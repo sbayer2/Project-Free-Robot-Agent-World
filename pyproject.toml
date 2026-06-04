@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pseudomarble"
+version = "0.0.1"
+description = "A constrained, MLX/Metal-native instrument for testing the core idea behind World Labs' Marble: one latent, two coupled output paths (appearance + physics)."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+authors = [{ name = "sbayer2" }]
+keywords = ["world-models", "gaussian-splatting", "mlx", "blender", "robotics", "simulation"]
+
+# The core package is pure-Python and dependency-light on purpose, so it imports
+# in CI without bpy / trimesh / mlx. Heavier capabilities are optional extras.
+dependencies = []
+
+[project.optional-dependencies]
+# Data generation runs INSIDE Blender's bundled Python; these are the helpers
+# used outside it (mesh validation, convex decomposition).
+datagen = ["trimesh>=4.0", "numpy>=1.24"]
+# Apple-silicon model stack (install on the Mac; not available in generic CI).
+mlx = ["mlx>=0.18", "numpy>=1.24"]
+dev = ["pytest>=8.0", "ruff>=0.6"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+# Blender's bpy API and lambda decoders trip these; allow them locally.
+ignore = ["E731"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
