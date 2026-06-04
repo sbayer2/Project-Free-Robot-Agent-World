@@ -152,10 +152,14 @@ independent decoders (disjoint dims) score ~0.
 1. **Data pipeline** — *done.* Continuous materials + drop/tilt/push behavior
    outcomes (the v2 task — see [`BEHAVIOR_TASK.md`](BEHAVIOR_TASK.md)), MuJoCo
    primary + Blender optional, behind the shared `sample.json` contract.
-2. **MLX dataset loader** — read manifests, batch views + behavior targets. *Next.*
-3. **MLX encoder + physics decoder** — easiest path to a first coherence number.
+2. **Dataset loader** — *done.* Reads manifests + sample.json, assembles the
+   flattened drop/tilt/push behavior target (`probes.behavior_vector`), serves
+   batches; image loading + MLX conversion are lazy
+   (`data/dataset.PseudoMarbleDataset`).
+3. **MLX encoder + behavior head** — action-conditioned; easiest path to a first
+   coherence number. *Next.*
 4. **MLX simplified splat render decoder.**
-5. **Coherence benchmark harness** — shared vs. independent, on held-out combos.
+5. **Coherence benchmark harness** — shared vs. independent, on held-out regions.
 6. **(Parked)** GSO real-scan experiment — reality's eigenvector
    ([`GSO_EXPERIMENT.md`](GSO_EXPERIMENT.md)).
 

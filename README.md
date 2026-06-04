@@ -133,6 +133,7 @@ Full setup (including the optional Blender path and Apple-silicon/MLX) is in
 | Held-out *essence regions* (checks understanding, not memorization) | ✅ done + tested |
 | The "do look and behavior move together?" measurement | ✅ done + tested |
 | Data generation — MuJoCo (primary), Blender (optional, appearance) | ✅ done; runs on your Mac |
+| Dataset loader (images + behavior targets, batched) | ✅ done + tested |
 | The model itself (encoder + the two outputs, in MLX) | 🔜 next |
 | Full experiment: one-understanding vs. glued-together | 🔜 next |
 | Using real scanned objects instead of textbook values | 🅿️ planned ([GSO_EXPERIMENT.md](docs/GSO_EXPERIMENT.md)) |
@@ -147,6 +148,7 @@ src/pseudomarble/
   config.py               # settings, sized for a MacBook Pro
   data/
     samples.py            # the shared data format (sample.json, schema v2)
+    dataset.py            # loads a dataset: images + behavior targets, batched
     generate_mujoco.py    # primary: renders + drop/tilt/push behavior
     generate_blender.py   # optional: photorealistic renders, same format
     mesh_validate.py      # checks a 3D mesh is solid enough to have a real mass

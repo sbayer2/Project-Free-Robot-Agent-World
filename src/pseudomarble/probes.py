@@ -157,8 +157,57 @@ OUTCOME_FIELDS: Tuple[str, ...] = (
     "n_bounces", "max_height", "path_length", "final_tilt_deg",
 )
 
+# Per-field scales that map raw outcomes into roughly [0, 1] so a regression
+# target isn't dominated by the large-magnitude fields (tilt in degrees, etc.).
+OUTCOME_NORMALIZERS: Dict[str, float] = {
+    "toppled": 1.0,
+    "settle_time": 2.0,
+    "slid_distance": 1.0,
+    "n_bounces": 5.0,
+    "max_height": 1.5,
+    "path_length": 3.0,
+    "final_tilt_deg": 180.0,
+}
 
-def outcome_vector(outcome: ProbeOutcome) -> List[float]:
-    """Flatten an outcome to floats (bool -> 0/1) in a fixed field order."""
-    d = outcome.to_dict()
+# Canonical probe order for the flattened behavior target vector.
+PROBE_ORDER: Tuple[str, ...] = ("drop", "tilt", "push")
+# Length of the full behavior target: one OUTCOME_FIELDS block per probe.
+BEHAVIOR_DIM: int = len(PROBE_ORDER) * len(OUTCOME_FIELDS)
+
+
+def _flatten(d: Dict, normalize: bool) -> List[float]:
+    if normalize:
+        return [float(d[k]) / OUTCOME_NORMALIZERS[k] for k in OUTCOME_FIELDS]
     return [float(d[k]) for k in OUTCOME_FIELDS]
+
+
+def outcome_vector(outcome: ProbeOutcome, normalize: bool = False) -> List[float]:
+    """Flatten one outcome to floats (bool -> 0/1) in a fixed field order."""
+    return _flatten(outcome.to_dict(), normalize)
+
+
+def outcome_vector_from_dict(d: Dict, normalize: bool = False) -> List[float]:
+    """Same as ``outcome_vector`` but from a plain dict (as stored in sample.json)."""
+    return _flatten(d, normalize)
+
+
+def behavior_vector(probe_records: Sequence[Dict], normalize: bool = True) -> List[float]:
+    """Assemble the full behavior target from a scene's probe records.
+
+    Probes are emitted in ``PROBE_ORDER`` regardless of their order on disk, so
+    the target vector layout is stable. Missing probes are zero-filled.
+    """
+    by_kind = {r.get("probe"): r.get("outcome", {}) for r in probe_records}
+    vec: List[float] = []
+    for kind in PROBE_ORDER:
+        outcome = by_kind.get(kind)
+        if outcome:
+            vec.extend(_flatten(outcome, normalize))
+        else:
+            vec.extend([0.0] * len(OUTCOME_FIELDS))
+    return vec
+
+
+def behavior_field_names() -> List[str]:
+    """Human-readable name for each entry of the behavior vector (``probe.field``)."""
+    return [f"{kind}.{field}" for kind in PROBE_ORDER for field in OUTCOME_FIELDS]
