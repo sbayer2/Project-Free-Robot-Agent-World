@@ -1,152 +1,158 @@
 # pseudo-marble
 
-> A constrained, MLX/Metal-native instrument for testing the **core idea** behind
-> World Labs' [Marble](https://www.worldlabs.ai/) — *one latent, two coupled
-> output paths (appearance + physics)* — on commodity Apple-silicon hardware,
-> fed by data everyday coders can actually generate (Blender).
+> A small, runnable experiment about giving machines a piece of the **physical
+> common sense** humans build over a lifetime: understanding an object well
+> enough to predict *what it will do when you act on it* — not just what it looks
+> like.
 
-**This is personal research.** It is **not** Marble, is **not affiliated with
-World Labs**, and makes **no claim** to reproduce their system. It is a *thinking
-instrument*: a deliberately small "pseudo-marble" we can run, perturb, and reason
-about end-to-end — to develop intuition about world models on a non-CUDA,
-non-H100 substrate.
+**Personal research.** Not affiliated with World Labs, and not an attempt to copy
+their [Marble](https://www.worldlabs.ai/) product. It's a thinking instrument you
+can actually run on a MacBook Pro.
 
 ---
 
-## The idea in one paragraph
+## The big picture
+
+**Rendering** is going from an *idea* of an object to a *picture* of it. Machines
+are very good at this now — type "a ceramic cup" and you get a convincing image.
+
+The hard part is the **inverse**. Go from the description or appearance of an
+object to *what it will do when you act on it*: how heavy it is, whether it
+slides or grips, how it tips, whether it shatters when dropped, whether it can
+hold water. That bundle of "what it will do" is the **essence of the thing** — and
+it's *physical*, not linguistic.
+
+Here's the gap. When a machine reads "ceramic cup," it treats those words as text
+to continue — the next likely token. When *you* read it, you instantly know it's
+hard, brittle, roughly the weight of a small apple, that it'll smash if it hits
+tile, that it tips if you push its rim. You don't reason this out; you just know
+it. You know because you spent a **childhood physically exploring the world** —
+dropping, stacking, spilling, breaking, catching things — as a baby, toddler,
+child, teenager, adult. That long, embodied curriculum is the advantage we have
+over machines, and it's exactly what these systems are missing.
+
+**Marble and Marble-like systems are early attempts to put that physical
+understanding inside a model.** pseudo-marble is a tiny version of the same idea,
+small enough to run and study on commodity hardware.
+
+## A simple way to picture it
+
+Imagine a machine that, given a soda can, hands you both a **photo** of the can
+*and* its **weight**.
+
+- It could be **two separate machines in one box** — a camera and a scale that
+  know nothing about each other.
+- Or it could be **one machine that genuinely understands "full aluminum can,"**
+  and produces both the photo and the weight from that single understanding.
+
+From the outside they look identical. The whole question behind world models —
+and behind this project — is whether you can build (and recognize) the *second*
+kind: one understanding from which both appearance and behavior come.
+
+## Where this sits in Li's taxonomy
 
 Fei-Fei Li's [*A Functional Taxonomy of World
-Models*](https://www.worldlabs.ai/blog/taxonomy-of-world-models) sorts world
-models into **renderers** (output pixels), **simulators** (output state), and
-**planners** (output actions), and closes by gesturing at a *unified* model that
-switches between them. We read that essay as a **shadow** of Marble: the
-interesting claim is that appearance and physics are **two projections of one
-underlying latent** — an "eigenvector" of the object. Marble already hints at
-this by emitting Gaussian splats *and* collision meshes from a single model.
+Models*](https://www.worldlabs.ai/blog/taxonomy-of-world-models) is the clearest
+map of this landscape. It sorts these systems by what they output:
 
-**pseudo-marble tests whether that shared-latent coupling is real and
-learnable** on hardware we own — by building the smallest model that emits *both*
-a neural render representation and a physics description **from the same latent**,
-and measuring how coupled that latent actually is.
+- **Renderer** — outputs **pixels** (how it looks).
+- **Simulator** — outputs **state** (how it behaves: shape, mass, friction).
+- **Planner** — outputs **actions** (what to do). Li calls the planner *"the
+  inverse of the renderer"* — which is exactly the inversion described above.
 
-> Full conceptual lineage (the five-part argument, the planner-primacy inversion,
-> the "open socket" reading of Marble) lives in
-> [`docs/TAXONOMY_NOTES.md`](docs/TAXONOMY_NOTES.md).
+Her bet is that these are three views of one underlying understanding.
+**pseudo-marble focuses on the renderer↔simulator link**: can a single model
+understand a thing well enough to produce both how it looks *and* how it behaves —
+and is that genuinely *one* understanding, or two outputs glued together?
 
-## What we actually measure
+## What pseudo-marble actually does
 
-Not visual quality. Not physics accuracy in isolation. **Latent coherence across
-modalities**: if you perturb the shared latent, do appearance *and* physics move
-*consistently*? A genuinely shared representation says yes; two independently
-trained models say no. The headline experiment is:
+1. Takes a simple scene — a **shape** (cube, sphere, …) made of a **material**
+   (ceramic, rubber, steel, glass, …).
+2. Tries to produce two things from one shared internal representation: **how it
+   looks** (rendered views) and **how it behaves** (mass, friction, bounciness).
+3. **Measures whether those two really come from one understanding** or are just
+   bolted together — by nudging the model's internal state and checking whether
+   the look *and* the physics change together (they should, if it's truly one
+   thing).
 
-> **shared-latent dual-decoder** vs. **two independent single-task models**,
-> compared on a [coherence metric](src/pseudomarble/models/coherence.py),
-> over **held-out material × shape combinations**.
+It runs on Apple-silicon (MLX/Metal), with training data anyone can generate
+using free tools (MuJoCo, optionally Blender) — no industrial GPU cluster.
 
-## The honesty problem (read this before believing any result)
+## Why it has value
 
-Blender **decouples** how a thing looks from how it behaves. So the
-appearance↔physics coupling the model could learn is coupling **we inject** via a
-[principled material library](src/pseudomarble/materials.py). That makes the
-naive "shared model wins" result nearly circular.
+- It's a **runnable, honest, small-scale probe** of the central question behind
+  world models: *can a machine hold the physical essence of an object the way a
+  person does?*
+- It produces a **measurement** for whether a system's looks and physics actually
+  share one understanding — something even large systems leave fuzzy.
+- It's **reproducible on a laptop**, for everyday coders, not just industry labs.
 
-The defensible question is therefore **generalization**, baked into the data
-split from day one: hold out specific `(shape, material)` *combinations* and test
-whether the model infers physics for an appearance it never saw paired with that
-shape. If it interpolates the coupling → a real result. If it only memorizes seen
-pairs → the claim fails, and that failure is worth knowing. See
-[`splits.py`](src/pseudomarble/splits.py) and
-[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#the-honesty-problem).
+## Being honest about the limits
 
-We are also, unavoidably, learning **Blender's eigenvector** — a decent
-approximation of reality's, not reality's itself. That's the same limitation
-Marble has until real robots plug in.
+- **We can't measure real friction.** We hand the model plausible textbook
+  values, so it's learning a simplified world, not the real one. (`materials.py`)
+- **A small model might just memorize.** So we test it on shape+material
+  combinations it *never saw together* — if it gets those right, it learned the
+  rule, not the examples. (`splits.py`)
+- **Maybe "glued together" works just as well** as one shared understanding. If
+  so, that's a real (if deflating) finding, and we're willing to report it.
 
-## Architecture (where we're headed)
-
-```
-scene description (shape id + material)            <- the single shared input
-        │
-     encoder  (MLX)
-        │
-        ▼
-        z   ← one latent
-       ╱ ╲
-      ╱   ╲
-render_decoder        physics_decoder              <- two projections, shared weights upstream
-(simplified MLX        (density, friction,
- gaussian splats)       restitution)
-
-loss = render + physics + coherence_weight · coherence(z)
-```
-
-The **coherence loss** is the novel, still-untested contribution. The render path
-is a *simplified MLX-native* splat decoder — we trade 3DGS fidelity for the
-ability to train on Metal/MLX without CUDA kernels (see
-[ARCHITECTURE.md](docs/ARCHITECTURE.md#render-path-on-apple-silicon)).
-
-## Status
-
-| Component | State |
-|---|---|
-| Principled material library (the coupling) | ✅ implemented + tested |
-| Held-out combination splits (the honest test) | ✅ implemented + tested |
-| Coherence metric (reference + MLX fast path) | ✅ definition implemented + tested |
-| **MuJoCo data pipeline (primary)** — renders + native physics | ✅ written; MJCF builder tested; runs on your Mac |
-| Blender data pipeline (optional, high-fidelity) | ✅ written; same `sample.json` contract |
-| Shared `sample.json` schema (generator-agnostic) | ✅ implemented + tested |
-| GSO "real eigenvector" experiment | 🅿️ parked / designed ([GSO_EXPERIMENT.md](docs/GSO_EXPERIMENT.md)) |
-| Mesh validation / convex decomposition | ✅ written (optional deps) |
-| MLX encoder + dual decoder | 🔜 design stage ([ARCHITECTURE.md](docs/ARCHITECTURE.md)) |
-| Coherence benchmark harness | 🔜 next |
+The deeper background argument — Li's taxonomy, what Marble is and isn't, and how
+this project relates to it — lives in
+[`docs/TAXONOMY_NOTES.md`](docs/TAXONOMY_NOTES.md).
 
 ## Quick start
 
 ```bash
-# pure-python core + tests (no MuJoCo/Blender/MLX needed)
-python -m pytest            # or: python tests/test_materials.py
+# core logic + tests — no MuJoCo/Blender/MLX needed
+python -m pytest                      # or: python tests/test_materials.py
 
-# generate a tiny paired dataset — PRIMARY path, MuJoCo (arm64-native on Mac)
+# generate a tiny dataset (primary path: MuJoCo, native on Apple silicon)
 pip install -e ".[mujoco]"
 python -m pseudomarble.data.generate_mujoco \
     --output data/pseudo_marble --num-scenes 16 --views 16 --resolution 256
-
-# optional high-fidelity path — Blender (same sample.json contract)
-blender --background --python src/pseudomarble/data/generate_blender.py -- \
-    --output data/pseudo_marble --num-scenes 16 --views 16 --resolution 256
 ```
 
-Both generators write the **identical** [`sample.json`](docs/HOWTO.md#the-paired-sample-schema-samplejson)
-schema (`data/samples.py`), so everything downstream is generator-agnostic.
-
-Full setup, including Apple-silicon/MLX, is in
+Full setup (including the optional Blender path and Apple-silicon/MLX) is in
 [`docs/HOWTO.md`](docs/HOWTO.md).
+
+## Status
+
+| Part | State |
+|---|---|
+| Materials: the look↔behavior pairings | ✅ done + tested |
+| Train/test split that checks *understanding*, not memorization | ✅ done + tested |
+| The "do look and physics move together?" measurement | ✅ done + tested |
+| Data generation — MuJoCo (primary), Blender (optional) | ✅ done; runs on your Mac |
+| The model itself (encoder + the two outputs, in MLX) | 🔜 next |
+| Full experiment: one-understanding vs. glued-together | 🔜 next |
+| Using real scanned objects instead of textbook values | 🅿️ planned ([GSO_EXPERIMENT.md](docs/GSO_EXPERIMENT.md)) |
 
 ## Repository layout
 
 ```
 src/pseudomarble/
-  materials.py            # the authored appearance↔physics coupling
-  splits.py               # held-out material×shape combinations (generalization test)
-  config.py               # render / physics / model configs
+  materials.py            # the look↔behavior pairings (ceramic, rubber, glass, …)
+  splits.py               # held-out shape+material combos (tests understanding)
+  config.py               # settings, sized for a MacBook Pro
   data/
-    samples.py            # the shared sample.json contract (single source of truth)
-    generate_mujoco.py    # PRIMARY generator: MuJoCo renders + native physics
-    generate_blender.py   # optional high-fidelity generator (same contract)
-    mesh_validate.py      # watertightness gate (mass needs valid volume)
-    collision.py          # convex DEcomposition (not convex hull — keeps concavity)
+    samples.py            # the shared data format every generator writes
+    generate_mujoco.py    # primary: MuJoCo renders + physics
+    generate_blender.py   # optional: photorealistic renders, same format
+    mesh_validate.py      # checks a 3D mesh is solid enough to have a real mass
+    collision.py          # keeps an object's real shape (e.g. a cup's cavity)
   models/
-    coherence.py          # the coherence loss/metric (core idea)
+    coherence.py          # the "do look and physics move together?" measurement
 docs/
-  TAXONOMY_NOTES.md       # the conceptual lineage / argument
+  TAXONOMY_NOTES.md       # background: Li's taxonomy, what Marble is and isn't
   ARCHITECTURE.md         # design decisions + honest limitations
-  GSO_EXPERIMENT.md       # parked: real-scan "escape Blender's eigenvector" plan
   HOWTO.md                # setup & usage
-tests/                    # pure-python suites (run anywhere)
+  GSO_EXPERIMENT.md       # planned: using real scanned objects
+tests/                    # runnable anywhere, no special hardware
 ```
 
 ## License
 
-[MIT](LICENSE) © 2026 sbayer2. Independent research project; not affiliated with
-or endorsed by World Labs.
+[MIT](LICENSE) © 2026 sbayer2. Independent research; not affiliated with or
+endorsed by World Labs.
