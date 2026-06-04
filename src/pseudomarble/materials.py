@@ -23,8 +23,11 @@ approximation of reality's, not reality's itself.
 
 from __future__ import annotations
 
+import colorsys
+import math
+import random
 from dataclasses import asdict, dataclass, field
-from typing import Dict, Tuple
+from typing import Dict, Optional, Tuple
 
 
 @dataclass(frozen=True)
@@ -183,3 +186,155 @@ def physics_vector(name: str) -> Tuple[float, float, float]:
     """
     p = get(name).physics
     return (p.density, p.friction, p.restitution)
+
+
+# --------------------------------------------------------------------------- #
+# Continuous material sampler — the fix for the "10-row lookup table" problem.
+# --------------------------------------------------------------------------- #
+# The discrete MATERIALS above are useful anchors, but a model can "solve" them
+# by recognizing which of 10 names it sees and looking up three numbers. That is
+# memorization, not understanding the physical essence of a thing.
+#
+# Instead we sample a hidden continuous "essence" from a few latent factors, and
+# produce BOTH appearance and physics from it. Appearance reveals the essence
+# only *partially and noisily*, so the model must infer it from visual evidence
+# (the way you infer "heavy" from "looks metallic") rather than read a label.
+# Because the essence is continuous, held-out *regions* of essence-space test
+# real interpolation/extrapolation (see splits.make_region_split).
+
+# Physical ranges the essence spans (plausible, not measured).
+DENSITY_RANGE = (50.0, 8000.0)      # kg/m^3, sampled log-uniform
+FRICTION_RANGE = (0.05, 1.10)
+RESTITUTION_RANGE = (0.05, 0.85)
+
+
+def _lerp(a: float, b: float, t: float) -> float:
+    return a + (b - a) * t
+
+
+def _clip01(x: float) -> float:
+    return max(0.0, min(1.0, x))
+
+
+@dataclass(frozen=True)
+class MaterialSample:
+    """A continuously-sampled material plus the latent factors that produced it.
+
+    ``material`` is the usual appearance+physics object the generators consume.
+    ``factors`` and ``nearest_anchor`` are recorded as ground truth for analysis
+    (e.g. measuring how well a model recovers the hidden essence).
+    """
+
+    material: Material
+    factors: Dict[str, float]      # heaviness/grip/hardness/clarity in [0,1]
+    nearest_anchor: str            # closest named material, for interpretable eval
+
+
+class MaterialSampler:
+    """Draws continuous materials whose appearance is a noisy function of physics.
+
+    Four latent factors drive everything so the coupling is principled:
+      * heaviness -> density (and a metallic look, since metals are dense)
+      * grip      -> friction (and a rougher surface)
+      * hardness  -> restitution (and a smoother surface)
+      * clarity   -> transmission (transparent kinds), mostly low
+    Gaussian noise on the *appearance* channels makes the map non-invertible, so
+    the essence must be inferred, not read off.
+    """
+
+    def __init__(self, seed: int = 0, appearance_noise: float = 0.07) -> None:
+        self.rng = random.Random(seed)
+        self.noise = appearance_noise
+
+    # -- internals -------------------------------------------------------- #
+    def _n(self) -> float:
+        return self.rng.gauss(0.0, self.noise)
+
+    def _appearance_from_factors(
+        self, heaviness: float, grip: float, hardness: float, clarity: float
+    ) -> VisualProps:
+        # Metals are dense and metallic; transparent kinds are not metallic.
+        metallic = _clip01((1.2 * heaviness - 0.2) * (1.0 - clarity) + self._n())
+        # Smooth when hard/clear; rough when grippy.
+        roughness = _clip01(0.90 - 0.55 * hardness - 0.70 * clarity + 0.25 * grip + self._n())
+        transmission = _clip01(clarity + 0.5 * self._n())
+        ior = _lerp(1.30, 1.50, clarity)
+        # Colour is a deliberately weak cue: random hue, value dimming with mass,
+        # so the model can't rely on colour alone and must use roughness/metallic.
+        hue = self.rng.random()
+        sat = _clip01(0.15 + 0.45 * self.rng.random() - 0.3 * transmission)
+        val = _clip01(0.85 - 0.35 * heaviness + self._n())
+        r, g, b = colorsys.hsv_to_rgb(hue, sat, val)
+        return VisualProps(
+            base_color=(r, g, b, 1.0),
+            roughness=max(0.02, roughness),
+            metallic=metallic,
+            transmission=transmission,
+            ior=ior,
+        )
+
+    def _physics_from_factors(
+        self, heaviness: float, grip: float, hardness: float
+    ) -> PhysicsProps:
+        log_d = _lerp(math.log(DENSITY_RANGE[0]), math.log(DENSITY_RANGE[1]), heaviness)
+        density = math.exp(log_d)
+        friction = _lerp(*FRICTION_RANGE, grip)
+        restitution = _lerp(*RESTITUTION_RANGE, hardness)
+        return PhysicsProps(density=density, friction=friction, restitution=restitution)
+
+    # -- public API ------------------------------------------------------- #
+    def sample(self, material_id: Optional[str] = None) -> MaterialSample:
+        heaviness = self.rng.random()
+        grip = self.rng.random()
+        hardness = self.rng.random()
+        clarity = self.rng.random() ** 3  # skew toward opaque
+        return self._assemble(heaviness, grip, hardness, clarity, material_id)
+
+    def sample_near(self, anchor: str, jitter: float = 0.15,
+                    material_id: Optional[str] = None) -> MaterialSample:
+        """Sample continuously *around* a named anchor (for controlled studies)."""
+        base = get(anchor)
+        heaviness = _clip01(_inv_log(base.physics.density, DENSITY_RANGE) + self._jit(jitter))
+        grip = _clip01(_inv_lin(base.physics.friction, FRICTION_RANGE) + self._jit(jitter))
+        hardness = _clip01(_inv_lin(base.physics.restitution, RESTITUTION_RANGE) + self._jit(jitter))
+        clarity = _clip01(base.visual.transmission + self._jit(jitter))
+        return self._assemble(heaviness, grip, hardness, clarity, material_id)
+
+    def _jit(self, jitter: float) -> float:
+        return self.rng.uniform(-jitter, jitter)
+
+    def _assemble(self, heaviness, grip, hardness, clarity, material_id) -> MaterialSample:
+        visual = self._appearance_from_factors(heaviness, grip, hardness, clarity)
+        physics = self._physics_from_factors(heaviness, grip, hardness)
+        mat = Material(name=material_id or "sampled", visual=visual, physics=physics)
+        factors = {
+            "heaviness": heaviness, "grip": grip,
+            "hardness": hardness, "clarity": clarity,
+        }
+        return MaterialSample(mat, factors, nearest_anchor(physics))
+
+
+def _inv_log(value: float, rng: Tuple[float, float]) -> float:
+    return (math.log(value) - math.log(rng[0])) / (math.log(rng[1]) - math.log(rng[0]))
+
+
+def _inv_lin(value: float, rng: Tuple[float, float]) -> float:
+    return (value - rng[0]) / (rng[1] - rng[0])
+
+
+def nearest_anchor(physics: PhysicsProps) -> str:
+    """Closest named material to a physics vector, in normalized essence space."""
+    from pseudomarble.config import PHYSICS_NORMALIZERS as N
+
+    def norm(p: PhysicsProps) -> Tuple[float, float, float]:
+        return (p.density / N["density"], p.friction / N["friction"],
+                p.restitution / N["restitution"])
+
+    q = norm(physics)
+    best, best_d = "", float("inf")
+    for name in names():
+        a = norm(get(name).physics)
+        d = sum((qi - ai) ** 2 for qi, ai in zip(q, a))
+        if d < best_d:
+            best, best_d = name, d
+    return best

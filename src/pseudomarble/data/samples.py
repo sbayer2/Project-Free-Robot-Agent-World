@@ -39,7 +39,7 @@ from typing import Dict, List, Optional, Sequence, Tuple
 from pseudomarble import materials as M
 from pseudomarble.config import PHYSICS_NORMALIZERS
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2  # v2 adds the `behavior` block (probe outcomes) + material_truth
 Pose = Tuple[float, float, float]
 
 
@@ -76,19 +76,53 @@ def pose_to_az_el_dist(pos: Pose) -> Tuple[float, float, float]:
 
 
 # --------------------------------------------------------------------------- #
-# Physics labels (authored from the material library — no engine required).
+# Physics labels (the "essence" target: density, friction, restitution).
 # --------------------------------------------------------------------------- #
-def physics_labels(material_name: str) -> Dict:
-    density, friction, restitution = M.physics_vector(material_name)
-    mat = M.get(material_name)
+def _physics_labels(physics: "M.PhysicsProps", tags: Sequence[str]) -> Dict:
+    d, f, r = physics.density, physics.friction, physics.restitution
     return {
-        "raw": {"density": density, "friction": friction, "restitution": restitution},
+        "raw": {"density": d, "friction": f, "restitution": r},
         "normalized": {
-            "density": density / PHYSICS_NORMALIZERS["density"],
-            "friction": friction / PHYSICS_NORMALIZERS["friction"],
-            "restitution": restitution / PHYSICS_NORMALIZERS["restitution"],
+            "density": d / PHYSICS_NORMALIZERS["density"],
+            "friction": f / PHYSICS_NORMALIZERS["friction"],
+            "restitution": r / PHYSICS_NORMALIZERS["restitution"],
         },
-        "tags": list(mat.tags),
+        "tags": list(tags),
+    }
+
+
+def physics_labels(material) -> Dict:
+    """Physics labels from a named material (str) OR a Material object.
+
+    Accepting a Material object is what lets continuously-sampled materials —
+    which have no entry in the discrete library — flow through the same schema.
+    """
+    if isinstance(material, str):
+        mat = M.get(material)
+    else:
+        mat = material
+    return _physics_labels(mat.physics, mat.tags)
+
+
+def material_truth(sample) -> Dict:
+    """Ground-truth essence for a continuously-sampled material (for analysis).
+
+    Records the hidden latent factors, the appearance params actually rendered,
+    and the nearest named anchor — none of which the model sees as input; they
+    let us measure how well it *recovers* the essence from images alone.
+    """
+    mat = sample.material
+    v = mat.visual
+    return {
+        "factors": dict(sample.factors),
+        "nearest_anchor": sample.nearest_anchor,
+        "appearance_params": {
+            "base_color": list(v.base_color),
+            "roughness": v.roughness,
+            "metallic": v.metallic,
+            "transmission": v.transmission,
+            "ior": v.ior,
+        },
     }
 
 
@@ -105,27 +139,61 @@ def build_frame(index: int, file: str, position: Sequence[float],
     }
 
 
+def build_probe_record(spec: Dict, outcome: Dict,
+                       trajectory: Optional[List[Dict]] = None) -> Dict:
+    """One probe's record: its spec, the summary outcome, optional raw trajectory."""
+    rec = {"probe": spec.get("kind", "unknown"), "spec": spec, "outcome": outcome}
+    if trajectory is not None:
+        rec["trajectory"] = trajectory
+    return rec
+
+
 def build_sample_record(
     scene_id: str,
     split: str,
     shape: str,
-    material_name: str,
     frames: List[Dict],
     resolution: int,
     generator: str,
+    *,
+    material_name: Optional[str] = None,
+    material=None,
+    material_id: Optional[str] = None,
+    behavior: Optional[List[Dict]] = None,
+    material_truth_block: Optional[Dict] = None,
     trajectory: Optional[List[Dict]] = None,
     fps: int = 60,
 ) -> Dict:
-    """Assemble one scene's ``sample.json`` record (identical across generators)."""
-    return {
+    """Assemble one scene's ``sample.json`` record (identical across generators).
+
+    Supply EITHER ``material_name`` (discrete library path, e.g. Blender
+    primitives) OR a ``material`` object + ``material_id`` (continuous-sampler
+    path). ``behavior`` is the v2 probe-outcome list; when present it is the
+    primary training target.
+    """
+    if material is not None:
+        phys = physics_labels(material)
+        mat_label = material_id or "sampled"
+    elif material_name is not None:
+        phys = physics_labels(material_name)
+        mat_label = material_name
+    else:
+        raise ValueError("provide material_name or (material + material_id)")
+
+    record = {
         "scene_id": scene_id,
         "split": split,
+        "schema_version": SCHEMA_VERSION,
         "generator": generator,
-        "input": {"shape": shape, "material": material_name},
+        "input": {"shape": shape, "material": mat_label},
         "appearance": {"resolution": int(resolution), "frames": frames},
-        "physics": physics_labels(material_name),
+        "physics": phys,
+        "behavior": {"probes": behavior or []},
         "dynamics": {"fps": int(fps), "trajectory": trajectory or []},
     }
+    if material_truth_block is not None:
+        record["material_truth"] = material_truth_block
+    return record
 
 
 def build_manifest(generator: str, split_summary: Dict,
