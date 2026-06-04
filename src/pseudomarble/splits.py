@@ -21,10 +21,11 @@ Constraints we enforce so the test is meaningful:
 from __future__ import annotations
 
 import random
-from dataclasses import dataclass
-from typing import Dict, List, Sequence, Tuple
+from dataclasses import dataclass, field
+from typing import Dict, List, Optional, Sequence, Tuple
 
 Pair = Tuple[str, str]  # (shape_id, material_name)
+Interval = Tuple[float, float]
 
 
 @dataclass(frozen=True)
@@ -93,6 +94,60 @@ def make_combination_split(
     train.sort()
     holdout.sort()
     return CombinationSplit(tuple(train), tuple(holdout))
+
+
+# --------------------------------------------------------------------------- #
+# Continuous-material generalization: hold out a REGION of essence-space.
+# --------------------------------------------------------------------------- #
+# With continuously-sampled materials there is no finite grid to hold combos out
+# of. Instead we reserve a *box* in normalized essence-space (and optionally only
+# for certain shapes) for the test set. A material whose essence lands in the box
+# goes to test; everything else trains. This tests true interpolation /
+# extrapolation: predicting behavior for essences never seen during training.
+@dataclass(frozen=True)
+class RegionHoldout:
+    """A held-out box in normalized (density, friction, restitution) space.
+
+    Each axis is an optional ``(min, max)`` interval on the *normalized* value
+    (raw / config.PHYSICS_NORMALIZERS). ``None`` means that axis is unconstrained.
+    If ``shapes`` is non-empty, only those shapes count as held out (so the same
+    essence can be train-on-one-shape, test-on-another).
+    """
+
+    density: Optional[Interval] = None
+    friction: Optional[Interval] = None
+    restitution: Optional[Interval] = None
+    shapes: Tuple[str, ...] = field(default_factory=tuple)
+
+    def contains(self, essence_norm: Dict[str, float], shape: str) -> bool:
+        if self.shapes and shape not in self.shapes:
+            return False
+        axes = (
+            ("density", self.density),
+            ("friction", self.friction),
+            ("restitution", self.restitution),
+        )
+        constrained = False
+        for key, interval in axes:
+            if interval is None:
+                continue
+            constrained = True
+            lo, hi = interval
+            if not (lo <= essence_norm[key] <= hi):
+                return False
+        # An all-None holdout would match everything; require >=1 constraint.
+        return constrained
+
+    def label(self, essence_norm: Dict[str, float], shape: str) -> str:
+        return "test" if self.contains(essence_norm, shape) else "train"
+
+
+# A mid-grip, fairly-bouncy corner of essence-space, held out by default. Forces
+# the model to extrapolate behavior for materials it never trained on.
+DEFAULT_REGION_HOLDOUT = RegionHoldout(
+    friction=(0.55, 0.80),
+    restitution=(0.55, 0.80),
+)
 
 
 def assign_scene_materials(

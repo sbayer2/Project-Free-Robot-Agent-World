@@ -67,14 +67,21 @@ and is that genuinely *one* understanding, or two outputs glued together?
 
 ## What pseudo-marble actually does
 
-1. Takes a simple scene — a **shape** (cube, sphere, …) made of a **material**
-   (ceramic, rubber, steel, glass, …).
-2. Tries to produce two things from one shared internal representation: **how it
-   looks** (rendered views) and **how it behaves** (mass, friction, bounciness).
-3. **Measures whether those two really come from one understanding** or are just
-   bolted together — by nudging the model's internal state and checking whether
-   the look *and* the physics change together (they should, if it's truly one
-   thing).
+1. Takes a simple scene — a **shape** (cube, cylinder, …) made of a **material**.
+   Materials aren't a short menu; they're sampled along a continuous range, so a
+   model can't win by memorizing a handful of names.
+2. **Acts on the object** — drops it, tilts it on a ramp, pushes it — and asks
+   the model to predict **what happens**: does it bounce, slide, or topple? That
+   "what it does when acted on" *is* the physical essence we care about (not just
+   three static numbers). A tall object topples where a squat one slides, so
+   **shape and material genuinely interact**.
+3. **Measures whether looks and behavior come from one understanding** or are
+   just bolted together — by nudging the model's internal state and checking
+   whether how it *looks* and how it *behaves* change together (they should, if
+   it's truly one thing).
+
+> The full task design — continuous materials, the drop/tilt/push probes, and the
+> held-out essence regions — is in [`docs/BEHAVIOR_TASK.md`](docs/BEHAVIOR_TASK.md).
 
 It runs on Apple-silicon (MLX/Metal), with training data anyone can generate
 using free tools (MuJoCo, optionally Blender) — no industrial GPU cluster.
@@ -121,10 +128,11 @@ Full setup (including the optional Blender path and Apple-silicon/MLX) is in
 
 | Part | State |
 |---|---|
-| Materials: the look↔behavior pairings | ✅ done + tested |
-| Train/test split that checks *understanding*, not memorization | ✅ done + tested |
-| The "do look and physics move together?" measurement | ✅ done + tested |
-| Data generation — MuJoCo (primary), Blender (optional) | ✅ done; runs on your Mac |
+| Continuous materials (no memorizable 10-item menu) | ✅ done + tested |
+| Acting on objects: drop / tilt / push → behavior outcomes | ✅ done + tested |
+| Held-out *essence regions* (checks understanding, not memorization) | ✅ done + tested |
+| The "do look and behavior move together?" measurement | ✅ done + tested |
+| Data generation — MuJoCo (primary), Blender (optional, appearance) | ✅ done; runs on your Mac |
 | The model itself (encoder + the two outputs, in MLX) | 🔜 next |
 | Full experiment: one-understanding vs. glued-together | 🔜 next |
 | Using real scanned objects instead of textbook values | 🅿️ planned ([GSO_EXPERIMENT.md](docs/GSO_EXPERIMENT.md)) |
@@ -133,19 +141,21 @@ Full setup (including the optional Blender path and Apple-silicon/MLX) is in
 
 ```
 src/pseudomarble/
-  materials.py            # the look↔behavior pairings (ceramic, rubber, glass, …)
-  splits.py               # held-out shape+material combos (tests understanding)
+  materials.py            # named materials + continuous MaterialSampler (the essence)
+  probes.py               # drop/tilt/push actions + behavior-outcome summaries
+  splits.py               # held-out essence regions (tests understanding)
   config.py               # settings, sized for a MacBook Pro
   data/
-    samples.py            # the shared data format every generator writes
-    generate_mujoco.py    # primary: MuJoCo renders + physics
+    samples.py            # the shared data format (sample.json, schema v2)
+    generate_mujoco.py    # primary: renders + drop/tilt/push behavior
     generate_blender.py   # optional: photorealistic renders, same format
     mesh_validate.py      # checks a 3D mesh is solid enough to have a real mass
     collision.py          # keeps an object's real shape (e.g. a cup's cavity)
   models/
-    coherence.py          # the "do look and physics move together?" measurement
+    coherence.py          # the "do look and behavior move together?" measurement
 docs/
   TAXONOMY_NOTES.md       # background: Li's taxonomy, what Marble is and isn't
+  BEHAVIOR_TASK.md        # the continuous + act-on-it task design (v2)
   ARCHITECTURE.md         # design decisions + honest limitations
   HOWTO.md                # setup & usage
   GSO_EXPERIMENT.md       # planned: using real scanned objects

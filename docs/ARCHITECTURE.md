@@ -48,9 +48,12 @@ Mitigations, all already reflected in code:
    real material identities (glass: transmissive *and* dense/brittle; rubber:
    matte-dark *and* grippy/bouncy). The coupling is physically motivated, not
    arbitrary.
-2. **Generalization, not reconstruction** — `splits.py` holds out specific
-   `(shape, material)` combinations. The result that counts is physics inferred
-   for an appearance never seen on that shape.
+2. **Generalization, not reconstruction** — with continuous materials,
+   `splits.RegionHoldout` reserves a *region* of essence-space for test (the v2
+   task; see [`BEHAVIOR_TASK.md`](BEHAVIOR_TASK.md)). The discrete
+   `make_combination_split` (held-out `(shape, material)` pairs) remains for the
+   named-material/primitive path. The result that counts is behavior inferred for
+   an essence never seen in training.
 3. **Honest framing** — the deliverable is *"shared latents capture and
    **generalize** appearance↔physics coupling better than independent models, on
    a controlled synthetic world,"* not *"reality's eigenvector exists."*
@@ -146,9 +149,10 @@ independent decoders (disjoint dims) score ~0.
 
 ## Build order
 
-1. **Data pipeline** (renders + physics GT) — *done.* MuJoCo primary +
-   Blender optional, both behind the shared `sample.json` contract.
-2. **MLX dataset loader** — read manifests, batch views + physics targets. *Next.*
+1. **Data pipeline** — *done.* Continuous materials + drop/tilt/push behavior
+   outcomes (the v2 task — see [`BEHAVIOR_TASK.md`](BEHAVIOR_TASK.md)), MuJoCo
+   primary + Blender optional, behind the shared `sample.json` contract.
+2. **MLX dataset loader** — read manifests, batch views + behavior targets. *Next.*
 3. **MLX encoder + physics decoder** — easiest path to a first coherence number.
 4. **MLX simplified splat render decoder.**
 5. **Coherence benchmark harness** — shared vs. independent, on held-out combos.

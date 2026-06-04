@@ -41,7 +41,26 @@ def test_coupling_lives_in_one_geom():
     _, geom = _object_geom(xml)
     assert float(geom.get("density")) == steel.physics.density
     assert geom.get("friction").split()[0] == str(steel.physics.friction)
-    assert geom.get("material") == f"m_{steel.name}"
+    assert geom.get("material") == "m_obj"
+
+
+def test_drop_sets_object_height():
+    xml = build_mjcf("box", M.get("wood"), object_z=1.2)
+    root = ET.fromstring(xml)
+    body = next(b for b in root.iter("body") if b.get("name") == "object")
+    assert abs(float(body.get("pos").split()[2]) - 1.2) < 1e-6
+
+
+def test_tilt_rotates_the_ground_plane():
+    xml = build_mjcf("box", M.get("ice"), ground_euler=(0.35, 0.0, 0.0))
+    root = ET.fromstring(xml)
+    ground = next(g for g in root.iter("geom") if g.get("name") == "ground")
+    assert abs(float(ground.get("euler").split()[0]) - 0.35) < 1e-6
+
+
+def test_every_shape_has_half_height():
+    for shape in DEFAULT_SHAPES:
+        assert SHAPE_TO_GEOM[shape]["half_height"] > 0
 
 
 def test_density_drives_mass_difference():
