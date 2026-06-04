@@ -55,15 +55,35 @@ Mitigations, all already reflected in code:
    **generalize** appearance↔physics coupling better than independent models, on
    a controlled synthetic world,"* not *"reality's eigenvector exists."*
 
-## Why Blender (and what it is *not* better at)
+## Generators: MuJoCo primary, Blender optional, one contract
 
-- ✅ One tool yields **paired** data: photoreal renders (Cycles/EEVEE) *and*
-  structured physics, with aligned camera poses and material assignments via a
-  scriptable API (`bpy`).
-- ⚠️ **Not** a physics-fidelity advantage over PyBullet/MuJoCo — Blender's
-  rigid-body solver *is* the Bullet library. The win is integration, not realism.
-- ⚠️ Friction/restitution are **authored**, not measured ⇒ "Blender's
-  eigenvector."
+Every generator writes the **same** `sample.json` (`data/samples.py`) — the
+single source of truth for the schema. Choosing a generator is choosing code
+*behind* that contract; the loader, splits, and coherence benchmark never change.
+
+**Primary — MuJoCo** (`data/generate_mujoco.py`):
+- ✅ arm64-native on macOS (no Docker, no bpy quirks); least setup work.
+- ✅ The coupling lives in **one geom**: `rgba` (appearance) + `density`
+  (→ auto mass) + `friction` (physics) — literally our `Material` dataclass in
+  MJCF. Physics ground truth (mass, contacts, trajectory) is the engine's
+  *native* output, so there's no separate bake step.
+- ⚠️ Renderer is **not** photorealistic — no real glass transmission/ice, so the
+  appearance→physics cue is weaker for *transparent* materials specifically.
+  Acceptable because we measure coherence, not photorealism.
+- ⚠️ No first-class restitution scalar (bounce emerges from solref/solimp); the
+  restitution *label* always comes from `materials.py`, and we only approximate
+  bounce in the trajectory.
+
+**Optional — Blender** (`data/generate_blender.py`):
+- ✅ Photoreal renders (Cycles/EEVEE) with true transmission — use when the
+  transparent-material visual cue matters.
+- ⚠️ **Not** a physics-fidelity advantage — Blender's rigid-body solver *is* the
+  Bullet library. The win is render fidelity, not realism of physics.
+- ⚠️ Slower, and depends on the finicky `bpy` API.
+
+**Common caveat:** both author friction/restitution rather than measuring them ⇒
+we learn the *generator's* eigenvector. Escaping that means real measured data —
+see [`GSO_EXPERIMENT.md`](GSO_EXPERIMENT.md).
 
 ## Collision: decomposition, not convex hull
 
@@ -126,13 +146,16 @@ independent decoders (disjoint dims) score ~0.
 
 ## Build order
 
-1. **Data pipeline** (renders + physics GT) — *done, runs in Blender.*
-2. **MLX dataset loader** — read manifests, batch views + physics targets.
+1. **Data pipeline** (renders + physics GT) — *done.* MuJoCo primary +
+   Blender optional, both behind the shared `sample.json` contract.
+2. **MLX dataset loader** — read manifests, batch views + physics targets. *Next.*
 3. **MLX encoder + physics decoder** — easiest path to a first coherence number.
 4. **MLX simplified splat render decoder.**
 5. **Coherence benchmark harness** — shared vs. independent, on held-out combos.
+6. **(Parked)** GSO real-scan experiment — reality's eigenvector
+   ([`GSO_EXPERIMENT.md`](GSO_EXPERIMENT.md)).
 
-Starting at (1) is deliberate: the project's validity is won or lost in data
+Starting at (1) was deliberate: the project's validity is won or lost in data
 generation, and it's independent of the ML stack.
 
 ## Configuration

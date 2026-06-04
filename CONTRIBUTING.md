@@ -21,7 +21,9 @@ auditable. These are the conventions for the repo.
 
 ```
 src/pseudomarble/    importable library (src-layout)
-  data/              Blender pipeline + mesh/collision helpers
+  data/              samples.py (shared sample.json contract) +
+                     generate_mujoco.py (primary) / generate_blender.py (optional) +
+                     mesh/collision helpers
   models/            MLX model + coherence loss
 tests/               pure-python suites, runnable with plain `python`
 docs/                TAXONOMY_NOTES (why) · ARCHITECTURE (how) · HOWTO (use)

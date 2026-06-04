@@ -27,10 +27,9 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
 import os
 import sys
-from typing import Dict, List, Tuple
+from typing import Dict, List
 
 # ``bpy`` only exists inside Blender. Keep the import soft so CI can import the
 # file for linting without a Blender runtime.
@@ -57,7 +56,7 @@ def _ensure_package_on_path() -> None:
 
 _ensure_package_on_path()
 from pseudomarble import materials as M  # noqa: E402
-from pseudomarble.config import PHYSICS_NORMALIZERS  # noqa: E402
+from pseudomarble.data import samples  # noqa: E402  (shared sample.json contract)
 
 
 def _require_bpy() -> None:
@@ -152,18 +151,6 @@ def apply_material(obj, material: M.Material) -> None:
     rb.mass = p.density * approx_vol
 
 
-def camera_poses(num_views: int, radius: float) -> List[Tuple[float, float, float]]:
-    """Fibonacci-sphere camera positions for even, deterministic coverage."""
-    poses = []
-    golden = math.pi * (3.0 - math.sqrt(5.0))
-    for i in range(num_views):
-        y = 1.0 - (i / max(1, num_views - 1)) * 2.0
-        r = math.sqrt(max(0.0, 1.0 - y * y))
-        theta = golden * i
-        poses.append((math.cos(theta) * r * radius, y * radius, math.sin(theta) * r * radius))
-    return poses
-
-
 def setup_world_and_light() -> None:
     _require_bpy()
     world = bpy.data.worlds.new("pm_world")
@@ -190,18 +177,15 @@ def render_views(obj, out_dir: str, num_views: int, radius: float, res: int,
     os.makedirs(out_dir, exist_ok=True)
     target = obj.location
     frames: List[Dict] = []
-    for i, pos in enumerate(camera_poses(num_views, radius)):
+    for i, pos in enumerate(samples.fibonacci_sphere_poses(num_views, radius)):
         cam.location = Vector(pos)
         _look_at(cam, target)
         path = os.path.join(out_dir, f"view_{i:03d}.png")
         scene.render.filepath = path
         bpy.ops.render.render(write_still=True)
-        frames.append({
-            "index": i,
-            "file": os.path.basename(path),
-            "position": list(pos),
-            "look_at": list(target),
-        })
+        frames.append(
+            samples.build_frame(i, os.path.basename(path), pos, list(target))
+        )
     return frames
 
 
@@ -235,19 +219,6 @@ def simulate_drop(obj, cfg_seconds: float, fps: int) -> List[Dict]:
     return traj
 
 
-def physics_labels(material: M.Material) -> Dict:
-    density, friction, restitution = M.physics_vector(material.name)
-    return {
-        "raw": {"density": density, "friction": friction, "restitution": restitution},
-        "normalized": {
-            "density": density / PHYSICS_NORMALIZERS["density"],
-            "friction": friction / PHYSICS_NORMALIZERS["friction"],
-            "restitution": restitution / PHYSICS_NORMALIZERS["restitution"],
-        },
-        "tags": list(material.tags),
-    }
-
-
 def build_scene(scene_id: str, shape_id: str, material_name: str, split: str,
                 out_root: str, render_cfg, physics_cfg) -> Dict:
     """Generate one paired sample and return its manifest record."""
@@ -266,14 +237,11 @@ def build_scene(scene_id: str, shape_id: str, material_name: str, split: str,
     )
     trajectory = simulate_drop(obj, physics_cfg.sim_seconds, physics_cfg.fps)
 
-    record = {
-        "scene_id": scene_id,
-        "split": split,
-        "input": {"shape": shape_id, "material": material_name},
-        "appearance": {"frames": frames, "resolution": render_cfg.resolution},
-        "physics": physics_labels(material),
-        "dynamics": {"fps": physics_cfg.fps, "trajectory": trajectory},
-    }
+    record = samples.build_sample_record(
+        scene_id=scene_id, split=split, shape=shape_id, material_name=material_name,
+        frames=frames, resolution=render_cfg.resolution, generator="blender",
+        trajectory=trajectory, fps=physics_cfg.fps,
+    )
     with open(os.path.join(scene_dir, "sample.json"), "w") as fh:
         json.dump(record, fh, indent=2)
     return record
@@ -318,29 +286,22 @@ def main(argv: List[str]) -> None:
     physics_cfg = PhysicsConfig()
 
     os.makedirs(args.output, exist_ok=True)
-    manifest = {
-        "version": 1,
-        "split_summary": split.summary(),
-        "held_out_combinations": [list(p) for p in split.test_pairs],
-        "scenes": [],
-    }
+    scenes: List[Dict] = []
     for rec in assignments:
         out = build_scene(
             rec["scene_id"], rec["shape"], rec["material"], rec["split"],
             args.output, render_cfg, physics_cfg,
         )
-        manifest["scenes"].append({
-            "scene_id": out["scene_id"],
-            "split": out["split"],
-            "shape": out["input"]["shape"],
-            "material": out["input"]["material"],
-        })
-        print(f"[pseudo-marble] built {rec['scene_id']} "
+        scenes.append(out)
+        print(f"[pseudo-marble:blender] built {rec['scene_id']} "
               f"({rec['shape']} / {rec['material']} / {rec['split']})")
 
+    manifest = samples.build_manifest(
+        "blender", split.summary(), split.test_pairs, scenes
+    )
     with open(os.path.join(args.output, "manifest.json"), "w") as fh:
         json.dump(manifest, fh, indent=2)
-    print(f"[pseudo-marble] wrote {len(assignments)} scenes -> {args.output}")
+    print(f"[pseudo-marble:blender] wrote {len(scenes)} scenes -> {args.output}")
 
 
 if __name__ == "__main__":

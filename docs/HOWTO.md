@@ -8,7 +8,8 @@ substrate) or just poking the pure-Python core anywhere.
 | You want to... | You need |
 |---|---|
 | Run the core + tests | Python 3.10+ only |
-| Generate paired data | Blender 4.x (ships its own Python) |
+| Generate paired data (**primary**) | `pip install -e ".[mujoco]"` (arm64-native on Mac) |
+| Generate paired data (high-fidelity, optional) | Blender 4.x (ships its own Python) |
 | Mesh validation / collision decomposition | `pip install -e ".[datagen]"` (trimesh; optional CoACD/V-HACD) |
 | Train the MLX model | Apple silicon + `pip install -e ".[mlx]"` |
 
@@ -40,24 +41,45 @@ pip install -e ".[datagen]"      # trimesh etc. (outside Blender)
 pip install -e ".[mlx]"          # Apple silicon only
 ```
 
-## 3. Generate a paired dataset (Blender)
+## 3. Generate a paired dataset
 
-Install [Blender 4.x](https://www.blender.org/download/). The pipeline runs
-inside Blender's bundled Python.
+Both generators write the **identical** `sample.json` schema (below), so anything
+downstream is agnostic to which one you used.
+
+### 3a. MuJoCo — the primary path (recommended)
+
+```bash
+pip install -e ".[mujoco]"
+python -m pseudomarble.data.generate_mujoco \
+    --output data/pseudo_marble \
+    --num-scenes 16 --views 16 --resolution 256 \
+    --shapes box,sphere,cylinder,capsule,ellipsoid
+# or: scripts/run_datagen_mujoco.sh data/pseudo_marble 16 16 256
+```
+
+Why primary: MuJoCo is arm64-native (no Docker, no bpy), and the
+appearance↔physics coupling lives in **one geom** (`rgba` + `density` +
+`friction`) with physics ground truth as the engine's native output. Honest
+caveat: its renderer isn't photorealistic — transparent materials (glass, ice)
+look weaker than opaque ones. See `docs/ARCHITECTURE.md`.
+
+> Primitive shapes give a dependency-free smoke test. Concave/custom shapes
+> (cup, cone, torus) need a mesh asset — that's the GSO/Objaverse path
+> (`docs/GSO_EXPERIMENT.md`).
+
+### 3b. Blender — optional high-fidelity path
+
+Install [Blender 4.x](https://www.blender.org/download/); the pipeline runs in
+its bundled Python. Use this when you want photoreal renders (real glass/ice
+transmission) at the cost of slower generation and bpy setup.
 
 ```bash
 blender --background --python src/pseudomarble/data/generate_blender.py -- \
     --output data/pseudo_marble \
-    --num-scenes 16 \
-    --views 16 \
-    --resolution 256 \
+    --num-scenes 16 --views 16 --resolution 256 \
     --shapes cube,sphere,cylinder,cone,torus,cup \
     --engine CYCLES --samples 64
 ```
-
-> Tip: the built-in primitive shapes (including a hollow `cup`) give a
-> dependency-free smoke test of the whole pipeline before you wire in an asset
-> library like Objaverse.
 
 Each scene `data/pseudo_marble/<scene_id>/` contains:
 

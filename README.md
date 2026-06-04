@@ -93,7 +93,10 @@ ability to train on Metal/MLX without CUDA kernels (see
 | Principled material library (the coupling) | ✅ implemented + tested |
 | Held-out combination splits (the honest test) | ✅ implemented + tested |
 | Coherence metric (reference + MLX fast path) | ✅ definition implemented + tested |
-| Blender data pipeline (renders + physics GT) | ✅ written; runs on your Mac in Blender |
+| **MuJoCo data pipeline (primary)** — renders + native physics | ✅ written; MJCF builder tested; runs on your Mac |
+| Blender data pipeline (optional, high-fidelity) | ✅ written; same `sample.json` contract |
+| Shared `sample.json` schema (generator-agnostic) | ✅ implemented + tested |
+| GSO "real eigenvector" experiment | 🅿️ parked / designed ([GSO_EXPERIMENT.md](docs/GSO_EXPERIMENT.md)) |
 | Mesh validation / convex decomposition | ✅ written (optional deps) |
 | MLX encoder + dual decoder | 🔜 design stage ([ARCHITECTURE.md](docs/ARCHITECTURE.md)) |
 | Coherence benchmark harness | 🔜 next |
@@ -101,13 +104,21 @@ ability to train on Metal/MLX without CUDA kernels (see
 ## Quick start
 
 ```bash
-# pure-python core + tests (no Blender/MLX needed)
+# pure-python core + tests (no MuJoCo/Blender/MLX needed)
 python -m pytest            # or: python tests/test_materials.py
 
-# generate a tiny paired dataset (requires Blender on your Mac)
+# generate a tiny paired dataset — PRIMARY path, MuJoCo (arm64-native on Mac)
+pip install -e ".[mujoco]"
+python -m pseudomarble.data.generate_mujoco \
+    --output data/pseudo_marble --num-scenes 16 --views 16 --resolution 256
+
+# optional high-fidelity path — Blender (same sample.json contract)
 blender --background --python src/pseudomarble/data/generate_blender.py -- \
     --output data/pseudo_marble --num-scenes 16 --views 16 --resolution 256
 ```
+
+Both generators write the **identical** [`sample.json`](docs/HOWTO.md#the-paired-sample-schema-samplejson)
+schema (`data/samples.py`), so everything downstream is generator-agnostic.
 
 Full setup, including Apple-silicon/MLX, is in
 [`docs/HOWTO.md`](docs/HOWTO.md).
@@ -120,7 +131,9 @@ src/pseudomarble/
   splits.py               # held-out material×shape combinations (generalization test)
   config.py               # render / physics / model configs
   data/
-    generate_blender.py   # bpy pipeline: paired renders + physics ground truth
+    samples.py            # the shared sample.json contract (single source of truth)
+    generate_mujoco.py    # PRIMARY generator: MuJoCo renders + native physics
+    generate_blender.py   # optional high-fidelity generator (same contract)
     mesh_validate.py      # watertightness gate (mass needs valid volume)
     collision.py          # convex DEcomposition (not convex hull — keeps concavity)
   models/
@@ -128,6 +141,7 @@ src/pseudomarble/
 docs/
   TAXONOMY_NOTES.md       # the conceptual lineage / argument
   ARCHITECTURE.md         # design decisions + honest limitations
+  GSO_EXPERIMENT.md       # parked: real-scan "escape Blender's eigenvector" plan
   HOWTO.md                # setup & usage
 tests/                    # pure-python suites (run anywhere)
 ```
