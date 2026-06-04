@@ -50,36 +50,31 @@ Personal research. Not affiliated with World Labs. Not an attempt to copy Marble
 
 PRs #1, #2, #3 all merged to `main`.
 
-## IMPORTANT constraint change (2026-06): no MacBook / no Apple silicon
+## Hardware note (2026-06): MacBook Pro exists, just not always on hand
 
-The project was scoped around an **M5 / MLX / Metal** substrate, but the user
-**does not have access to a Mac.** This blocks two assumptions:
+The target substrate **is** the user's **MacBook Pro (Apple silicon, M5 / 64 GB)** —
+the MLX / Metal plan is intact and correct. The only limitation is per-session:
+some sessions run in a **Linux container without the Mac**, so **Mac-only steps
+(MLX training, Metal rendering) can't be executed in those sessions** — only
+written and reviewed.
 
-- **MLX runs only on Apple silicon** — the planned "MLX encoder + behavior head"
-  cannot run on the user's hardware as-is. The model layer should likely be made
-  **framework-agnostic** or retargeted (PyTorch/JAX on CPU/CUDA, or numpy for a
-  tiny first model) before any training step.
-- The "runs on a MacBook Pro" language in README/docs is now aspirational, not
-  literal. Revisit it when the compute target is known.
-
-Good news — most of the stack is portable:
-- The data layer is **pure-Python**; `MuJoCo` has **Linux/CPU wheels**, so data
-  generation can run off-Mac (even in a Linux container), though renders are
-  software-GL and slower.
-- The coherence metric has a pure-Python reference path (no MLX needed to test it).
-
-**Open decision for next session:** confirm the actual compute the user has
-(Linux? CUDA GPU? CPU only? cloud?), then choose the model framework accordingly.
-Do NOT default to MLX again without confirming Apple-silicon access.
+Implication for how we work, not what we build:
+- Keep doing what we've done — author MLX/Mac code with **pure-Python cores that
+  test in any session**, and **defer Mac-only execution** (running the MLX model,
+  Metal/MuJoCo rendering at speed) to when the user has the laptop.
+- MLX remains the intended model framework. Do **not** retarget away from it.
+- Data generation can also run off-Mac if needed (`MuJoCo` has Linux/CPU wheels,
+  slower software GL), but the canonical runs happen on the Mac.
 
 ## Next steps (when resumed)
 
-1. Decide compute target + model framework (see constraint above).
-2. Generate a small real dataset on whatever box can run MuJoCo, and sanity-check
-   that probe outcomes are stable (watch the "chaos near tipping points" risk in
-   `docs/BEHAVIOR_TASK.md`) and that renders load.
-3. Build encoder + action-conditioned behavior head (+ optional render head).
-4. Run the headline experiment: **shared-essence model vs. two glued-together
+1. On the Mac: generate a small real dataset with MuJoCo and sanity-check that
+   probe outcomes are stable (watch the "chaos near tipping points" risk in
+   `docs/BEHAVIOR_TASK.md`) and that renders load. (Can be smoke-tested off-Mac.)
+2. Build the **MLX** encoder + action-conditioned behavior head (+ optional render
+   head) — keep a pure-Python/numpy-testable core so it can be reviewed in any
+   session; run/train it on the Mac.
+3. Run the headline experiment: **shared-essence model vs. two glued-together
    models**, compared on coherence over **held-out essence regions** — and report
    the result honestly, including a null.
 
