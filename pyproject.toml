@@ -26,6 +26,9 @@ datagen = ["trimesh>=4.0", "numpy>=1.24"]
 # Includes image IO so training can read the generated render PNGs.
 mlx = ["mlx>=0.18", "numpy>=1.24", "imageio>=2.31", "Pillow>=10.0"]
 dev = ["pytest>=8.0", "ruff>=0.6"]
+# Optional CPU PyTorch backend (models/torch_net.py): an in-session trainable
+# stand-in to verify the loop converges without a Mac. NOT the canonical trainer.
+torch = ["torch>=2.2"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

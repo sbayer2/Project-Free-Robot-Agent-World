@@ -54,11 +54,16 @@ Personal research. Not affiliated with World Labs. Not an attempt to copy Marble
 
 PRs #1, #2, #3 merged to `main`. PR #4 = encoder + behavior head.
 
-### Sandbox note on MLX
+### Sandbox note on MLX / backends
 The pip `mlx` wheel on plain Linux x86 is **non-functional** (missing
-`libmlx.so`) — there is no usable Linux/CPU MLX runtime in these sessions. `numpy`
-*does* install and run, so `numpy_net` is the in-session stand-in for validating
-the model's forward pass; real training is MLX on the Mac.
+`libmlx.so`) — there is no usable Linux/CPU MLX runtime in these sessions. The
+architecture therefore has three mirrored backends from one `ModelConfig`:
+- `mlx_net` — canonical trainer, MLX/Metal, Mac only.
+- `numpy_net` — forward-only, validates shapes in any session (numpy installs).
+- `torch_net` — PyTorch **CPU** stand-in; runnable in-sandbox to verify the
+  training loop converges (loss drops) before spending Mac time. NOT canonical.
+There is no Claude Code feature to run MLX on Anthropic hardware; the only real
+MLX execution is the user's Mac (or an NVIDIA box via MLX's CUDA backend).
 
 ## Hardware note (2026-06): MacBook Pro exists, just not always on hand
 

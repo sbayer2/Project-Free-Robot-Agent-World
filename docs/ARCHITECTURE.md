@@ -157,11 +157,14 @@ independent decoders (disjoint dims) score ~0.
    batches; image loading + MLX conversion are lazy
    (`data/dataset.PseudoMarbleDataset`).
 3. **Encoder + behavior head** — *done.* Multi-view CNN -> shared latent ->
-   behavior head (drop/tilt/push outcomes) + auxiliary essence head. Built in MLX
-   (`models/mlx_net.py`, trains on the Mac via `models/train.py`) with a NumPy
-   forward-reference (`models/numpy_net.py`) that runs and is tested in any
-   session, since MLX has no working Linux runtime. Eval is on the held-out
-   essence region.
+   behavior head (drop/tilt/push outcomes) + auxiliary essence head. One
+   architecture, three mirrored backends from one `ModelConfig`:
+   `models/mlx_net.py` (canonical trainer, MLX/Metal on the Mac, via
+   `models/train.py`); `models/numpy_net.py` (forward-only, shape-tested in any
+   session, since MLX has no Linux runtime); `models/torch_net.py` (PyTorch CPU
+   stand-in that verifies the training loop converges in-sandbox — a 4-5x loss
+   drop on a synthetic overfit batch is checked by a test). Eval is on the
+   held-out essence region.
 4. **MLX simplified splat render decoder** — the appearance head. *Next* (needed
    to actually run the coherence experiment, which compares render vs. behavior).
 5. **Coherence benchmark harness** — shared vs. independent, on held-out regions.

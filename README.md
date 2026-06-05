@@ -135,6 +135,7 @@ Full setup (including the optional Blender path and Apple-silicon/MLX) is in
 | Data generation — MuJoCo (primary), Blender (optional, appearance) | ✅ done; runs on your Mac |
 | Dataset loader (images + behavior targets, batched) | ✅ done + tested |
 | Encoder + behavior head (MLX trainer; numpy forward stand-in) | ✅ authored + forward-tested; trains on the Mac |
+| Training verified in-sandbox (PyTorch CPU stand-in; loss drops) | ✅ done + tested |
 | Render head (appearance) — needed for the coherence experiment | 🔜 next |
 | Full experiment: one-understanding vs. glued-together | 🔜 next |
 | Using real scanned objects instead of textbook values | 🅿️ planned ([GSO_EXPERIMENT.md](docs/GSO_EXPERIMENT.md)) |
@@ -157,6 +158,7 @@ src/pseudomarble/
   models/
     mlx_net.py            # the trainable encoder + behavior/essence heads (MLX, on Mac)
     numpy_net.py          # same architecture in numpy: forward-only, runs in any session
+    torch_net.py          # same architecture in PyTorch CPU: trainable smoke-test stand-in
     losses.py             # framework-agnostic loss reference (tested anywhere)
     train.py              # training loop (MLX); eval on the held-out essence region
     coherence.py          # the "do look and behavior move together?" measurement
