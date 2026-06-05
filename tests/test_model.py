@@ -1,0 +1,58 @@
+"""Tests for model config, the MLX import guard, and the train CLI (pure-Python).
+
+These run in any session: they check the config matches the behavior target, that
+the MLX path either builds (on Apple silicon) or fails with a clear message
+(elsewhere), and that the training arg parser behaves.
+"""
+
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+
+from pseudomarble import probes  # noqa: E402
+from pseudomarble.config import ModelConfig  # noqa: E402
+from pseudomarble.models import mlx_net, train  # noqa: E402
+
+
+def test_behavior_dim_matches_probes():
+    # The model's behavior head must match the flattened probe target exactly.
+    assert ModelConfig().behavior_dim == probes.BEHAVIOR_DIM
+
+
+def test_mlx_builds_or_guards_clearly():
+    if mlx_net._HAVE_MLX:  # on the Mac: it should actually build
+        model = mlx_net.build_model(ModelConfig())
+        assert model is not None
+    else:  # elsewhere: a clear, actionable error
+        try:
+            mlx_net.build_model(ModelConfig())
+        except RuntimeError as exc:
+            assert "MLX" in str(exc)
+        else:  # pragma: no cover
+            raise AssertionError("expected RuntimeError without MLX")
+
+
+def test_train_args_defaults_and_overrides():
+    ns = train.parse_args([])
+    assert ns.data == "data/pseudo_marble"
+    assert ns.epochs == 30
+    assert ns.batch_size == 16
+
+    ns2 = train.parse_args(["--epochs", "5", "--latent-dim", "64", "--out", "runs/x"])
+    assert ns2.epochs == 5
+    cfg = train.make_config(ns2)
+    assert cfg.latent_dim == 64  # override applied
+
+
+def test_make_config_default_keeps_model_config():
+    ns = train.parse_args([])
+    assert train.make_config(ns).latent_dim == ModelConfig().latent_dim
+
+
+if __name__ == "__main__":
+    fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
+    for fn in fns:
+        fn()
+        print(f"ok  {fn.__name__}")
+    print(f"\n{len(fns)} passed")

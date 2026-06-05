@@ -62,15 +62,38 @@ class DatagenConfig:
 
 @dataclass(frozen=True)
 class ModelConfig:
-    """Shape of the MLX shared-latent model (see docs/ARCHITECTURE.md).
+    """Shape of the shared-latent model (see docs/ARCHITECTURE.md).
 
-    Implemented incrementally — these are the agreed dimensions, not a promise
-    that every field is wired up yet.
+    The architecture is backend-agnostic: ``models/mlx_net.py`` (trains on the
+    Mac) and ``models/numpy_net.py`` (a forward-only reference that runs/tests in
+    any session) build the *same* layers from these dimensions.
     """
 
+    # Encoder (multi-view CNN -> shared latent z).
+    image_size: int = 128          # advisory; encoder global-pools, so any HxW works
+    in_channels: int = 3
+    conv_channels: tuple = (32, 64, 128)
+    conv_kernel: int = 3
+    conv_stride: int = 2
     latent_dim: int = 256
     encoder_width: int = 512
+
+    # Behavior head (z -> flattened drop/tilt/push outcomes). Equals
+    # probes.BEHAVIOR_DIM (PROBE_ORDER x OUTCOME_FIELDS); a test guards the match.
+    behavior_dim: int = 21
+    behavior_head_width: int = 256
+
+    # Auxiliary essence head (z -> density/friction/restitution, normalized).
+    essence_dim: int = 3
+    essence_head_width: int = 128
+    essence_weight: float = 0.3
+
+    # Reserved for the later render head / coherence experiment.
     render_decoder_width: int = 512
-    physics_decoder_width: int = 256
-    num_gaussians: int = 4096  # simplified MLX splat budget (not full 3DGS)
+    num_gaussians: int = 4096
     coherence_weight: float = 1.0
+
+
+def conv_output_channels(cfg: "ModelConfig") -> int:
+    """Channels after the conv stack (= last conv layer's channel count)."""
+    return cfg.conv_channels[-1]

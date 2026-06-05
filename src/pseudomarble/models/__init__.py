@@ -1,9 +1,12 @@
 """MLX shared-latent model (encoder -> latent -> {render, physics} decoders).
 
-DESIGN STAGE. The data pipeline comes first (see docs/ARCHITECTURE.md, "Build
-order"); this package currently holds the agreed interface and the coherence
-loss, implemented against MLX when it is available on the Mac. We keep imports
-soft so the rest of the package and CI do not require ``mlx``.
+Status: encoder + behavior head are built. ``mlx_net`` is the trainable model
+(MLX, runs on the Mac); ``numpy_net`` mirrors its architecture for a forward-only
+check that runs in any session (MLX has no working Linux runtime); ``losses`` is
+the framework-agnostic loss reference; ``train`` is the MLX training loop;
+``coherence`` is the measurement. The render head (appearance) is next, and is
+what enables the full render-vs-behavior coherence experiment. Imports stay soft
+so the rest of the package and CI do not require ``mlx``.
 
 The model the rest of the project is building toward::
 
