@@ -123,11 +123,15 @@ class NumpyModel:
             x = np.maximum(_conv2d(_upsample2(x), w, b, stride=1, pad=1), 0.0)
         return _sigmoid(_conv2d(x, self.Wf, self.bf, stride=1, pad=1))
 
-    def __call__(self, images) -> Dict:
+    def behavior_from_z(self, z):
         np = _np()
+        return np.maximum(z @ self.Wb1 + self.bb1, 0.0) @ self.Wb2 + self.bb2
+
+    def essence_from_z(self, z):
+        np = _np()
+        return np.maximum(z @ self.We1 + self.be1, 0.0) @ self.We2 + self.be2
+
+    def __call__(self, images) -> Dict:
         z = self.encode(images)
-        hb = np.maximum(z @ self.Wb1 + self.bb1, 0.0)
-        behavior = hb @ self.Wb2 + self.bb2
-        he = np.maximum(z @ self.We1 + self.be1, 0.0)
-        essence = he @ self.We2 + self.be2
-        return {"z": z, "behavior": behavior, "essence": essence, "render": self.decode(z)}
+        return {"z": z, "behavior": self.behavior_from_z(z),
+                "essence": self.essence_from_z(z), "render": self.decode(z)}
