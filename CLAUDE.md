@@ -64,6 +64,10 @@ architecture therefore has three mirrored backends from one `ModelConfig`:
   training loop converges (loss drops) before spending Mac time. NOT canonical.
 There is no Claude Code feature to run MLX on Anthropic hardware; the only real
 MLX execution is the user's Mac (or an NVIDIA box via MLX's CUDA backend).
+`scripts/bench_torch.py` measures in-sandbox CPU scaling (4-core/15GB): comfortable
+to ~1M params / 128px / 16 views (sub-second–~1.4s/step); past ~192px / multi-M
+params CPU step-time (7–22s) makes real training impractical — memory never bound.
+Legacy GPU backends (cudamat/gnumpy/Theano) were ruled out: no GPU here, deprecated.
 
 ## Hardware note (2026-06): MacBook Pro exists, just not always on hand
 
