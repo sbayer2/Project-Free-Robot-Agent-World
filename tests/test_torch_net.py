@@ -20,7 +20,7 @@ except Exception:  # pragma: no cover
 from pseudomarble.config import ModelConfig  # noqa: E402
 
 SMALL = replace(ModelConfig(), conv_channels=(4, 8), latent_dim=16,
-                behavior_head_width=16, essence_head_width=8)
+                behavior_head_width=16, essence_head_width=8, image_size=16)
 
 
 def _skip():
@@ -41,6 +41,7 @@ def test_forward_shapes():
     assert out["z"].shape == (2, SMALL.latent_dim)
     assert out["behavior"].shape == (2, SMALL.behavior_dim)
     assert out["essence"].shape == (2, SMALL.essence_dim)
+    assert tuple(out["render"].shape) == (2, SMALL.image_size, SMALL.image_size, 3)
 
 
 def test_training_reduces_loss():
@@ -85,6 +86,7 @@ def test_shapes_match_numpy_backend():
     t_out = build_model(SMALL)(torch.from_numpy(images))
     assert tuple(t_out["behavior"].shape) == n_out["behavior"].shape
     assert tuple(t_out["essence"].shape) == n_out["essence"].shape
+    assert tuple(t_out["render"].shape) == n_out["render"].shape
 
 
 if __name__ == "__main__":

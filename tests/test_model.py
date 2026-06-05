@@ -10,14 +10,27 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
+from dataclasses import replace  # noqa: E402
+
 from pseudomarble import probes  # noqa: E402
-from pseudomarble.config import ModelConfig  # noqa: E402
+from pseudomarble.config import ModelConfig, num_upsample_steps  # noqa: E402
 from pseudomarble.models import mlx_net, train  # noqa: E402
 
 
 def test_behavior_dim_matches_probes():
     # The model's behavior head must match the flattened probe target exactly.
     assert ModelConfig().behavior_dim == probes.BEHAVIOR_DIM
+
+
+def test_num_upsample_steps_and_validation():
+    assert num_upsample_steps(replace(ModelConfig(), image_size=128, render_seed=4)) == 5
+    assert num_upsample_steps(replace(ModelConfig(), image_size=16, render_seed=4)) == 2
+    try:
+        num_upsample_steps(replace(ModelConfig(), image_size=96, render_seed=4))
+    except ValueError:
+        pass
+    else:  # pragma: no cover
+        raise AssertionError("expected ValueError for non-power-of-two image_size")
 
 
 def test_mlx_builds_or_guards_clearly():

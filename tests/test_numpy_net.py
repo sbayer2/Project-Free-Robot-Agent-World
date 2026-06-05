@@ -20,13 +20,16 @@ except Exception:  # pragma: no cover
 from pseudomarble.config import ModelConfig  # noqa: E402
 from pseudomarble.models import losses  # noqa: E402
 
-# A small architecture so the test is fast (3 conv layers wouldn't fit 16x16).
+# A small architecture so the test is fast. image_size=16 keeps the render
+# decoder cheap (16 = render_seed(4) * 2^2), which matters for the python-loop
+# numpy conv.
 SMALL = replace(
     ModelConfig(),
     conv_channels=(4, 8),
     latent_dim=16,
     behavior_head_width=16,
     essence_head_width=8,
+    image_size=16,
 )
 
 
@@ -48,6 +51,7 @@ def test_forward_shapes():
     assert out["z"].shape == (2, SMALL.latent_dim)
     assert out["behavior"].shape == (2, SMALL.behavior_dim)
     assert out["essence"].shape == (2, SMALL.essence_dim)
+    assert out["render"].shape == (2, SMALL.image_size, SMALL.image_size, 3)
 
 
 def test_forward_is_deterministic():
@@ -69,15 +73,17 @@ def test_pipeline_composes_with_loss():
     model = NumpyModel(SMALL, seed=0)
     images = np.random.default_rng(3).random((4, 3, 16, 16, 3))
     out = model(images)
-    behavior_target = np.zeros((4, SMALL.behavior_dim))
-    essence_target = np.zeros((4, SMALL.essence_dim))
+    render_target = images.mean(axis=1)  # mean view
     result = losses.combined_loss(
-        out["behavior"].tolist(), behavior_target.tolist(),
-        out["essence"].tolist(), essence_target.tolist(),
+        out["behavior"].tolist(), np.zeros((4, SMALL.behavior_dim)).tolist(),
+        out["essence"].tolist(), np.zeros((4, SMALL.essence_dim)).tolist(),
         essence_weight=SMALL.essence_weight,
+        render_pred=out["render"].tolist(), render_target=render_target.tolist(),
+        render_weight=SMALL.render_weight,
     )
     assert result["total"] >= 0.0
     assert result["behavior"] >= 0.0
+    assert result["render"] >= 0.0
 
 
 def test_too_small_image_raises():

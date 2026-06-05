@@ -31,6 +31,8 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
     p.add_argument("--batch-size", type=int, default=16)
     p.add_argument("--lr", type=float, default=1e-3)
     p.add_argument("--latent-dim", type=int, default=None, help="override ModelConfig")
+    p.add_argument("--image-size", type=int, default=None,
+                   help="model render size; must match the dataset's resolution")
     p.add_argument("--max-views", type=int, default=None, help="cap views per scene")
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--out", default="runs/exp", help="checkpoint/metrics dir")
@@ -42,6 +44,8 @@ def make_config(args: argparse.Namespace) -> ModelConfig:
     cfg = ModelConfig()
     if args.latent_dim is not None:
         cfg = replace(cfg, latent_dim=args.latent_dim)
+    if args.image_size is not None:
+        cfg = replace(cfg, image_size=args.image_size)
     return cfg
 
 
@@ -50,16 +54,17 @@ def evaluate(model, dataset: PseudoMarbleDataset, cfg: ModelConfig,
     """Mean behavior / essence MSE over a split (no shuffling)."""
     import mlx.core as mx  # type: ignore
 
-    nb = ne = n = 0.0
+    nb = ne = nr = n = 0.0
     for batch in dataset.iter_batches(batch_size, shuffle=False,
                                       with_images=True, max_views=max_views, as_mlx=True):
         out = model(batch["images"])
         bs = batch["behavior"].shape[0]
         nb += float(mx.mean((out["behavior"] - batch["behavior"]) ** 2)) * bs
         ne += float(mx.mean((out["essence"] - batch["essence"]) ** 2)) * bs
+        nr += float(mx.mean((out["render"] - mx.mean(batch["images"], axis=1)) ** 2)) * bs
         n += bs
     n = max(1.0, n)
-    return {"behavior_mse": nb / n, "essence_mse": ne / n}
+    return {"behavior_mse": nb / n, "essence_mse": ne / n, "render_mse": nr / n}
 
 
 def main(argv: List[str]) -> None:
@@ -79,6 +84,16 @@ def main(argv: List[str]) -> None:
           f"(test = held-out essence region)")
     if len(train) == 0:
         raise SystemExit("no training scenes; generate a dataset first")
+
+    # The render head reconstructs at cfg.image_size, so the dataset must be
+    # rendered at that resolution (the recon target is the mean input view).
+    res = train[0].record.get("appearance", {}).get("resolution")
+    if res is not None and res != cfg.image_size:
+        raise SystemExit(
+            f"dataset rendered at {res}px but model image_size={cfg.image_size}. "
+            f"Regenerate with --resolution {cfg.image_size} (a power-of-two multiple "
+            f"of render_seed={cfg.render_seed}), or pass --image-size {res}."
+        )
 
     model = build_model(cfg)
     optimizer = optim.AdamW(learning_rate=args.lr)

@@ -23,6 +23,7 @@ from pseudomarble.config import ModelConfig
 try:
     import torch  # type: ignore
     import torch.nn as nn  # type: ignore
+    import torch.nn.functional as F  # type: ignore
 
     _HAVE_TORCH = True
 except Exception:  # pragma: no cover
@@ -63,6 +64,16 @@ if _HAVE_TORCH:
             self.behavior = _MLP(cfg.latent_dim, cfg.behavior_head_width, cfg.behavior_dim)
             self.essence = _MLP(cfg.latent_dim, cfg.essence_head_width, cfg.essence_dim)
 
+            # Render decoder: z -> seed map -> (upsample + conv)*k -> RGB.
+            from pseudomarble.config import num_upsample_steps
+            ch, s = cfg.render_channels, cfg.render_seed
+            self._seed_ch, self._seed_s = ch, s
+            self.seed = nn.Linear(cfg.latent_dim, ch * s * s)
+            self.dec_convs = nn.ModuleList(
+                [nn.Conv2d(ch, ch, 3, padding=1) for _ in range(num_upsample_steps(cfg))]
+            )
+            self.dec_final = nn.Conv2d(ch, 3, 3, padding=1)
+
         def encode(self, images):
             # images: (B, N, H, W, C) NHWC -> (B*N, C, H, W) NCHW for conv.
             B, N = images.shape[0], images.shape[1]
@@ -73,9 +84,19 @@ if _HAVE_TORCH:
             z = torch.relu(self.proj(x))              # per-view latent
             return z.reshape(B, N, -1).mean(dim=1)    # pool over views
 
+        def decode(self, z):
+            # z -> (B, ch, s, s) NCHW -> upsample/conv -> (B, S, S, 3) NHWC.
+            x = torch.relu(self.seed(z)).reshape(z.shape[0], self._seed_ch,
+                                                 self._seed_s, self._seed_s)
+            for conv in self.dec_convs:
+                x = torch.relu(conv(F.interpolate(x, scale_factor=2, mode="nearest")))
+            x = torch.sigmoid(self.dec_final(x))
+            return x.permute(0, 2, 3, 1)
+
         def forward(self, images) -> Dict:
             z = self.encode(images)
-            return {"z": z, "behavior": self.behavior(z), "essence": self.essence(z)}
+            return {"z": z, "behavior": self.behavior(z),
+                    "essence": self.essence(z), "render": self.decode(z)}
 
 
 def build_model(cfg: ModelConfig = ModelConfig()):
@@ -83,25 +104,33 @@ def build_model(cfg: ModelConfig = ModelConfig()):
     return TorchModel(cfg)
 
 
-def loss_fn(out: Dict, behavior_t, essence_t, essence_weight: float):
+def loss_fn(out: Dict, behavior_t, essence_t, cfg: ModelConfig, render_t=None):
+    """behavior MSE + essence_weight*essence MSE (+ render_weight*recon MSE).
+
+    ``render_t`` is the mean-view target (B, image_size, image_size, 3); when
+    omitted the render term is skipped (e.g. behavior-only checks)."""
     _require_torch()
     b = torch.mean((out["behavior"] - behavior_t) ** 2)
     e = torch.mean((out["essence"] - essence_t) ** 2)
-    return b + essence_weight * e
+    loss = b + cfg.essence_weight * e
+    if render_t is not None:
+        loss = loss + cfg.render_weight * torch.mean((out["render"] - render_t) ** 2)
+    return loss
 
 
 def overfit_smoke(cfg: ModelConfig, images, behavior_t, essence_t,
                   steps: int = 200, lr: float = 1e-3, seed: int = 0) -> List[float]:
-    """Train on one fixed batch; returns the loss per step. Loss should fall
-    sharply if gradients flow correctly through the whole network."""
+    """Train on one fixed batch (incl. the render head); returns loss per step.
+    Loss should fall sharply if gradients flow through the whole network."""
     _require_torch()
     torch.manual_seed(seed)
     model = TorchModel(cfg)
     opt = torch.optim.Adam(model.parameters(), lr=lr)
+    render_t = images.mean(dim=1)  # mean over the N views = canonical appearance
     history: List[float] = []
     for _ in range(steps):
         opt.zero_grad()
-        loss = loss_fn(model(images), behavior_t, essence_t, cfg.essence_weight)
+        loss = loss_fn(model(images), behavior_t, essence_t, cfg, render_t)
         loss.backward()
         opt.step()
         history.append(float(loss.detach()))
@@ -112,9 +141,9 @@ def _demo() -> None:  # pragma: no cover - manual smoke
     from dataclasses import replace
     _require_torch()
     cfg = replace(ModelConfig(), conv_channels=(8, 16), latent_dim=32,
-                  behavior_head_width=32, essence_head_width=16)
+                  behavior_head_width=32, essence_head_width=16, image_size=32)
     torch.manual_seed(0)
-    images = torch.rand(4, 3, 24, 24, 3)               # B=4, N=3 views
+    images = torch.rand(4, 3, 32, 32, 3)               # B=4, N=3 views (32=4*2^3)
     behavior_t = torch.rand(4, cfg.behavior_dim)
     essence_t = torch.rand(4, cfg.essence_dim)
     hist = overfit_smoke(cfg, images, behavior_t, essence_t, steps=200)

@@ -36,17 +36,50 @@ def mse(pred: Matrix, target: Matrix) -> float:
     return total / n
 
 
+def _flatten_sample(s) -> list:
+    out: list = []
+
+    def rec(v):
+        if isinstance(v, (list, tuple)):
+            for e in v:
+                rec(e)
+        else:
+            out.append(float(v))
+
+    rec(s)
+    return out
+
+
+def flatten_batch(x) -> list:
+    """Flatten each sample of a (B, ...) nested list to (B, D) — e.g. images."""
+    return [_flatten_sample(s) for s in x]
+
+
 def combined_loss(
     behavior_pred: Matrix,
     behavior_target: Matrix,
     essence_pred: Matrix,
     essence_target: Matrix,
     essence_weight: float = 0.3,
+    render_pred=None,
+    render_target=None,
+    render_weight: float = 1.0,
 ) -> Dict[str, float]:
-    """Total + component losses; mirrors the MLX training objective."""
+    """Total + component losses; mirrors the MLX training objective.
+
+    With the render head: total = behavior MSE + essence_weight * essence MSE
+    + render_weight * reconstruction MSE (the render target is the mean view).
+    """
     b = mse(behavior_pred, behavior_target)
     e = mse(essence_pred, essence_target)
-    return {"behavior": b, "essence": e, "total": b + essence_weight * e}
+    out = {"behavior": b, "essence": e}
+    total = b + essence_weight * e
+    if render_pred is not None:
+        r = mse(flatten_batch(render_pred), flatten_batch(render_target))
+        out["render"] = r
+        total += render_weight * r
+    out["total"] = total
+    return out
 
 
 def per_field_mse(pred: Matrix, target: Matrix) -> list:

@@ -88,12 +88,33 @@ class ModelConfig:
     essence_head_width: int = 128
     essence_weight: float = 0.3
 
-    # Reserved for the later render head / coherence experiment.
-    render_decoder_width: int = 512
-    num_gaussians: int = 4096
-    coherence_weight: float = 1.0
+    # Render head (z -> reconstructed canonical appearance). A lightweight conv
+    # decoder (nearest-upsample + conv), NOT a Gaussian splat decoder: simpler,
+    # CPU/Metal-portable, and sufficient because the coherence experiment measures
+    # whether appearance and behavior move together, not photorealism. Output is
+    # image_size x image_size x 3; image_size must be render_seed * 2^k.
+    render_seed: int = 4           # spatial size of the decoder's seed feature map
+    render_channels: int = 32      # channels in each decoder block
+    render_weight: float = 1.0     # reconstruction loss weight
+    coherence_weight: float = 1.0  # reserved for the coherence experiment
 
 
 def conv_output_channels(cfg: "ModelConfig") -> int:
     """Channels after the conv stack (= last conv layer's channel count)."""
     return cfg.conv_channels[-1]
+
+
+def num_upsample_steps(cfg: "ModelConfig") -> int:
+    """How many 2x upsamples take the decoder seed to image_size (must be exact)."""
+    ratio = cfg.image_size / cfg.render_seed
+    steps = 0
+    v = cfg.render_seed
+    while v < cfg.image_size:
+        v *= 2
+        steps += 1
+    if v != cfg.image_size:
+        raise ValueError(
+            f"image_size ({cfg.image_size}) must be render_seed ({cfg.render_seed}) "
+            f"* 2^k; got ratio {ratio}"
+        )
+    return steps
