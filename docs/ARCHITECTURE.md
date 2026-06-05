@@ -173,9 +173,18 @@ independent decoders (disjoint dims) score ~0.
 4. **Render head** — *done.* A lightweight conv decoder (z -> mean-view image),
    mirrored across mlx/numpy/torch; reconstruction MSE added to the loss. At
    128px/~1M params the full model trains in-sandbox (torch CPU, ~0.85 s/step).
-5. **Coherence benchmark harness** — *next.* Now runnable: shared-latent model vs.
-   two independent models, compared on render-vs-behavior coherence over held-out
-   essence regions.
+5. **Coherence benchmark harness** — *done* (`models/coherence_bench.py`).
+   Shared-latent model vs. two independent models, render-vs-behavior coherence
+   over held-out essence regions. **Key finding from building it:** an *untrained*
+   shared model already scores high coherence (~0.45) purely from architecture
+   (both heads read one `z`); the independent baseline is ~0. So the shared-vs-
+   independent gap is NOT evidence of a learned eigenvector — the honest signal is
+   `learned_coherence = trained_shared − untrained_shared` (averaged over several
+   untrained seeds, since the baseline varies ~0.36–0.46). The apparatus caught
+   this before any Mac time was spent.
+6. **Run the experiment on the Mac** — train the shared + two independent models
+   on real renders, report `learned_coherence` + behavior generalization on
+   held-out essence regions. Honestly, including a null.
 6. **(Parked)** GSO real-scan experiment — reality's eigenvector
    ([`GSO_EXPERIMENT.md`](GSO_EXPERIMENT.md)).
 

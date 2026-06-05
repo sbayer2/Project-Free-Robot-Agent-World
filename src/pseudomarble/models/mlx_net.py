@@ -105,6 +105,13 @@ if _HAVE_MLX:
             return {"z": z, "behavior": self.behavior(z),
                     "essence": self.essence(z), "render": self.decode(z)}
 
+        # Convenience accessors used by the coherence harness (decode = render).
+        def behavior_from_z(self, z):
+            return self.behavior(z)
+
+        def render_from_z(self, z):
+            return self.decode(z)
+
 
 def build_model(cfg: ModelConfig = ModelConfig()):
     """Construct the MLX model (raises a clear error if MLX is unavailable)."""

@@ -137,7 +137,8 @@ Full setup (including the optional Blender path and Apple-silicon/MLX) is in
 | Encoder + behavior head (MLX trainer; numpy forward stand-in) | ✅ authored + forward-tested; trains on the Mac |
 | Training verified in-sandbox (PyTorch CPU stand-in; loss drops) | ✅ done + tested |
 | Render head (appearance): conv decoder → mean-view reconstruction | ✅ done + tested (128px/~1M trains) |
-| Full experiment: one-understanding vs. glued-together (coherence) | 🔜 next |
+| Coherence benchmark harness (shared vs. glued, with controls) | ✅ done + tested |
+| Run the experiment on real renders (the result) | 🔜 on the Mac |
 | Using real scanned objects instead of textbook values | 🅿️ planned ([GSO_EXPERIMENT.md](docs/GSO_EXPERIMENT.md)) |
 
 ## Repository layout

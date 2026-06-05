@@ -53,6 +53,12 @@ Personal research. Not affiliated with World Labs. Not an attempt to copy Marble
   `models/losses.py` — pure-Python loss reference (behavior+essence+render).
   `models/train.py` — MLX training loop, eval on held-out essence region.
   `scripts/bench_torch.py` — CPU scale sweep (full model trains at 128px/~1M).
+- `models/coherence_bench.py` — the experiment harness: shared-latent vs. two
+  independent models, render-vs-behavior coherence. **KEY FINDING:** an untrained
+  shared model already scores ~0.45 coherence (architecture, not learning);
+  independent baseline ~0. So the honest signal is `learned_coherence =
+  trained_shared − untrained_shared` (average the baseline over seeds; it varies
+  ~0.36–0.46). Coherence is forward-only, so it runs on numpy in-sandbox.
 - Render head decision: a **conv decoder** (upsample+conv → image_size, which must
   be render_seed·2^k), reconstructing the **mean view**; NOT a splat decoder —
   we measure coherence, not photorealism. Splat/`brush` is a later option.
@@ -101,9 +107,11 @@ Implication for how we work, not what we build:
    confirm behavior MSE drops on the held-out essence region.
 3. Render head — **done** (conv decoder in mlx/numpy/torch; recon loss; trains at
    128px/~1M in-sandbox). On the Mac: generate at `--resolution 128` and train.
-4. Build the **coherence benchmark harness** (next): shared-latent model vs. two
-   independent models, compared on render-vs-behavior coherence over held-out
-   essence regions — using `models/coherence.py`. Report honestly, including a null.
+4. Coherence harness — **done** (`models/coherence_bench.py`, with the
+   architectural-baseline control). RUN THE EXPERIMENT on the Mac: train shared +
+   two independent models on real renders; report `learned_coherence` (over
+   several untrained seeds) + behavior generalization on held-out essence regions.
+   Report honestly, including a null. This is the project's payoff.
 
 ## Working conventions
 
