@@ -46,13 +46,19 @@ Personal research. Not affiliated with World Labs. Not an attempt to copy Marble
   image loading + `mlx` conversion lazy.
 - `models/coherence.py` — the coherence metric ("do look and behavior move
   together when you nudge the latent?"); reference (finite-diff) + MLX `jvp`.
-- `models/mlx_net.py` — trainable encoder + behavior head (+ aux essence head),
-  MLX, runs on the Mac. `models/numpy_net.py` — same architecture in numpy,
-  forward-only, runs/tests in any session. `models/losses.py` — pure-Python loss
-  reference. `models/train.py` — MLX training loop, eval on held-out essence region.
-- 69 tests across 12 suites; core imports with **no** mujoco/bpy/trimesh/numpy/mlx.
+- `models/mlx_net.py` — trainable encoder + behavior head + aux essence head +
+  **render head** (conv decoder z→mean-view image), MLX, runs on the Mac.
+  `models/numpy_net.py` — same architecture in numpy, forward-only, any session.
+  `models/torch_net.py` — same in PyTorch CPU, trainable in-sandbox.
+  `models/losses.py` — pure-Python loss reference (behavior+essence+render).
+  `models/train.py` — MLX training loop, eval on held-out essence region.
+  `scripts/bench_torch.py` — CPU scale sweep (full model trains at 128px/~1M).
+- Render head decision: a **conv decoder** (upsample+conv → image_size, which must
+  be render_seed·2^k), reconstructing the **mean view**; NOT a splat decoder —
+  we measure coherence, not photorealism. Splat/`brush` is a later option.
+- 76 tests across 14 suites; core imports with **no** mujoco/bpy/trimesh/numpy/mlx/torch.
 
-PRs #1, #2, #3 merged to `main`. PR #4 = encoder + behavior head.
+PRs #1–#5 merged to `main`. PR #6 = render head.
 
 ### Sandbox note on MLX / backends
 The pip `mlx` wheel on plain Linux x86 is **non-functional** (missing
@@ -93,11 +99,11 @@ Implication for how we work, not what we build:
 2. Encoder + behavior head — **done** (`models/mlx_net.py` + `numpy_net.py` +
    `train.py`). On the Mac: `python -m pseudomarble.models.train --data <dir>` and
    confirm behavior MSE drops on the held-out essence region.
-3. Build the **render head** (appearance) — the simplified MLX splat decoder — so
-   the coherence experiment has both a render and a behavior projection to compare.
-4. Run the headline experiment: **shared-essence model vs. two glued-together
-   models**, compared on coherence over **held-out essence regions** — and report
-   the result honestly, including a null.
+3. Render head — **done** (conv decoder in mlx/numpy/torch; recon loss; trains at
+   128px/~1M in-sandbox). On the Mac: generate at `--resolution 128` and train.
+4. Build the **coherence benchmark harness** (next): shared-latent model vs. two
+   independent models, compared on render-vs-behavior coherence over held-out
+   essence regions — using `models/coherence.py`. Report honestly, including a null.
 
 ## Working conventions
 

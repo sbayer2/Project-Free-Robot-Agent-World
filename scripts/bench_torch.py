@@ -8,24 +8,23 @@ on in a CPU sandbox before the canonical MLX/Metal runs on the Mac.
     python scripts/bench_torch.py            # default sweep
     python scripts/bench_torch.py --steps 20
 
-Findings (4-core / 15 GB Linux CPU sandbox; loss dropped every case, so
-gradients flow at all sizes — the limit is wall-clock, not memory or crashes):
+Findings (4-core / 15 GB Linux CPU sandbox; FULL model incl. the render head;
+loss dropped every case, so gradients flow at all sizes — the limit is
+wall-clock, not memory or crashes):
 
     case     img  views  params   ms/step   img/s   peakRSS
-    tiny      32    4     0.02M       4.7    6843     311 MB
-    small     64    8     0.08M      64.4     994     352 MB
-    medium    96   12     0.23M     141.7     677     476 MB
-    large    128   16     0.71M     764.2     168     839 MB
-    xl       128   16     0.71M    1375.7     186    1145 MB   (batch 16)
-    xxl      192   16     1.43M    7026         36    3002 MB
-    mega     192   16     1.43M   14653         35    5664 MB   (batch 32)
-    giant    256   24     3.53M   22460         17    7530 MB
+    tiny      32    4     0.07M      15.8    2031     328 MB
+    small     64    8     0.19M      49.9    1284     379 MB
+    medium   128   12     0.41M     268.5     358     668 MB
+    large    128   16     1.01M     847.3     151     913 MB   <- 128px / ~1M target
+    xl       256    8     1.02M    2357.2      27    1309 MB
 
-Takeaway: the sandbox comfortably iterates models up to ~1 M params / 128 px /
-~16 views at sub-second to ~1.4 s/step — fine for correctness + convergence
-smoke tests. Past ~192 px / multi-M params, CPU step time (7-22 s) makes real
-training impractical, which is exactly why MLX/Metal on the Mac is the canonical
-trainer. Memory never bound (peak 7.5 of 15 GB).
+Takeaway: the sandbox comfortably iterates the full model (encoder + behavior +
+essence + render head) up to ~1 M params / 128 px / 16 views at sub-second to
+~0.85 s/step — fine for correctness + convergence smoke tests. At 256 px step
+time jumps to ~2.4 s; past that CPU becomes impractical, which is why MLX/Metal
+on the Mac stays the canonical trainer. Memory never bound (peak 1.3 of 15 GB
+here). image_size must be render_seed(4) * 2^k for the decoder (32/64/128/256).
 """
 
 from __future__ import annotations
@@ -42,12 +41,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from pseudomarble.config import ModelConfig  # noqa: E402
 
 # (name, batch, n_views, image_size, conv_channels, latent_dim)
+# image_size must be render_seed(4) * 2^k for the render decoder: 32/64/128/256.
 SWEEP = [
     ("tiny", 8, 4, 32, (8, 16), 32),
     ("small", 8, 8, 64, (32, 64), 128),
-    ("medium", 8, 12, 96, (32, 64, 128), 256),
-    ("large", 8, 16, 128, (64, 128, 256), 512),
-    ("xl", 16, 16, 128, (64, 128, 256), 512),
+    ("medium", 8, 12, 128, (32, 64, 128), 256),
+    ("large", 8, 16, 128, (64, 128, 256), 512),   # the 128px ~1M target
+    ("xl", 8, 8, 256, (64, 128, 256), 512),
 ]
 
 
@@ -70,17 +70,18 @@ def run_case(name, B, N, img, channels, latent, steps):
     images = torch.rand(B, N, img, img, 3)
     behavior_t = torch.rand(B, cfg.behavior_dim)
     essence_t = torch.rand(B, cfg.essence_dim)
+    render_t = images.mean(dim=1)  # mean-view recon target (incl. the render head)
     opt = torch.optim.Adam(model.parameters(), lr=1e-3)
 
     # one warmup step (allocations, MKL planning) excluded from timing
-    loss0 = loss_fn(model(images), behavior_t, essence_t, cfg.essence_weight)
+    loss0 = loss_fn(model(images), behavior_t, essence_t, cfg, render_t)
     opt.zero_grad(); loss0.backward(); opt.step()
 
     t0 = time.perf_counter()
     last = float(loss0.detach())
     for _ in range(steps):
         opt.zero_grad()
-        loss = loss_fn(model(images), behavior_t, essence_t, cfg.essence_weight)
+        loss = loss_fn(model(images), behavior_t, essence_t, cfg, render_t)
         loss.backward()
         opt.step()
         last = float(loss.detach())

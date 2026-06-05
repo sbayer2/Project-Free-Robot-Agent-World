@@ -78,14 +78,32 @@ if _HAVE_MLX:
 
         def __init__(self, cfg: ModelConfig) -> None:
             super().__init__()
+            from pseudomarble.config import num_upsample_steps
             self.cfg = cfg
             self.encoder = Encoder(cfg)
             self.behavior = MLP(cfg.latent_dim, cfg.behavior_head_width, cfg.behavior_dim)
             self.essence = MLP(cfg.latent_dim, cfg.essence_head_width, cfg.essence_dim)
 
+            # Render decoder: z -> seed map -> (upsample + conv)*k -> RGB (NHWC).
+            ch, s = cfg.render_channels, cfg.render_seed
+            self._seed_ch, self._seed_s = ch, s
+            self.seed = nn.Linear(cfg.latent_dim, ch * s * s)
+            self.dec_convs = [nn.Conv2d(ch, ch, 3, padding=1)
+                              for _ in range(num_upsample_steps(cfg))]
+            self.dec_final = nn.Conv2d(ch, 3, 3, padding=1)
+
+        def decode(self, z):
+            x = nn.relu(self.seed(z)).reshape(z.shape[0], self._seed_s, self._seed_s,
+                                              self._seed_ch)
+            for conv in self.dec_convs:
+                x = mx.repeat(mx.repeat(x, 2, axis=1), 2, axis=2)  # nearest 2x upsample
+                x = nn.relu(conv(x))
+            return mx.sigmoid(self.dec_final(x))
+
         def __call__(self, images) -> Dict:
             z = self.encoder(images)
-            return {"z": z, "behavior": self.behavior(z), "essence": self.essence(z)}
+            return {"z": z, "behavior": self.behavior(z),
+                    "essence": self.essence(z), "render": self.decode(z)}
 
 
 def build_model(cfg: ModelConfig = ModelConfig()):
@@ -95,13 +113,17 @@ def build_model(cfg: ModelConfig = ModelConfig()):
 
 
 def loss_fn(model, batch: Dict, cfg: ModelConfig):
-    """Total loss = behavior MSE + essence_weight * essence MSE (mirrors losses.py).
+    """Total = behavior MSE + essence_weight*essence MSE + render_weight*recon MSE.
 
     ``batch`` holds mlx arrays: ``images`` (B,N,H,W,C), ``behavior`` (B,behavior_dim),
-    ``essence`` (B,essence_dim).
+    ``essence`` (B,essence_dim). The render target is the mean over the N views
+    (the pose-averaged canonical appearance); input H,W must equal cfg.image_size
+    so it matches the decoder output.
     """
     _require_mlx()
     out = model(batch["images"])
     b = mx.mean((out["behavior"] - batch["behavior"]) ** 2)
     e = mx.mean((out["essence"] - batch["essence"]) ** 2)
-    return b + cfg.essence_weight * e
+    render_target = mx.mean(batch["images"], axis=1)  # (B, H, W, C)
+    r = mx.mean((out["render"] - render_target) ** 2)
+    return b + cfg.essence_weight * e + cfg.render_weight * r

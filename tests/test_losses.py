@@ -34,6 +34,18 @@ def test_per_field_mse():
     assert losses.per_field_mse(pred, target) == [5.0, 10.0]
 
 
+def test_combined_loss_includes_render_when_given():
+    bp = bt = [[0.0]]
+    ep = et = [[0.0]]
+    # one sample, a 1x1 RGB image; mse over the 3 channels = (1+0+0)/3
+    rp = [[[[0.0, 0.0, 0.0]]]]
+    rt = [[[[1.0, 0.0, 0.0]]]]
+    out = losses.combined_loss(bp, bt, ep, et, essence_weight=0.5,
+                               render_pred=rp, render_target=rt, render_weight=2.0)
+    assert abs(out["render"] - 1.0 / 3.0) < 1e-9
+    assert abs(out["total"] - 2.0 * (1.0 / 3.0)) < 1e-9  # behavior+essence are 0
+
+
 def test_row_length_mismatch_raises():
     try:
         losses.mse([[1.0, 2.0]], [[1.0]])

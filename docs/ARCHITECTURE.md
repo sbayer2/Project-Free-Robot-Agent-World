@@ -104,22 +104,27 @@ of non-manifold/open meshes where volume is undefined. `mesh_validate.py` gates 
 watertightness before a mesh contributes physics ground truth. (Hollow/composite
 objects still violate the uniform-density assumption — a known, accepted limit.)
 
-## Render path on Apple silicon
+## Render head (the appearance projection)
 
 The reference 3D Gaussian-splatting rasterizer and most of the ecosystem
-(gsplat/nerfstudio) are **CUDA-only custom kernels**. On an M5 that's the real
-bottleneck — far more than dataset size.
+(gsplat/nerfstudio) are **CUDA-only custom kernels** — a poor fit for Metal/MLX
+and for a CPU-testable design.
 
-Decision: the pseudo-marble render path is a **simplified, MLX-native splat
-decoder** — a fixed budget of Gaussians (`ModelConfig.num_gaussians`) splatted
-with a differentiable, MLX-expressible approximation. We accept lower visual
-fidelity in exchange for training entirely on Metal/MLX with no CUDA dependency.
-This is the project's central "engineer around the constraint" move: a *pseudo*
-renderer is fine, because we measure **coherence**, not photorealism.
+Decision (implemented): the render head is a **lightweight conv decoder** —
+`z -> Linear -> seed feature map (render_seed²) -> (nearest-upsample 2x + Conv2d
++ ReLU) × k -> Conv2d -> sigmoid`, producing an `image_size × image_size × 3`
+image. The reconstruction target is the **mean over the input views** (the
+pose-averaged "canonical appearance"), consistent with a pose-invariant latent.
+`image_size` must be `render_seed · 2^k` (32/64/128/256…).
 
-> If full 3DGS is ever wanted on the Mac, [`brush`](https://github.com/ArthurBrussee/brush)
-> (Rust + wgpu/Burn) trains splats cross-platform on Metal and is the fallback
-> substrate. Out of scope for the coherence experiment.
+Why a conv decoder, not a Gaussian-splat decoder: we measure **coherence**
+(do appearance and behavior move together when the latent is nudged?), **not
+photorealism**. A conv decoder is simpler, mirrors cleanly across all three
+backends (MLX/numpy/torch), runs on CPU for in-sandbox tests, and is sufficient
+to carry the appearance↔physics coupling (colour/material survive view-averaging).
+A splat decoder remains a possible higher-fidelity swap later; `brush`
+(Rust + wgpu/Burn) is the route if full 3DGS on Metal is ever wanted.
+(`ModelConfig.num_gaussians` is retained only as a reserved knob for that path.)
 
 ## The coherence metric
 
@@ -165,9 +170,12 @@ independent decoders (disjoint dims) score ~0.
    stand-in that verifies the training loop converges in-sandbox — a 4-5x loss
    drop on a synthetic overfit batch is checked by a test). Eval is on the
    held-out essence region.
-4. **MLX simplified splat render decoder** — the appearance head. *Next* (needed
-   to actually run the coherence experiment, which compares render vs. behavior).
-5. **Coherence benchmark harness** — shared vs. independent, on held-out regions.
+4. **Render head** — *done.* A lightweight conv decoder (z -> mean-view image),
+   mirrored across mlx/numpy/torch; reconstruction MSE added to the loss. At
+   128px/~1M params the full model trains in-sandbox (torch CPU, ~0.85 s/step).
+5. **Coherence benchmark harness** — *next.* Now runnable: shared-latent model vs.
+   two independent models, compared on render-vs-behavior coherence over held-out
+   essence regions.
 6. **(Parked)** GSO real-scan experiment — reality's eigenvector
    ([`GSO_EXPERIMENT.md`](GSO_EXPERIMENT.md)).
 
