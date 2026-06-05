@@ -134,7 +134,8 @@ Full setup (including the optional Blender path and Apple-silicon/MLX) is in
 | The "do look and behavior move together?" measurement | ✅ done + tested |
 | Data generation — MuJoCo (primary), Blender (optional, appearance) | ✅ done; runs on your Mac |
 | Dataset loader (images + behavior targets, batched) | ✅ done + tested |
-| The model itself (encoder + the two outputs, in MLX) | 🔜 next |
+| Encoder + behavior head (MLX trainer; numpy forward stand-in) | ✅ authored + forward-tested; trains on the Mac |
+| Render head (appearance) — needed for the coherence experiment | 🔜 next |
 | Full experiment: one-understanding vs. glued-together | 🔜 next |
 | Using real scanned objects instead of textbook values | 🅿️ planned ([GSO_EXPERIMENT.md](docs/GSO_EXPERIMENT.md)) |
 
@@ -154,6 +155,10 @@ src/pseudomarble/
     mesh_validate.py      # checks a 3D mesh is solid enough to have a real mass
     collision.py          # keeps an object's real shape (e.g. a cup's cavity)
   models/
+    mlx_net.py            # the trainable encoder + behavior/essence heads (MLX, on Mac)
+    numpy_net.py          # same architecture in numpy: forward-only, runs in any session
+    losses.py             # framework-agnostic loss reference (tested anywhere)
+    train.py              # training loop (MLX); eval on the held-out essence region
     coherence.py          # the "do look and behavior move together?" measurement
 docs/
   TAXONOMY_NOTES.md       # background: Li's taxonomy, what Marble is and isn't

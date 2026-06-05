@@ -46,9 +46,19 @@ Personal research. Not affiliated with World Labs. Not an attempt to copy Marble
   image loading + `mlx` conversion lazy.
 - `models/coherence.py` — the coherence metric ("do look and behavior move
   together when you nudge the latent?"); reference (finite-diff) + MLX `jvp`.
-- 56 tests across 9 suites; core imports with **no** mujoco/bpy/trimesh/numpy/mlx.
+- `models/mlx_net.py` — trainable encoder + behavior head (+ aux essence head),
+  MLX, runs on the Mac. `models/numpy_net.py` — same architecture in numpy,
+  forward-only, runs/tests in any session. `models/losses.py` — pure-Python loss
+  reference. `models/train.py` — MLX training loop, eval on held-out essence region.
+- 69 tests across 12 suites; core imports with **no** mujoco/bpy/trimesh/numpy/mlx.
 
-PRs #1, #2, #3 all merged to `main`.
+PRs #1, #2, #3 merged to `main`. PR #4 = encoder + behavior head.
+
+### Sandbox note on MLX
+The pip `mlx` wheel on plain Linux x86 is **non-functional** (missing
+`libmlx.so`) — there is no usable Linux/CPU MLX runtime in these sessions. `numpy`
+*does* install and run, so `numpy_net` is the in-session stand-in for validating
+the model's forward pass; real training is MLX on the Mac.
 
 ## Hardware note (2026-06): MacBook Pro exists, just not always on hand
 
@@ -71,10 +81,12 @@ Implication for how we work, not what we build:
 1. On the Mac: generate a small real dataset with MuJoCo and sanity-check that
    probe outcomes are stable (watch the "chaos near tipping points" risk in
    `docs/BEHAVIOR_TASK.md`) and that renders load. (Can be smoke-tested off-Mac.)
-2. Build the **MLX** encoder + action-conditioned behavior head (+ optional render
-   head) — keep a pure-Python/numpy-testable core so it can be reviewed in any
-   session; run/train it on the Mac.
-3. Run the headline experiment: **shared-essence model vs. two glued-together
+2. Encoder + behavior head — **done** (`models/mlx_net.py` + `numpy_net.py` +
+   `train.py`). On the Mac: `python -m pseudomarble.models.train --data <dir>` and
+   confirm behavior MSE drops on the held-out essence region.
+3. Build the **render head** (appearance) — the simplified MLX splat decoder — so
+   the coherence experiment has both a render and a behavior projection to compare.
+4. Run the headline experiment: **shared-essence model vs. two glued-together
    models**, compared on coherence over **held-out essence regions** — and report
    the result honestly, including a null.
 
