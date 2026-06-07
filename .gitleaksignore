@@ -1,0 +1,7 @@
+# gitleaks allowlist — fingerprints of findings reviewed and accepted as
+# non-secret (e.g. test fixtures or false positives). One fingerprint per line:
+#   <commit>:<file>:<rule-id>:<startline>
+# Currently EMPTY: a full-history `gitleaks detect` is clean (no secrets in the
+# repo). This file is the documented home for any future accepted finding so the
+# secret-scan gate keeps failing on genuinely new secrets while ignoring known,
+# reviewed ones.
