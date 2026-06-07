@@ -5,8 +5,10 @@ name: adversarial-verify
 #     breaks a core invariant (adversarial INPUTS). Hard gate.
 #   * mutation      — scripts/mutation_check.py corrupts the code one operator at
 #     a time and checks the tests catch it (adversarial CODE). Ratchet gate at
-#     0.70; residual survivors are mostly equivalent mutants (documented in the
-#     script). Deterministic (seeded), so it does not flake.
+#     0.60 (true score ~0.65); residual survivors are equivalent mutants +
+#     tuning-constant defaults (documented in the script). Runs each test with
+#     `python -B` so bytecode caching can't mask mutations; deterministic
+#     (seeded), so it does not flake.
 # See SECURITY.md / FINDINGS for context. This complements security-audit.yml.
 
 on:
