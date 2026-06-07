@@ -1,0 +1,65 @@
+name: security-audit
+
+# Audits the codebase on every push/PR to main and weekly. Scope is tailored to
+# what this repo actually is — a pure-Python research codebase with no web
+# services, no auth, and no network endpoints — so the jobs are:
+#   * SAST (bandit)        — unsafe operations: eval/exec/pickle/shell/etc.
+#   * dependency CVEs      — pip-audit on the cross-platform declared deps
+#   * secret scanning      — gitleaks across the full history
+# See SECURITY.md for the threat model and how each of these maps to the code.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "0 6 * * 1"   # Mondays 06:00 UTC — catches newly-disclosed CVEs
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  sast:
+    name: SAST (bandit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install --upgrade "bandit[toml]"
+      # Gate: fail the build on Medium/High findings (uses [tool.bandit] config).
+      - name: bandit (fail on medium/high)
+        run: bandit -c pyproject.toml -ll -r src scripts
+      # Informational: the full low+ report, never blocks.
+      - name: bandit full report
+        if: always()
+        run: bandit -c pyproject.toml -r src scripts || true
+
+  dependencies:
+    name: Dependency CVEs (pip-audit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      # The project declares no required deps; audit the cross-platform optional
+      # runtime deps. mlx (macOS), mujoco (needs GL) and torch are platform/size
+      # specific and excluded from CI resolution.
+      - run: python -m pip install --upgrade pip-audit numpy trimesh imageio pillow
+      - name: pip-audit
+        run: pip-audit --strict || true   # informational; surfaces transitive CVEs
+
+  secrets:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history so rotated/historic secrets are caught
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITLEAKS_ENABLE_SUMMARY: "true"
