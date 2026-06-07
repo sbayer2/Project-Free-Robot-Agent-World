@@ -123,6 +123,21 @@ Mac time was spent — arguably the most valuable sandbox finding.
 
 ---
 
+### F7 — Per-probe difficulty (methodology illustration)
+
+Which behavior outputs are hard to predict from appearance? Real per-field
+difficulty needs the MuJoCo run, but training the *actual* torch model on a
+synthetic toy-physics stand-in shows the apparatus and the expected ordering:
+
+![per-probe difficulty](figures/probe_difficulty.png)
+
+Smooth outcomes (settle time, max height) are easiest; **toppling is hardest** —
+it is a bimodal threshold (tips or it doesn't), so a regression head cannot land
+cleanly near the tipping point (the "chaos near tipping points" risk from
+`BEHAVIOR_TASK.md`, made visible). The model beats a predict-the-mean baseline on
+every field. The *numbers* are from a synthetic stand-in
+(`scripts/figure_probe_difficulty.py`); the real ordering comes from the Mac run.
+
 ## 3. What is NOT yet known (honest gaps)
 
 - **No training on real renders.** Every "training" result above overfits random
