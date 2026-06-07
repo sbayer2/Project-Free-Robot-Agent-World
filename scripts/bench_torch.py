@@ -95,6 +95,11 @@ def run_case(name, B, N, img, channels, latent, steps):
           f"| {imgs_per_s:7.1f} img/s "
           f"| peakRSS {_peak_rss_mb():6.0f} MB "
           f"| loss {float(loss0.detach()):.3f}->{last:.3f}", flush=True)
+    return {
+        "name": name, "img": img, "params_m": n_params / 1e6,
+        "ms_step": per_step * 1000.0, "img_s": imgs_per_s,
+        "peak_rss_mb": _peak_rss_mb(), "loss0": float(loss0.detach()), "last": last,
+    }
 
 
 def main(argv):

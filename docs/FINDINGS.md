@@ -55,6 +55,10 @@ All numbers below are from a 4-core / 15 GB Linux CPU container, using the numpy
 and torch backends. They establish that the **apparatus works**; they are **not**
 the scientific result.
 
+![initial sandbox findings](figures/sandbox_findings.png)
+
+*(Figure regenerable from live data with `python scripts/make_figures.py`.)*
+
 ### F1 — No usable Linux MLX; numpy/torch fill the gap
 The pip `mlx` wheel on Linux x86 is non-functional (missing `libmlx.so`), and
 there's no GPU (so cudamat/Theano/CUDA paths are out). NumPy and CPU PyTorch
