@@ -1,0 +1,45 @@
+name: adversarial-verify
+
+# Verifies that the test suite's green is *meaningful*, using two adversaries:
+#   * property-fuzz — hypothesis searches the input space for any case that
+#     breaks a core invariant (adversarial INPUTS). Hard gate.
+#   * mutation      — scripts/mutation_check.py corrupts the code one operator at
+#     a time and checks the tests catch it (adversarial CODE). Ratchet gate at
+#     0.70; residual survivors are mostly equivalent mutants (documented in the
+#     script). Deterministic (seeded), so it does not flake.
+# See SECURITY.md / FINDINGS for context. This complements security-audit.yml.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  property-fuzz:
+    name: Property-based fuzzing (hypothesis)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install --upgrade pytest hypothesis numpy
+      - name: hypothesis property tests
+        run: python -m pytest -q tests/test_adversarial_properties.py
+
+  mutation:
+    name: Mutation testing (tests must catch injected bugs)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install --upgrade numpy   # some target tests use numpy
+      - name: mutation score gate (>= 0.70)
+        run: python scripts/mutation_check.py
