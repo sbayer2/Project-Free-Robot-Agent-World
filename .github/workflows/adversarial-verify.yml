@@ -43,5 +43,5 @@ jobs:
         with:
           python-version: "3.11"
       - run: python -m pip install --upgrade numpy   # some target tests use numpy
-      - name: mutation score gate (>= 0.70)
+      - name: mutation score gate (>= 0.60)
         run: python scripts/mutation_check.py
