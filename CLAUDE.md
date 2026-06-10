@@ -26,7 +26,10 @@ Personal research. Not affiliated with World Labs. Not an attempt to copy Marble
   "two outputs in a package," not a unified eigenvector — that gap IS our target).
 - `docs/BEHAVIOR_TASK.md` — the current (v2) task design.
 - `docs/ARCHITECTURE.md` — design decisions, honest limitations, build order.
-- `docs/GSO_EXPERIMENT.md` — parked: real scanned objects to escape "authored coupling."
+- `docs/GSO_EXPERIMENT.md` — real scanned objects to escape "authored coupling";
+  **data layer now implemented** (`data/generate_gso.py`): measured-mass parsing,
+  mesh MJCF (`build_mjcf(mesh=...)`), category holdout, concave path
+  (mesh_validate + collision.py) wired; experiment run still pending real meshes.
 
 ## What's built and merged to `main` (all tested)
 

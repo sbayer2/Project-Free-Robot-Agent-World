@@ -139,7 +139,7 @@ Full setup (including the optional Blender path and Apple-silicon/MLX) is in
 | Render head (appearance): conv decoder → mean-view reconstruction | ✅ done + tested (128px/~1M trains) |
 | Coherence benchmark harness (shared vs. glued, with controls) | ✅ done + tested |
 | Run the experiment on real renders (the result) | 🔜 on the Mac |
-| Using real scanned objects instead of textbook values | 🅿️ planned ([GSO_EXPERIMENT.md](docs/GSO_EXPERIMENT.md)) |
+| Real scanned objects (GSO): generator + mesh physics + concave path | ✅ data layer done + tested ([GSO_EXPERIMENT.md](docs/GSO_EXPERIMENT.md)) |
 
 ## Repository layout
 
