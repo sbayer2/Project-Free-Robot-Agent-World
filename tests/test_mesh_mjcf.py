@@ -51,9 +51,12 @@ def test_collision_parts_split_mass_and_disable_visual_collision():
     root, geoms = _object_geoms(build_mjcf(mesh=asset))
     vis = next(g for g in geoms if g.get("name") == "vis")
     assert vis.get("contype") == "0" and vis.get("conaffinity") == "0"  # render-only
+    # render-only geom must be mass-less, or MuJoCo adds phantom default-density
+    # mass on top of the measured mass (a real bug caught by the sandbox run).
+    assert float(vis.get("mass")) == 0.0
     cols = [g for g in geoms if g.get("name", "").startswith("col")]
     assert len(cols) == 3
-    # mass split evenly across parts -> sums to the measured mass
+    # mass split evenly across parts -> sums to exactly the measured mass
     total = sum(float(g.get("mass")) for g in cols)
     assert abs(total - 0.30) < 1e-9
 

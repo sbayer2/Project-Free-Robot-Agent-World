@@ -115,10 +115,16 @@ this project relates to it — lives in
 # core logic + tests — no MuJoCo/Blender/MLX needed
 python -m pytest                      # or: python tests/test_materials.py
 
-# generate a tiny dataset (primary path: MuJoCo, native on Apple silicon)
+# generate a tiny SYNTHETIC dataset (primary path: MuJoCo, native on Apple silicon)
 pip install -e ".[mujoco]"
 python -m pseudomarble.data.generate_mujoco \
     --output data/pseudo_marble --num-scenes 16 --views 16 --resolution 256
+
+# REAL scanned objects (Google Scanned Objects) — measured mass + concave physics
+pip install -e ".[gso]" coacd
+python -m pseudomarble.data.generate_gso \
+    --gso-root /path/to/google_scanned_objects --output data/pm_gso --views 16
+# (the mesh physics path is sandbox-verified: python scripts/smoke_gso.py)
 ```
 
 Full setup (including the optional Blender path and Apple-silicon/MLX) is in
@@ -139,7 +145,7 @@ Full setup (including the optional Blender path and Apple-silicon/MLX) is in
 | Render head (appearance): conv decoder → mean-view reconstruction | ✅ done + tested (128px/~1M trains) |
 | Coherence benchmark harness (shared vs. glued, with controls) | ✅ done + tested |
 | Run the experiment on real renders (the result) | 🔜 on the Mac |
-| Real scanned objects (GSO): generator + mesh physics + concave path | ✅ data layer done + tested ([GSO_EXPERIMENT.md](docs/GSO_EXPERIMENT.md)) |
+| Real scanned objects (GSO): measured mass + concave mesh physics | ✅ data layer done; **physics path sandbox-verified** ([GSO_EXPERIMENT.md](docs/GSO_EXPERIMENT.md)) |
 
 ## Repository layout
 
@@ -152,7 +158,8 @@ src/pseudomarble/
   data/
     samples.py            # the shared data format (sample.json, schema v2)
     dataset.py            # loads a dataset: images + behavior targets, batched
-    generate_mujoco.py    # primary: renders + drop/tilt/push behavior
+    generate_mujoco.py    # primary: renders + drop/tilt/push behavior (synthetic)
+    generate_gso.py       # real scanned objects: measured mass + concave mesh physics
     generate_blender.py   # optional: photorealistic renders, same format
     mesh_validate.py      # checks a 3D mesh is solid enough to have a real mass
     collision.py          # keeps an object's real shape (e.g. a cup's cavity)
@@ -168,7 +175,7 @@ docs/
   BEHAVIOR_TASK.md        # the continuous + act-on-it task design (v2)
   ARCHITECTURE.md         # design decisions + honest limitations
   HOWTO.md                # setup & usage
-  GSO_EXPERIMENT.md       # planned: using real scanned objects
+  GSO_EXPERIMENT.md       # real scanned objects: data layer built + sandbox-verified
 tests/                    # runnable anywhere, no special hardware
 ```
 

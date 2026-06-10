@@ -214,8 +214,11 @@ def build_mesh_mjcf(
     if mesh.collision_paths:
         n = len(mesh.collision_paths)
         part_mass = mesh.mass / n
+        # Visual geom is render-only AND mass-less: without mass="0" MuJoCo would
+        # give the full mesh default density (1000 kg/m^3) and add phantom mass on
+        # top of the measured mass carried by the collision parts.
         geoms = [f'<geom name="vis" type="mesh" mesh="{mesh.name}_vis" {appearance} '
-                 f'contype="0" conaffinity="0" group="2"/>']
+                 f'contype="0" conaffinity="0" group="2" mass="0"/>']
         for i in range(n):
             geoms.append(
                 f'<geom name="col{i}" type="mesh" mesh="{mesh.name}_col{i}" '
