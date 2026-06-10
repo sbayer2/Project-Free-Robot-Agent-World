@@ -154,6 +154,17 @@ loss      = 1 − coherence
 Unit-test sanity checks: coupled decoders (shared latent dims) score high;
 independent decoders (disjoint dims) score ~0.
 
+**Smooth vs. chaotic target (de-risking a false null).** The physics-side decoder
+can be the **behavior** head (drop/tilt/push outcomes — the headline) or the
+**essence** head (density/friction/restitution). `toppled` is a *threshold*, so
+near a tipping point the behavior head's sensitivity is erratic — its Jacobian
+magnitudes are noisy, which can drag coherence DOWN artificially (a false null).
+The essence head is a *smooth* function of `z`, so coherence on it is robust to
+that chaos. `coherence_bench.compare(..., target="essence")` /
+`compare_both_targets(...)` measure both; the recommended read is **a high
+essence-coherence beside a low behavior-coherence ⇒ the topple-chaos artifact, not
+a real absence of coupling.** (`*_from_z` accessors exist on all three backends.)
+
 ## Build order
 
 1. **Data pipeline** — *done.* Continuous materials + drop/tilt/push behavior

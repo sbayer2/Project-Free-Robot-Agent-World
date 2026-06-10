@@ -64,6 +64,9 @@ Personal research. Not affiliated with World Labs. Not an attempt to copy Marble
   independent baseline ~0. So the honest signal is `learned_coherence =
   trained_shared − untrained_shared` (average the baseline over seeds; it varies
   ~0.36–0.46). Coherence is forward-only, so it runs on numpy in-sandbox.
+  Supports `target="essence"` (smooth physics head) to de-risk the topple-chaos
+  bias; `compare_both_targets()` reports behavior+essence (high essence + low
+  behavior ⇒ chaos artifact, not a true null).
 - Render head decision: a **conv decoder** (upsample+conv → image_size, which must
   be render_seed·2^k), reconstructing the **mean view**; NOT a splat decoder —
   we measure coherence, not photorealism. Splat/`brush` is a later option.
