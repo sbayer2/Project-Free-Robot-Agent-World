@@ -119,7 +119,10 @@ The honest signal is therefore:
 > **held-out essence regions**, and paired with **behavior generalization**.
 
 This control is baked into `compare()`. The apparatus caught this *before* any
-Mac time was spent — arguably the most valuable sandbox finding.
+Mac time was spent — arguably the most valuable sandbox finding. Its logic
+(subtract the architectural prior, keep the residual) is the same move predictive
+coding makes for a prediction error — see
+[`PREDICTIVE_CODING.md`](PREDICTIVE_CODING.md).
 
 ---
 
