@@ -1,8 +1,31 @@
-# Back-pocket experiment: escaping "Blender's eigenvector" with real scans
+# Experiment: escaping "Blender's eigenvector" with real scans
 
-> Status: **parked / not implemented.** This is a deliberate placeholder so the
-> idea isn't lost. It is a *different, deeper* experiment than the synthetic one,
-> not a drop-in generator.
+> Status: **data layer IMPLEMENTED** (`data/generate_gso.py`); the experiment
+> itself is still pending — it needs a real GSO download + a machine with
+> `trimesh`/`mujoco`. Build: `pip install -e ".[gso]"`, then
+> `python -m pseudomarble.data.generate_gso --gso-root <dir> --output <dir>`.
+> The pure-Python core (object/mass/category parsing, mesh MJCF, category split,
+> the convex_hull branch of the concave path) is unit-tested; mesh loading +
+> rendering + simulation are guarded.
+
+## What is built
+
+- **`generate_gso.py`** — discovers scanned-object folders, reads **measured mass**
+  (from `model.sdf` `<inertial>`, with JSON/pbtxt fallbacks), renders multi-view
+  appearance from the real texture, runs drop/tilt/push on the mesh, and writes the
+  **same `sample.json` contract**.
+- **`build_mjcf(mesh=MeshAsset(...))`** — the mesh path (extends the primitive
+  builder): explicit measured mass, optional texture material, and multi-part
+  convex collision.
+- **Concave path wired** — `mesh_validate` gates watertightness; `collision.py`
+  (CoACD/V-HACD) decomposes the mesh so a real cavity (mug, bowl) survives instead
+  of collapsing to a convex hull. Provenance recorded per scene.
+- **`splits.make_category_holdout`** — holds out whole object **categories**
+  (materials are baked per object, so synthetic combination/region splits don't
+  transfer); `make_object_holdout` is the fallback when categories are unknown.
+- **Thinner, honest physics** — `samples.physics_labels_measured`: mass measured,
+  density derived, **friction/restitution assumed** and flagged in
+  `physics.provenance`.
 
 ## The limitation it addresses
 

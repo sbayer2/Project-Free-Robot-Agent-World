@@ -188,3 +188,74 @@ def assign_scene_materials(
             {"scene_id": f"test_{i:06d}", "shape": s, "material": m, "split": "test"}
         )
     return records
+
+
+# --------------------------------------------------------------------------- #
+# Real-object generalization: hold out whole CATEGORIES (or objects).
+# --------------------------------------------------------------------------- #
+# For scanned objects (GSO) the material/appearance is baked per object — you
+# cannot freely recombine shape x material, so the synthetic combination/region
+# splits do not transfer. The honest generalization test is whether the model
+# infers physical behavior for object *categories* (or objects) it never trained
+# on. We hold out entire categories so no object of a held-out kind leaks into
+# train; if categories are unknown/degenerate, fall back to a random object split.
+@dataclass(frozen=True)
+class CategorySplit:
+    train_ids: Tuple[str, ...]
+    test_ids: Tuple[str, ...]
+    holdout_categories: Tuple[str, ...]
+
+    def summary(self) -> Dict[str, int]:
+        return {"n_train": len(self.train_ids), "n_test": len(self.test_ids),
+                "n_holdout_categories": len(self.holdout_categories)}
+
+
+def make_category_holdout(
+    objects: Sequence[Tuple[str, str]],
+    holdout_categories: Optional[Sequence[str]] = None,
+    holdout_frac: float = 0.2,
+    seed: int = 0,
+) -> CategorySplit:
+    """Split ``objects`` (list of ``(object_id, category)``) by holding out whole
+    categories. If ``holdout_categories`` is given, those go to test; otherwise a
+    ``holdout_frac`` fraction of the categories is chosen at random. Every held-out
+    category's objects go to test; all others train. Coverage guard: never hold
+    out *all* categories (training set must be non-empty)."""
+    if not objects:
+        raise ValueError("need at least one object")
+    cats = list(dict.fromkeys(c for _, c in objects))  # stable unique categories
+    rng = random.Random(seed)
+
+    if holdout_categories is not None:
+        held = [c for c in cats if c in set(holdout_categories)]
+    else:
+        n = min(len(cats) - 1, int(round(len(cats) * holdout_frac)))
+        shuffled = cats[:]
+        rng.shuffle(shuffled)
+        held = shuffled[:max(0, n)]
+    held_set = set(held)
+    if len(held_set) >= len(cats):  # would empty the train set
+        held_set = set(list(held_set)[:-1])
+
+    train, test = [], []
+    for oid, cat in objects:
+        (test if cat in held_set else train).append(oid)
+    if not train:
+        raise ValueError("holdout emptied the train set; reduce holdout_categories")
+    return CategorySplit(tuple(train), tuple(test), tuple(sorted(held_set)))
+
+
+def make_object_holdout(object_ids: Sequence[str], holdout_frac: float = 0.2,
+                        seed: int = 0) -> CategorySplit:
+    """Fallback when categories are unknown: hold out a random fraction of objects
+    (weaker than a category split — same object *kind* may appear in both)."""
+    if not object_ids:
+        raise ValueError("need at least one object")
+    ids = list(dict.fromkeys(object_ids))
+    rng = random.Random(seed)
+    shuffled = ids[:]
+    rng.shuffle(shuffled)
+    n_test = min(len(ids) - 1, int(round(len(ids) * holdout_frac)))
+    test = set(shuffled[:n_test])
+    train = tuple(i for i in ids if i not in test)
+    return CategorySplit(train, tuple(shuffled[:n_test]), ())

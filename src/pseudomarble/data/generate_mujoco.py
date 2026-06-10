@@ -30,6 +30,7 @@ import json
 import math
 import os
 import sys
+from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
 from pseudomarble import materials as M
@@ -85,20 +86,54 @@ def _restitution_to_solref(restitution: float) -> str:
     return f"-{stiffness:.0f} -{damping:.2f}"
 
 
+@dataclass(frozen=True)
+class MeshAsset:
+    """A real (e.g. Google-Scanned-Objects) object for the mesh path of build_mjcf.
+
+    Unlike the primitive path, ``mass`` is set EXPLICITLY (GSO ships measured mass)
+    rather than derived from density x volume; MuJoCo computes inertia from the
+    mesh scaled to that mass. ``friction`` and ``restitution`` are *assumed* — GSO
+    does not measure them (see docs/GSO_EXPERIMENT.md), so honest analysis treats
+    them as priors, not signal. ``texture_path`` lets MuJoCo render the real
+    scanned appearance; ``collision_paths`` (convex decomposition parts) preserve
+    concavity, otherwise the single mesh geom collides as its convex hull.
+    """
+
+    name: str
+    visual_path: str                          # OBJ/STL/PLY mesh for rendering
+    mass: float                               # kg — measured (GSO) or estimated
+    half_height: float = 0.15                 # z half-extent, for placement/push
+    scale: float = 1.0
+    friction: float = 0.5                     # ASSUMED (not measured)
+    restitution: float = 0.3                  # ASSUMED (not measured)
+    collision_paths: Tuple[str, ...] = field(default_factory=tuple)
+    rgba: Tuple[float, float, float, float] = (0.7, 0.7, 0.7, 1.0)
+    texture_path: Optional[str] = None
+
+
 def build_mjcf(
-    shape: str,
-    material: M.Material,
+    shape: Optional[str] = None,
+    material: Optional[M.Material] = None,
     object_z: Optional[float] = None,
     ground_euler: Tuple[float, float, float] = (0.0, 0.0, 0.0),
     gravity: float = -9.81,
+    *,
+    mesh: Optional[MeshAsset] = None,
 ) -> str:
     """Build a single-scene MJCF string. Pure-Python: unit-testable, no runtime.
 
+    Two modes:
+      * primitive — pass ``shape`` + ``material`` (the synthetic MuJoCo path).
+      * mesh      — pass ``mesh`` (a ``MeshAsset``) for real scanned objects (GSO).
+
     ``object_z`` sets the body's starting height (drop height, or resting height
-    if None). ``ground_euler`` tilts the ground plane (the TILT probe). The geom
-    binds appearance (rgba) and physics (density->mass, friction,
-    solref-from-restitution) in one element — the Marble idea in one place.
+    if None). ``ground_euler`` tilts the ground plane (the TILT probe).
     """
+    if mesh is not None:
+        return build_mesh_mjcf(mesh, object_z=object_z, ground_euler=ground_euler,
+                               gravity=gravity)
+    if shape is None or material is None:
+        raise ValueError("primitive mode needs shape + material; or pass mesh=...")
     if shape not in SHAPE_TO_GEOM:
         raise ValueError(
             f"shape {shape!r} is not a MuJoCo primitive; have "
@@ -138,6 +173,77 @@ def build_mjcf(
             material="m_obj"
             density="{p.density}" friction="{p.friction} 0.005 0.0001"
             solref="{solref}" solimp="0.9 0.95 0.001"/>
+    </body>
+  </worldbody>
+</mujoco>"""
+
+
+def build_mesh_mjcf(
+    mesh: MeshAsset,
+    object_z: Optional[float] = None,
+    ground_euler: Tuple[float, float, float] = (0.0, 0.0, 0.0),
+    gravity: float = -9.81,
+) -> str:
+    """Build a single-scene MJCF for a real mesh object. Pure-Python, testable.
+
+    Mass is set explicitly (measured); MuJoCo derives inertia from the mesh. If
+    ``collision_paths`` are given (convex decomposition), the visual mesh is
+    render-only and the convex parts carry collision + an even share of the mass
+    (approximate inertia); otherwise the single mesh geom collides as its convex
+    hull. Texture, if provided, renders the real scanned appearance.
+    """
+    if object_z is None:
+        object_z = mesh.half_height + 0.001
+    gx, gy, gz = ground_euler
+    s = mesh.scale
+    fr = mesh.friction
+    solref = _restitution_to_solref(mesh.restitution)
+
+    assets = [f'<mesh name="{mesh.name}_vis" file="{mesh.visual_path}" '
+              f'scale="{s} {s} {s}"/>']
+    for i, cp in enumerate(mesh.collision_paths):
+        assets.append(f'<mesh name="{mesh.name}_col{i}" file="{cp}" scale="{s} {s} {s}"/>')
+    if mesh.texture_path:
+        assets.append(f'<texture name="{mesh.name}_tex" type="2d" file="{mesh.texture_path}"/>')
+        assets.append(f'<material name="{mesh.name}_mat" texture="{mesh.name}_tex"/>')
+        appearance = f'material="{mesh.name}_mat"'
+    else:
+        r, g, b, a = mesh.rgba
+        appearance = f'rgba="{r} {g} {b} {a}"'
+
+    if mesh.collision_paths:
+        n = len(mesh.collision_paths)
+        part_mass = mesh.mass / n
+        geoms = [f'<geom name="vis" type="mesh" mesh="{mesh.name}_vis" {appearance} '
+                 f'contype="0" conaffinity="0" group="2"/>']
+        for i in range(n):
+            geoms.append(
+                f'<geom name="col{i}" type="mesh" mesh="{mesh.name}_col{i}" '
+                f'mass="{part_mass}" friction="{fr} 0.005 0.0001" '
+                f'solref="{solref}" solimp="0.9 0.95 0.001" group="3"/>')
+    else:
+        geoms = [f'<geom name="obj" type="mesh" mesh="{mesh.name}_vis" {appearance} '
+                 f'mass="{mesh.mass}" friction="{fr} 0.005 0.0001" '
+                 f'solref="{solref}" solimp="0.9 0.95 0.001"/>']
+
+    asset_block = "\n    ".join(assets)
+    geom_block = "\n      ".join(geoms)
+    return f"""<mujoco model="pseudo_marble_gso">
+  <option gravity="0 0 {gravity}" timestep="0.002"/>
+  <visual>
+    <global offwidth="1280" offheight="1280"/>
+    <headlight diffuse="0.6 0.6 0.6" ambient="0.4 0.4 0.4"/>
+  </visual>
+  <asset>
+    {asset_block}
+  </asset>
+  <worldbody>
+    <light pos="0 0 3" dir="0 0 -1" diffuse="0.8 0.8 0.8"/>
+    <geom name="ground" type="plane" size="5 5 0.1" rgba="0.8 0.8 0.8 1"
+          euler="{gx} {gy} {gz}" friction="{fr} 0.005 0.0001"/>
+    <body name="object" pos="0 0 {object_z}">
+      <freejoint/>
+      {geom_block}
     </body>
   </worldbody>
 </mujoco>"""

@@ -22,6 +22,9 @@ mujoco = ["mujoco>=3.1", "numpy>=1.24", "imageio>=2.31", "Pillow>=10.0"]
 # Mesh helpers used outside Blender (mesh validation, convex decomposition).
 # Blender itself ships its own Python; this extra is for the host environment.
 datagen = ["trimesh>=4.0", "numpy>=1.24"]
+# Real scanned-object (Google Scanned Objects) generator: mesh load + decompose +
+# MuJoCo render/sim + image IO. Add 'coacd' separately for concave decomposition.
+gso = ["trimesh>=4.0", "mujoco>=3.1", "numpy>=1.24", "imageio>=2.31", "Pillow>=10.0"]
 # Apple-silicon model stack (install on the Mac; not available in generic CI).
 # Includes image IO so training can read the generated render PNGs.
 mlx = ["mlx>=0.18", "numpy>=1.24", "imageio>=2.31", "Pillow>=10.0"]

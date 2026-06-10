@@ -104,6 +104,45 @@ def physics_labels(material) -> Dict:
     return _physics_labels(mat.physics, mat.tags)
 
 
+# Priors used when a real dataset (GSO) does not measure friction/restitution.
+ASSUMED_FRICTION = 0.5
+ASSUMED_RESTITUTION = 0.3
+
+
+def physics_labels_measured(mass_kg: float, density: Optional[float] = None,
+                            friction: Optional[float] = None,
+                            restitution: Optional[float] = None,
+                            mass_source: str = "measured") -> Dict:
+    """Thinner, honest physics labels for a REAL object (e.g. GSO).
+
+    GSO ships **measured mass**; density is derivable from mass / watertight
+    volume; **friction and restitution are NOT measured**. The block stays
+    loader-compatible (``raw``/``normalized`` present, friction/restitution filled
+    with priors) but adds ``mass_kg`` and a ``provenance`` map so analysis can mask
+    the *assumed* channels. The only real physics signal here is mass (and the
+    mass-driven part of behavior) — not friction/restitution.
+    """
+    f = ASSUMED_FRICTION if friction is None else friction
+    r = ASSUMED_RESTITUTION if restitution is None else restitution
+    d = 0.0 if density is None else density
+    return {
+        "raw": {"density": d, "friction": f, "restitution": r},
+        "normalized": {
+            "density": d / PHYSICS_NORMALIZERS["density"],
+            "friction": f / PHYSICS_NORMALIZERS["friction"],
+            "restitution": r / PHYSICS_NORMALIZERS["restitution"],
+        },
+        "tags": [],
+        "mass_kg": float(mass_kg),
+        "provenance": {
+            "mass": mass_source,
+            "density": "derived" if density is not None else "unknown",
+            "friction": "assumed" if friction is None else "measured",
+            "restitution": "assumed" if restitution is None else "measured",
+        },
+    }
+
+
 def material_truth(sample) -> Dict:
     """Ground-truth essence for a continuously-sampled material (for analysis).
 
@@ -159,6 +198,7 @@ def build_sample_record(
     material_name: Optional[str] = None,
     material=None,
     material_id: Optional[str] = None,
+    physics_block: Optional[Dict] = None,
     behavior: Optional[List[Dict]] = None,
     material_truth_block: Optional[Dict] = None,
     trajectory: Optional[List[Dict]] = None,
@@ -166,19 +206,22 @@ def build_sample_record(
 ) -> Dict:
     """Assemble one scene's ``sample.json`` record (identical across generators).
 
-    Supply EITHER ``material_name`` (discrete library path, e.g. Blender
-    primitives) OR a ``material`` object + ``material_id`` (continuous-sampler
-    path). ``behavior`` is the v2 probe-outcome list; when present it is the
-    primary training target.
+    Supply ONE of: ``material_name`` (discrete library), ``material`` + ``material_id``
+    (continuous sampler), or ``physics_block`` + ``material_id`` (a real/measured
+    object, e.g. GSO — see ``physics_labels_measured``). ``behavior`` is the v2
+    probe-outcome list; when present it is the primary training target.
     """
-    if material is not None:
+    if physics_block is not None:
+        phys = physics_block
+        mat_label = material_id or "object"
+    elif material is not None:
         phys = physics_labels(material)
         mat_label = material_id or "sampled"
     elif material_name is not None:
         phys = physics_labels(material_name)
         mat_label = material_name
     else:
-        raise ValueError("provide material_name or (material + material_id)")
+        raise ValueError("provide material_name, (material + material_id), or physics_block")
 
     record = {
         "scene_id": scene_id,
