@@ -42,7 +42,6 @@ import json
 import os
 import re
 import sys
-import xml.etree.ElementTree as ET
 from dataclasses import dataclass, replace
 from typing import Dict, List, Optional, Tuple
 
@@ -74,11 +73,13 @@ def read_mass(obj_dir: str) -> Tuple[Optional[float], str]:
     fall back to JSON/pbtxt metadata, else unknown."""
     sdf = os.path.join(obj_dir, "model.sdf")
     if os.path.exists(sdf):
+        # Regex, not an XML parser: SDF files come from an external dataset, and a
+        # full XML parser (xml.etree) is exposed to entity-expansion attacks
+        # (bandit B314). A targeted match for <mass> avoids that surface entirely.
         try:
-            root = ET.parse(sdf).getroot()
-            for mass_el in root.iter("mass"):
-                if mass_el.text and mass_el.text.strip():
-                    return float(mass_el.text.strip()), "sdf"
+            m = re.search(r"<mass>\s*([0-9.eE+-]+)\s*</mass>", open(sdf).read())
+            if m:
+                return float(m.group(1)), "sdf"
         except Exception:
             pass
     for name in ("meta.json", "metadata.json", "model.json"):

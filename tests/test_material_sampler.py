@@ -65,6 +65,36 @@ def test_appearance_is_predictive_but_not_deterministic():
     assert 0.3 < r < 0.99, f"coupling correlation out of expected band: {r}"
 
 
+def test_appearance_formula_directions():
+    # Pin the SIGN of each term in the appearance map (no magic numbers): this
+    # kills operator-swap mutations in _appearance_from_factors without making the
+    # test brittle to the exact coefficients. noise=0 makes it deterministic.
+    s = MaterialSampler(seed=0, appearance_noise=0.0)
+
+    def ap(h, g, k, c):
+        return s._appearance_from_factors(h, g, k, c)
+
+    assert ap(0.9, 0.5, 0.5, 0.0).metallic > ap(0.1, 0.5, 0.5, 0.0).metallic   # heavier->metallic
+    assert ap(0.9, 0.5, 0.5, 0.9).metallic < ap(0.9, 0.5, 0.5, 0.0).metallic   # clarity suppresses
+    assert ap(0.5, 0.5, 0.9, 0.0).roughness < ap(0.5, 0.5, 0.1, 0.0).roughness  # harder->smoother
+    assert ap(0.5, 0.9, 0.5, 0.0).roughness > ap(0.5, 0.1, 0.5, 0.0).roughness  # grippier->rougher
+    assert ap(0.5, 0.5, 0.5, 0.9).transmission > ap(0.5, 0.5, 0.5, 0.05).transmission  # clarity
+
+
+def test_physics_formula_directions():
+    s = MaterialSampler(seed=0, appearance_noise=0.0)
+    assert s._physics_from_factors(0.9, 0.5, 0.5).density > s._physics_from_factors(0.1, 0.5, 0.5).density
+    assert s._physics_from_factors(0.5, 0.9, 0.5).friction > s._physics_from_factors(0.5, 0.1, 0.5).friction
+    assert s._physics_from_factors(0.5, 0.5, 0.9).restitution > s._physics_from_factors(0.5, 0.5, 0.1).restitution
+
+
+def test_nearest_anchor_recovers_seed_material():
+    # Sampling tightly around an anchor must resolve to that anchor — kills the
+    # distance-metric operator mutation in nearest_anchor().
+    ms = MaterialSampler(seed=1).sample_near("steel", jitter=0.0)
+    assert ms.nearest_anchor == "steel"
+
+
 def test_materials_actually_vary():
     s = MaterialSampler(seed=3)
     densities = {round(s.sample().material.physics.density) for _ in range(50)}
