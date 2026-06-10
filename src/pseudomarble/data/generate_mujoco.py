@@ -38,7 +38,11 @@ from pseudomarble import probes as P
 from pseudomarble.config import PhysicsConfig, RenderConfig
 from pseudomarble.data import samples
 from pseudomarble.materials import MaterialSampler
-from pseudomarble.splits import DEFAULT_REGION_HOLDOUT, RegionHoldout
+from pseudomarble.splits import (
+    DEFAULT_REGION_HOLDOUT,
+    EXTRAPOLATION_REGION_HOLDOUT,
+    RegionHoldout,
+)
 
 try:
     import mujoco  # type: ignore
@@ -428,6 +432,10 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
     p.add_argument("--resolution", type=int, default=256)
     p.add_argument("--views", type=int, default=16)
     p.add_argument("--seed", type=int, default=1234)
+    p.add_argument("--holdout-kind", default="extrapolation",
+                   choices=["interpolation", "extrapolation"],
+                   help="held-out essence region: extrapolation (corner, real teeth) "
+                        "or interpolation (interior box, weak)")
     p.add_argument("--shapes", default=",".join(DEFAULT_SHAPES),
                    help="comma-separated MuJoCo primitive shape ids")
     p.add_argument("--keep-trajectory", action="store_true",
@@ -442,7 +450,9 @@ def main(argv: List[str]) -> None:
     render_cfg = RenderConfig(resolution=args.resolution, num_views=args.views)
     physics_cfg = PhysicsConfig()
 
-    assignments = assign_scenes(shapes, DEFAULT_REGION_HOLDOUT, args.num_scenes, args.seed)
+    holdout = (EXTRAPOLATION_REGION_HOLDOUT if args.holdout_kind == "extrapolation"
+               else DEFAULT_REGION_HOLDOUT)
+    assignments = assign_scenes(shapes, holdout, args.num_scenes, args.seed)
     os.makedirs(args.output, exist_ok=True)
     scenes: List[Dict] = []
     for rec in assignments:
@@ -460,8 +470,10 @@ def main(argv: List[str]) -> None:
         scenes,
     )
     manifest["holdout_region"] = {
-        "friction": list(DEFAULT_REGION_HOLDOUT.friction or []),
-        "restitution": list(DEFAULT_REGION_HOLDOUT.restitution or []),
+        "kind": holdout.kind,
+        "density": list(holdout.density or []),
+        "friction": list(holdout.friction or []),
+        "restitution": list(holdout.restitution or []),
     }
     with open(os.path.join(args.output, "manifest.json"), "w") as fh:
         json.dump(manifest, fh, indent=2)

@@ -57,11 +57,23 @@ bouncing trajectories — no MuJoCo required.
 ## Generalization: hold out a region, not a list (`splits.RegionHoldout`)
 
 With continuous materials there's no grid to hold combinations out of. Instead we
-reserve a **box in normalized essence-space** for test (default: mid-grip,
-fairly-bouncy — `friction∈[0.55,0.80]`, `restitution∈[0.55,0.80]`). Materials
-whose essence lands in the box go to test; everything else trains. This tests
-real **interpolation/extrapolation** — predicting behavior for essences never
-seen in training — and can be combined with held-out shapes.
+reserve a **box in normalized essence-space** for test. Two flavors, and the
+distinction matters (it was an audit finding):
+
+- **Interpolation** (`DEFAULT_REGION_HOLDOUT`) — an *interior* box (mid-grip,
+  fairly-bouncy), surrounded by training data on all sides. A smooth model fills
+  an interior hole almost trivially, so this is a **weak** test. ~8% of samples.
+- **Extrapolation** (`EXTRAPOLATION_REGION_HOLDOUT`, now the **default** for
+  generation) — the **heavy *and* bouncy corner** (`density≳0.55` **and**
+  `restitution≳0.60`, normalized). Training has heavy objects and bouncy objects
+  but never both-extreme together, so for held-out points no training object lies
+  jointly beyond them — the model must extrapolate the coupling **outside the
+  training manifold's convex hull**. ~3–4% of samples. This is the test *with
+  teeth*.
+
+Select with `--holdout-kind {extrapolation,interpolation}`; the choice + bounds
+are recorded in the manifest's `holdout_region`. Report `learned_coherence` and
+behavior generalization on the **extrapolation** split for the honest result.
 
 ## The schema (v2)
 

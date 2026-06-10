@@ -102,8 +102,12 @@ def make_combination_split(
 # With continuously-sampled materials there is no finite grid to hold combos out
 # of. Instead we reserve a *box* in normalized essence-space (and optionally only
 # for certain shapes) for the test set. A material whose essence lands in the box
-# goes to test; everything else trains. This tests true interpolation /
-# extrapolation: predicting behavior for essences never seen during training.
+# goes to test; everything else trains. Two flavors:
+#   * INTERPOLATION — an *interior* box, surrounded by training data on all sides.
+#     A smooth model fills an interior hole almost trivially, so it's a weak test.
+#   * EXTRAPOLATION — a *corner/extreme*, where for held-out points no training
+#     object lies jointly beyond them, so the model must extrapolate the coupling
+#     OUTSIDE the training manifold's convex hull. This is the test with teeth.
 @dataclass(frozen=True)
 class RegionHoldout:
     """A held-out box in normalized (density, friction, restitution) space.
@@ -111,13 +115,15 @@ class RegionHoldout:
     Each axis is an optional ``(min, max)`` interval on the *normalized* value
     (raw / config.PHYSICS_NORMALIZERS). ``None`` means that axis is unconstrained.
     If ``shapes`` is non-empty, only those shapes count as held out (so the same
-    essence can be train-on-one-shape, test-on-another).
+    essence can be train-on-one-shape, test-on-another). ``kind`` is a label
+    recorded in the manifest ("interpolation" | "extrapolation").
     """
 
     density: Optional[Interval] = None
     friction: Optional[Interval] = None
     restitution: Optional[Interval] = None
     shapes: Tuple[str, ...] = field(default_factory=tuple)
+    kind: str = "region"
 
     def contains(self, essence_norm: Dict[str, float], shape: str) -> bool:
         if self.shapes and shape not in self.shapes:
@@ -142,11 +148,22 @@ class RegionHoldout:
         return "test" if self.contains(essence_norm, shape) else "train"
 
 
-# A mid-grip, fairly-bouncy corner of essence-space, held out by default. Forces
-# the model to extrapolate behavior for materials it never trained on.
+# INTERPOLATION (weak): a mid-grip, fairly-bouncy *interior* box.
 DEFAULT_REGION_HOLDOUT = RegionHoldout(
     friction=(0.55, 0.80),
     restitution=(0.55, 0.80),
+    kind="interpolation",
+)
+
+# EXTRAPOLATION (the test with teeth): the HEAVY *and* BOUNCY corner. Normalized
+# essence maxes out near density~1.0 and restitution~0.85; this box sits at that
+# upper corner, so training has heavy OR bouncy objects but never both-extreme
+# together — predicting their behavior requires extrapolating the coupling beyond
+# anything seen. ~3-4% of samples land here (a non-empty, non-dominant test set).
+EXTRAPOLATION_REGION_HOLDOUT = RegionHoldout(
+    density=(0.55, 1.01),
+    restitution=(0.60, 0.90),
+    kind="extrapolation",
 )
 
 

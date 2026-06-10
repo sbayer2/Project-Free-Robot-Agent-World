@@ -6,11 +6,44 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
+from pseudomarble.config import PHYSICS_NORMALIZERS as N  # noqa: E402
 from pseudomarble.data.generate_mujoco import DEFAULT_SHAPES, assign_scenes  # noqa: E402
 from pseudomarble.splits import (  # noqa: E402
     DEFAULT_REGION_HOLDOUT,
+    EXTRAPOLATION_REGION_HOLDOUT,
     RegionHoldout,
 )
+
+
+def _norm(sample):
+    p = sample.material.physics
+    return p.density / N["density"], p.restitution / N["restitution"]
+
+
+def test_extrapolation_corner_membership():
+    h = EXTRAPOLATION_REGION_HOLDOUT
+    assert h.kind == "extrapolation"
+    # heavy AND bouncy -> held out (test)
+    assert h.contains({"density": 0.9, "friction": 0.3, "restitution": 0.8}, "box")
+    # only ONE extreme -> trains (the model HAS seen heavy, and seen bouncy)
+    assert not h.contains({"density": 0.9, "friction": 0.3, "restitution": 0.2}, "box")
+    assert not h.contains({"density": 0.2, "friction": 0.3, "restitution": 0.8}, "box")
+    # interior -> trains
+    assert not h.contains({"density": 0.3, "friction": 0.3, "restitution": 0.3}, "box")
+
+
+def test_extrapolation_assignment_is_extreme_and_nonempty():
+    recs = assign_scenes(DEFAULT_SHAPES, EXTRAPOLATION_REGION_HOLDOUT, 500, seed=0)
+    test = [r for r in recs if r["split"] == "test"]
+    assert 0 < len(test) < len(recs)  # corner reachable but not dominant
+    # every held-out object is genuinely in the extreme corner (extrapolation)
+    for r in test:
+        d, rest = _norm(r["sample"])
+        assert d >= 0.55 and rest >= 0.60
+
+
+def test_default_region_is_labeled_interpolation():
+    assert DEFAULT_REGION_HOLDOUT.kind == "interpolation"
 
 
 def test_region_contains_inside_box():
