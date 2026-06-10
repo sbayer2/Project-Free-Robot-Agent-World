@@ -154,6 +154,12 @@ loss      = 1 − coherence
 Unit-test sanity checks: coupled decoders (shared latent dims) score high;
 independent decoders (disjoint dims) score ~0.
 
+The render head's reconstruction loss reads as a literal prediction-error term,
+and the coherence control (`learned = trained − untrained`) is the
+subtract-the-prior logic of a prediction error applied across training rather than
+across time — the connection back to Rao & Ballard (1999) is written up in
+[`PREDICTIVE_CODING.md`](PREDICTIVE_CODING.md) (a framing note, not a result).
+
 **Smooth vs. chaotic target (de-risking a false null).** The physics-side decoder
 can be the **behavior** head (drop/tilt/push outcomes — the headline) or the
 **essence** head (density/friction/restitution). `toppled` is a *threshold*, so
