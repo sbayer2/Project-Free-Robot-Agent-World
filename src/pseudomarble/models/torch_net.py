@@ -102,6 +102,9 @@ if _HAVE_TORCH:
         def behavior_from_z(self, z):
             return self.behavior(z)
 
+        def essence_from_z(self, z):
+            return self.essence(z)
+
         def render_from_z(self, z):
             return self.decode(z)
 

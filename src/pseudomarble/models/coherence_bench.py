@@ -41,6 +41,15 @@ so the real run should average it over several untrained seeds and require the
 essence regions**; pair coherence with behavior generalization (does the shared
 latent predict behavior better on unseen essences?).
 
+Smooth vs. chaotic target (de-risking a false null): the physics-side head can be
+the **behavior** head (drop/tilt/push outcomes — the headline, but ``toppled`` is
+a threshold, so near tipping points its sensitivity is erratic and can drag
+coherence DOWN artificially) or the **essence** head ((density, friction,
+restitution) — a smooth function of z, robust to that chaos). Run both via
+``compare_both_targets``: a *high* essence-coherence beside a *low* behavior-
+coherence is the signature of the topple-chaos artifact, not a real absence of
+coupling.
+
 Coherence is a finite-difference (forward-only) measurement, so it runs with any
 backend — including the numpy reference in a plain sandbox. ``numpy_model_decoders``
 adapts a ``NumpyModel``; the same shape works for the MLX model on the Mac.
@@ -72,32 +81,46 @@ def mean_coherence(zs: Sequence[Sequence[float]], f_render: Decoder,
     return sum(scores) / len(scores)
 
 
-def numpy_model_decoders(model) -> Tuple[Decoder, Decoder]:
-    """Wrap a NumpyModel's render/behavior heads as z(list) -> flat-list decoders."""
+def numpy_model_decoders(model, target: str = "behavior") -> Tuple[Decoder, Decoder]:
+    """Wrap a model's render head and a chosen physics-side head as z->flat-list.
+
+    ``target`` selects the physics-side decoder:
+      * ``"behavior"`` — the drop/tilt/push outcome head (the headline target, but
+        partly non-smooth: ``toppled`` is a threshold, so near tipping points its
+        Jacobian is erratic and can bias coherence DOWNWARD — a false null).
+      * ``"essence"`` — the (density, friction, restitution) head, a SMOOTH
+        function of z. Coherence here is robust to the topple-chaos bias, so it's
+        the de-risked read: "does appearance couple with the physical *properties*?"
+    Report both; a low behavior-coherence next to a high essence-coherence points
+    to the chaos artifact rather than a true absence of coupling.
+    """
     import numpy as np
+
+    head = {"behavior": model.behavior_from_z, "essence": model.essence_from_z}[target]
 
     def f_render(z: Sequence[float]) -> List[float]:
         img = model.decode(np.asarray([z], dtype="float32"))[0]
         return [float(v) for v in np.asarray(img).reshape(-1)]
 
-    def f_behavior(z: Sequence[float]) -> List[float]:
-        b = model.behavior_from_z(np.asarray([z], dtype="float32"))[0]
-        return [float(v) for v in np.asarray(b).reshape(-1)]
+    def f_target(z: Sequence[float]) -> List[float]:
+        out = head(np.asarray([z], dtype="float32"))[0]
+        return [float(v) for v in np.asarray(out).reshape(-1)]
 
-    return f_render, f_behavior
+    return f_render, f_target
 
 
 def independent_coherence(render_model, behavior_model,
                           zs_render: Sequence[Sequence[float]],
                           zs_behavior: Sequence[Sequence[float]],
-                          n_dirs: int = 48, seed: int = 0) -> float:
+                          n_dirs: int = 48, seed: int = 0,
+                          target: str = "behavior") -> float:
     """Control: coherence of two separate models via a joint disjoint latent.
 
-    z = [z_render ; z_behavior]; render reads the first block, behavior the
-    second. Independent by construction -> expected ~0.
+    z = [z_render ; z_target]; render reads the first block, the physics-side head
+    (``target``) the second. Independent by construction -> expected ~0.
     """
     fr, _ = numpy_model_decoders(render_model)
-    _, fb = numpy_model_decoders(behavior_model)
+    _, fb = numpy_model_decoders(behavior_model, target)
     dr = len(zs_render[0])
 
     def f_render(z: Sequence[float]) -> List[float]:
@@ -112,27 +135,30 @@ def independent_coherence(render_model, behavior_model,
 
 def compare(shared_model, render_model, behavior_model, images,
             untrained_shared_model=None, n_dirs: int = 48,
-            seed: int = 0) -> Dict[str, float]:
+            seed: int = 0, target: str = "behavior") -> Dict[str, float]:
     """Run the coherence comparison on a batch of images.
 
-    Returns ``{shared_coherence, independent_coherence, gap, n_samples}``.
-    If ``untrained_shared_model`` (the same architecture, freshly initialized) is
-    given, also returns ``architectural_coherence`` and ``learned_coherence``
-    (= shared - architectural) — the honest "did training couple them?" signal,
-    controlling for the fact that a shared latent is coherent even untrained.
+    ``target`` ("behavior" | "essence") picks the physics-side head. "essence" is
+    smooth and de-risks the topple-chaos bias (see ``numpy_model_decoders``); run
+    both and report both. Returns ``{target, shared_coherence,
+    independent_coherence, gap, n_samples}``. If ``untrained_shared_model`` (same
+    architecture, freshly initialized) is given, also returns
+    ``architectural_coherence`` and ``learned_coherence`` (= shared - architectural)
+    — the honest "did training couple them?" signal.
     """
     import numpy as np
 
     imgs = np.asarray(images, dtype="float32")
     zs = [list(z) for z in np.asarray(shared_model.encode(imgs))]
-    fr, fb = numpy_model_decoders(shared_model)
-    shared = mean_coherence(zs, fr, fb, n_dirs=n_dirs, seed=seed)
+    fr, ft = numpy_model_decoders(shared_model, target)
+    shared = mean_coherence(zs, fr, ft, n_dirs=n_dirs, seed=seed)
 
     zs_r = [list(z) for z in np.asarray(render_model.encode(imgs))]
     zs_b = [list(z) for z in np.asarray(behavior_model.encode(imgs))]
     indep = independent_coherence(render_model, behavior_model, zs_r, zs_b,
-                                  n_dirs=n_dirs, seed=seed)
+                                  n_dirs=n_dirs, seed=seed, target=target)
     rep = {
+        "target": target,
         "shared_coherence": shared,
         "independent_coherence": indep,
         "gap": shared - indep,
@@ -140,11 +166,27 @@ def compare(shared_model, render_model, behavior_model, images,
     }
     if untrained_shared_model is not None:
         zs0 = [list(z) for z in np.asarray(untrained_shared_model.encode(imgs))]
-        fr0, fb0 = numpy_model_decoders(untrained_shared_model)
-        arch = mean_coherence(zs0, fr0, fb0, n_dirs=n_dirs, seed=seed)
+        fr0, ft0 = numpy_model_decoders(untrained_shared_model, target)
+        arch = mean_coherence(zs0, fr0, ft0, n_dirs=n_dirs, seed=seed)
         rep["architectural_coherence"] = arch
         rep["learned_coherence"] = shared - arch
     return rep
+
+
+def compare_both_targets(shared_model, render_model, behavior_model, images,
+                         untrained_shared_model=None, n_dirs: int = 48,
+                         seed: int = 0) -> Dict[str, Dict[str, float]]:
+    """Run the comparison for BOTH targets — ``{"behavior": {...}, "essence": {...}}``.
+
+    The recommended read: a high essence-coherence with a low behavior-coherence
+    flags the topple-chaos artifact, not a true absence of coupling.
+    """
+    return {
+        t: compare(shared_model, render_model, behavior_model, images,
+                   untrained_shared_model=untrained_shared_model,
+                   n_dirs=n_dirs, seed=seed, target=t)
+        for t in ("behavior", "essence")
+    }
 
 
 def _demo() -> None:  # pragma: no cover - illustrative, not a result
@@ -168,11 +210,15 @@ def _demo() -> None:  # pragma: no cover - illustrative, not a result
     behavior_only = NumpyModel(cfg, seed=2)
     untrained = NumpyModel(cfg, seed=3)  # architectural-baseline control
     images = np.random.default_rng(0).random((6, 4, 16, 16, 3)).astype("float32")
-    rep = compare(shared, render_only, behavior_only, images,
-                  untrained_shared_model=untrained, n_dirs=48, seed=0)
+    reps = compare_both_targets(shared, render_only, behavior_only, images,
+                                untrained_shared_model=untrained, n_dirs=48, seed=0)
     print("[coherence bench] UNTRAINED illustrative numbers (not the result):")
-    for k, v in rep.items():
-        print(f"  {k:24s} {v:.4f}" if isinstance(v, float) else f"  {k:24s} {v}")
+    for tgt, rep in reps.items():
+        print(f"  target={tgt}")
+        for k, v in rep.items():
+            if k == "target":
+                continue
+            print(f"    {k:22s} {v:.4f}" if isinstance(v, float) else f"    {k:22s} {v}")
     print("  (run on trained MLX models over held-out essence regions for the real result)")
 
 

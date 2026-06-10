@@ -13,8 +13,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from pseudomarble.models.coherence_bench import (  # noqa: E402
     compare,
+    compare_both_targets,
     independent_coherence,
     mean_coherence,
+    numpy_model_decoders,
 )
 
 try:
@@ -63,7 +65,9 @@ def test_compare_runs_and_reports_valid_numbers():
     images = np.random.default_rng(0).random((2, 2, 16, 16, 3)).astype("float32")
 
     rep = compare(shared, render_only, behavior_only, images, n_dirs=32, seed=0)
-    assert set(rep) == {"shared_coherence", "independent_coherence", "gap", "n_samples"}
+    assert set(rep) == {"target", "shared_coherence", "independent_coherence",
+                        "gap", "n_samples"}
+    assert rep["target"] == "behavior"  # default
     assert rep["n_samples"] == 2
     for k in ("shared_coherence", "independent_coherence"):
         assert -1.0 <= rep[k] <= 1.0
@@ -103,6 +107,49 @@ def test_independent_baseline_is_near_zero():
     zs_b = [list(rng.standard_normal(SMALL.latent_dim)) for _ in range(3)]
     val = independent_coherence(render_only, behavior_only, zs_r, zs_b, n_dirs=64, seed=0)
     assert abs(val) < 0.4, f"independent baseline not near zero: {val}"
+
+
+def test_essence_target_decoder_dimensions():
+    # The essence head outputs (density, friction, restitution) = 3; behavior = 21.
+    if _skip_no_numpy():
+        return
+    from pseudomarble.models.numpy_net import NumpyModel
+
+    m = NumpyModel(SMALL, seed=0)
+    z = [0.0] * SMALL.latent_dim
+    _, f_essence = numpy_model_decoders(m, target="essence")
+    _, f_behavior = numpy_model_decoders(m, target="behavior")
+    assert len(f_essence(z)) == SMALL.essence_dim == 3
+    assert len(f_behavior(z)) == SMALL.behavior_dim == 21
+
+
+def test_compare_runs_on_essence_target():
+    # The smooth essence target is the de-risked read (no topple-chaos bias).
+    if _skip_no_numpy():
+        return
+    from pseudomarble.models.numpy_net import NumpyModel
+
+    shared = NumpyModel(SMALL, seed=0)
+    images = np.random.default_rng(0).random((2, 2, 16, 16, 3)).astype("float32")
+    rep = compare(shared, NumpyModel(SMALL, 1), NumpyModel(SMALL, 2), images,
+                  n_dirs=32, seed=0, target="essence")
+    assert rep["target"] == "essence"
+    assert -1.0 <= rep["shared_coherence"] <= 1.0
+
+
+def test_compare_both_targets_returns_behavior_and_essence():
+    if _skip_no_numpy():
+        return
+    from pseudomarble.models.numpy_net import NumpyModel
+
+    images = np.random.default_rng(1).random((2, 2, 16, 16, 3)).astype("float32")
+    reps = compare_both_targets(NumpyModel(SMALL, 0), NumpyModel(SMALL, 1),
+                                NumpyModel(SMALL, 2), images,
+                                untrained_shared_model=NumpyModel(SMALL, 4), n_dirs=24)
+    assert set(reps) == {"behavior", "essence"}
+    for t in ("behavior", "essence"):
+        assert reps[t]["target"] == t
+        assert "learned_coherence" in reps[t]
 
 
 if __name__ == "__main__":
