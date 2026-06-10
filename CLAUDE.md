@@ -38,8 +38,10 @@ Personal research. Not affiliated with World Labs. Not an attempt to copy Marble
   predictive-but-not-invertible).
 - `probes.py` — drop/tilt/push actions + summary outcomes; `behavior_vector()`
   flattens to a stable **21-dim** target (PROBE_ORDER × 7 fields), with normalizers.
-- `splits.py` — `RegionHoldout` (held-out region of essence-space) + the older
-  discrete `make_combination_split`.
+- `splits.py` — `RegionHoldout` (held-out region of essence-space): default is
+  `EXTRAPOLATION_REGION_HOLDOUT` (heavy+bouncy corner, real extrapolation) vs the
+  weak `DEFAULT_REGION_HOLDOUT` (interior interpolation); `--holdout-kind` picks.
+  Plus `make_category_holdout` (GSO) and the older discrete `make_combination_split`.
 - `data/samples.py` — the generator-agnostic `sample.json` contract, **schema v2**
   (adds `behavior` + `material_truth`).
 - `data/generate_mujoco.py` — PRIMARY generator (continuous materials → renders →

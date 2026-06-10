@@ -49,11 +49,13 @@ Mitigations, all already reflected in code:
    matte-dark *and* grippy/bouncy). The coupling is physically motivated, not
    arbitrary.
 2. **Generalization, not reconstruction** — with continuous materials,
-   `splits.RegionHoldout` reserves a *region* of essence-space for test (the v2
-   task; see [`BEHAVIOR_TASK.md`](BEHAVIOR_TASK.md)). The discrete
-   `make_combination_split` (held-out `(shape, material)` pairs) remains for the
-   named-material/primitive path. The result that counts is behavior inferred for
-   an essence never seen in training.
+   `splits.RegionHoldout` reserves a *region* of essence-space for test. The
+   default is now **extrapolation** (`EXTRAPOLATION_REGION_HOLDOUT`: the heavy+bouncy
+   corner, where no training object lies jointly beyond the held-out points, so
+   the coupling must extrapolate outside the training hull) — `interpolation` (an
+   interior box) is available but is a weak test (an audit finding). The discrete
+   `make_combination_split` remains for the named/primitive path. The result that
+   counts is behavior inferred for an essence never seen in training.
 3. **Honest framing** — the deliverable is *"shared latents capture and
    **generalize** appearance↔physics coupling better than independent models, on
    a controlled synthetic world,"* not *"reality's eigenvector exists."*
