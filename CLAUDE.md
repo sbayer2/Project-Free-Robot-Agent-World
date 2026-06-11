@@ -26,6 +26,10 @@ Personal research. Not affiliated with World Labs. Not an attempt to copy Marble
   "two outputs in a package," not a unified eigenvector — that gap IS our target).
 - `docs/BEHAVIOR_TASK.md` — the current (v2) task design.
 - `docs/ARCHITECTURE.md` — design decisions, honest limitations, build order.
+- `docs/HARDWARE.md` — the target M5 Pro substrate and *why it shapes the code*:
+  unified memory's two sides (zero-copy win vs one shared bus/GPU → the data-gen
+  phase split), and the ANE-vs-GPU-Neural-Accelerator distinction (MLX runs on the
+  GPU, not the ANE). Read before touching anything performance-shaped.
 - `docs/PREDICTIVE_CODING.md` — framing note: render-loss as a Rao–Ballard (1999)
   prediction error; coherence control (`learned = trained − untrained`) as the same
   subtract-the-prior residual logic. A connection to neuroscience, not a result.
@@ -105,11 +109,14 @@ Legacy GPU backends (cudamat/gnumpy/Theano) were ruled out: no GPU here, depreca
 
 ## Hardware note (2026-06): MacBook Pro exists, just not always on hand
 
-The target substrate **is** the user's **MacBook Pro (Apple silicon, M5 / 64 GB)** —
-the MLX / Metal plan is intact and correct. The only limitation is per-session:
-some sessions run in a **Linux container without the Mac**, so **Mac-only steps
-(MLX training, Metal rendering) can't be executed in those sessions** — only
-written and reviewed.
+The target substrate **is** the user's **MacBook Pro (Apple silicon, M5 Pro:
+18-core CPU / 20-core GPU / 64 GB @ 307 GB/s)** — the MLX / Metal plan is intact
+and correct. Full topology + why it shapes the code (unified memory's two sides;
+MLX runs on the GPU's Neural Accelerators, **not** the ANE) is in
+[`docs/HARDWARE.md`](docs/HARDWARE.md). The only limitation is per-session: some
+sessions run in a **Linux container without the Mac**, so **Mac-only steps (MLX
+training, Metal rendering) can't be executed in those sessions** — only written and
+reviewed.
 
 Implication for how we work, not what we build:
 - Keep doing what we've done — author MLX/Mac code with **pure-Python cores that
