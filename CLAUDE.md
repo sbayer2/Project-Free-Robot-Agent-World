@@ -49,6 +49,11 @@ Personal research. Not affiliated with World Labs. Not an attempt to copy Marble
   (adds `behavior` + `material_truth`).
 - `data/generate_mujoco.py` — PRIMARY generator (continuous materials → renders →
   drop/tilt/push). MJCF builder is pure-Python/tested; sim+render guarded by `mujoco`.
+- `data/parallel.py` — generator-agnostic process-parallel scheduler
+  (`resolve_workers` + `ordered_parallel_map`, order-preserving). Both generators
+  take `--workers` (0 = auto = `os.cpu_count()`, ~18-way on the M5); scenes are
+  independent so it scales ~linearly. Processes not threads (MuJoCo context is
+  per-process). Pure stdlib, unit-tested in-sandbox (`tests/test_parallel.py`).
 - `data/generate_blender.py` — optional high-fidelity appearance generator, same contract.
 - `data/dataset.py` — `PseudoMarbleDataset`: manifest/target logic pure-Python;
   image loading + `mlx` conversion lazy.

@@ -118,12 +118,13 @@ python -m pytest                      # or: python tests/test_materials.py
 # generate a tiny SYNTHETIC dataset (primary path: MuJoCo, native on Apple silicon)
 pip install -e ".[mujoco]"
 python -m pseudomarble.data.generate_mujoco \
-    --output data/pseudo_marble --num-scenes 16 --views 16 --resolution 256
+    --output data/pseudo_marble --num-scenes 16 --views 16 --resolution 256 \
+    --workers 0    # scenes are independent → fan out across cores (~18-way on the M5)
 
 # REAL scanned objects (Google Scanned Objects) — measured mass + concave physics
 pip install -e ".[gso]" coacd
 python -m pseudomarble.data.generate_gso \
-    --gso-root /path/to/google_scanned_objects --output data/pm_gso --views 16
+    --gso-root /path/to/google_scanned_objects --output data/pm_gso --views 16 --workers 0
 # (the mesh physics path is sandbox-verified: python scripts/smoke_gso.py)
 ```
 

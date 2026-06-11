@@ -48,6 +48,7 @@ from typing import Dict, List, Optional, Tuple
 from pseudomarble import probes as P
 from pseudomarble.config import PhysicsConfig, RenderConfig
 from pseudomarble.data import samples
+from pseudomarble.data.parallel import ordered_parallel_map, resolve_workers
 from pseudomarble.splits import make_category_holdout, make_object_holdout
 
 MESH_EXTS = (".obj", ".glb", ".gltf", ".stl", ".ply")
@@ -352,6 +353,18 @@ def build_scene_gso(scene_id: str, obj: GsoObject, split: str, out_root: str,
     return record
 
 
+def _build_scene_gso_task(task: Tuple) -> Dict:
+    """Module-level (picklable) worker: build one GSO scene from a packed task.
+
+    Like the MuJoCo path, each scene is self-contained — its own mesh validation,
+    convex decomposition, render and probe contexts, and its own output dir — so
+    workers share no state and the dataset fans out across processes cleanly.
+    """
+    obj, scene_id, sp, out_root, render_cfg, physics_cfg, scale, friction, keep = task
+    return build_scene_gso(scene_id, obj, sp, out_root, render_cfg, physics_cfg,
+                           scale, friction, keep)
+
+
 def parse_args(argv: List[str]) -> argparse.Namespace:
     p = argparse.ArgumentParser(description="pseudo-marble GSO (real-object) generation")
     p.add_argument("--gso-root", required=True, help="directory of scanned-object folders")
@@ -370,6 +383,10 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
                    help="comma-separated categories to hold out for test")
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--keep-trajectory", action="store_true")
+    p.add_argument("--workers", type=int, default=0,
+                   help="parallel worker processes (0 = auto = os.cpu_count(); "
+                        "objects are independent, so this scales ~linearly with "
+                        "cores — on the M5, ~18-way)")
     return p.parse_args(argv)
 
 
@@ -401,14 +418,24 @@ def main(argv: List[str]) -> None:
     render_cfg = RenderConfig(resolution=args.resolution, num_views=args.views)
     physics_cfg = replace(PhysicsConfig(), collision_method=args.collision_method)
     os.makedirs(args.output, exist_ok=True)
-    scenes: List[Dict] = []
+    workers = resolve_workers(args.workers, len(objects))
+    print(f"[gso] generating {len(objects)} scenes on {workers} worker process(es)")
+
+    tasks = []
+    metas = []  # parallel list of (scene_id, obj) for ordered progress prints
     for i, obj in enumerate(objects):
         sp = "test" if obj.object_id in test_ids else "train"
         scene_id = f"{sp}_{i:06d}"
-        out = build_scene_gso(scene_id, obj, sp, args.output, render_cfg, physics_cfg,
-                              args.scale, args.friction, args.keep_trajectory)
-        scenes.append(out)
+        tasks.append((obj, scene_id, sp, args.output, render_cfg, physics_cfg,
+                      args.scale, args.friction, args.keep_trajectory))
+        metas.append((scene_id, obj, sp))
+
+    def _progress(i: int, _record: Dict) -> None:
+        scene_id, obj, sp = metas[i]
         print(f"[gso] built {scene_id} ({obj.object_id} / {obj.category} / {sp})")
+
+    scenes: List[Dict] = ordered_parallel_map(
+        _build_scene_gso_task, tasks, workers, on_done=_progress)
 
     n_test = sum(1 for s in scenes if s["split"] == "test")
     manifest = samples.build_manifest(
