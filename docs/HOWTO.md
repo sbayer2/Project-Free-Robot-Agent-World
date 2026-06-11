@@ -54,16 +54,28 @@ python -m pseudomarble.data.generate_mujoco \
     --output data/pseudo_marble \
     --num-scenes 16 --views 16 --resolution 256 \
     --shapes box,sphere,cylinder,capsule,ellipsoid \
-    --workers 0            # 0 = auto = one process per core (~18-way on the M5)
+    --render-workers 0 --sim-workers 0     # 0 = phase-specific auto
 # or: scripts/run_datagen_mujoco.sh data/pseudo_marble 16 16 256
 ```
 
-**Parallelism (`--workers`).** Scenes are fully independent, so generation fans
-out across processes (not threads — a MuJoCo render/sim context is per-process).
-`--workers 0` (the default) uses one process per core; pass an explicit number to
-cap it (e.g. to leave cores free). Manifest order is preserved regardless of which
-scene finishes first. The GSO path (`generate_gso`) takes the same `--workers`
-flag. Throughput scales ~linearly until cores run out.
+**Parallelism is phase-aware (unified-memory aware).** Scenes are independent, so
+generation fans out across *processes* (not threads — a MuJoCo render/sim context
+is per-process). But on an Apple-silicon SoC the two stages have **opposite**
+optimal widths, so they run as separate phases:
+
+- **render** (`--render-workers`) is GPU/Metal-bound. There is **one** GPU sharing
+  the unified-memory bus with the CPU (on the M5 Pro: 20-core GPU, 64 GB @
+  307 GB/s), so a worker-per-core just makes processes queue on it and fight for
+  bandwidth. Auto keeps this **small**.
+- **simulate** (`--sim-workers`) is pure CPU (`mj_step`). The GPU is idle in this
+  phase, so it scales ~linearly across the performance cores; auto uses most of
+  them, leaving a little headroom.
+
+`--workers N` is a combined fallback that sets both when the per-phase flags are 0.
+Manifest order is preserved regardless of finish order. The real optimum per phase
+(vs. resolution × views) is worth a quick sweep on your Mac. The GSO path
+(`generate_gso --workers`) stays single-phase for now, but its auto default is the
+same conservative CPU width (not one-per-core) so it doesn't starve the GPU either.
 
 Why primary: MuJoCo is arm64-native (no Docker, no bpy), and the
 appearance↔physics coupling lives in **one geom** (`rgba` + `density` +

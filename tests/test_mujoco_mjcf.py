@@ -15,6 +15,7 @@ from pseudomarble import materials as M  # noqa: E402
 from pseudomarble.data.generate_mujoco import (  # noqa: E402
     DEFAULT_SHAPES,
     SHAPE_TO_GEOM,
+    assemble_scene,
     build_mjcf,
 )
 
@@ -92,6 +93,34 @@ def test_unknown_shape_is_rejected_with_guidance():
 def test_every_default_shape_is_known():
     for shape in DEFAULT_SHAPES:
         assert shape in SHAPE_TO_GEOM
+
+
+def test_assemble_scene_joins_render_and_sim_without_mujoco():
+    # The split pipeline's join seam: given frames (GPU phase) + behavior (CPU
+    # phase) it must assemble a valid sample.json — pure-Python, no mujoco runtime.
+    import json
+    import tempfile
+
+    from pseudomarble.config import PhysicsConfig, RenderConfig
+    from pseudomarble.materials import MaterialSampler
+
+    sample = MaterialSampler(seed=7).sample(material_id="t")
+    frames = [{"index": 0, "file": "view_000.png"}]        # stand-in render output
+    behavior = [{"probe": {"kind": "drop"}, "outcome": {"toppled": False}}]
+    with tempfile.TemporaryDirectory() as d:
+        rec = assemble_scene("train_000000", "box", sample, "train", d,
+                             RenderConfig(resolution=64, num_views=1),
+                             PhysicsConfig(), frames, behavior)
+        # record carries both projections and the split label...
+        assert rec["scene_id"] == "train_000000" and rec["split"] == "train"
+        assert rec["input"]["shape"] == "box"
+        assert rec["appearance"]["frames"] == frames      # render phase output
+        assert rec["behavior"]["probes"] == behavior      # sim phase output
+        # ...and it was written to <out>/<scene_id>/sample.json verbatim.
+        with open(f"{d}/train_000000/sample.json") as fh:
+            on_disk = json.load(fh)
+        assert on_disk["scene_id"] == "train_000000"
+        assert on_disk["behavior"]["probes"] == behavior
 
 
 if __name__ == "__main__":

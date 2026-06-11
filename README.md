@@ -119,7 +119,7 @@ python -m pytest                      # or: python tests/test_materials.py
 pip install -e ".[mujoco]"
 python -m pseudomarble.data.generate_mujoco \
     --output data/pseudo_marble --num-scenes 16 --views 16 --resolution 256 \
-    --workers 0    # scenes are independent → fan out across cores (~18-way on the M5)
+    --render-workers 0 --sim-workers 0   # phase-aware: small GPU render pool, wide CPU sim
 
 # REAL scanned objects (Google Scanned Objects) — measured mass + concave physics
 pip install -e ".[gso]" coacd
