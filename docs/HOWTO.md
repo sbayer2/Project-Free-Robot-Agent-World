@@ -53,9 +53,17 @@ pip install -e ".[mujoco]"
 python -m pseudomarble.data.generate_mujoco \
     --output data/pseudo_marble \
     --num-scenes 16 --views 16 --resolution 256 \
-    --shapes box,sphere,cylinder,capsule,ellipsoid
+    --shapes box,sphere,cylinder,capsule,ellipsoid \
+    --workers 0            # 0 = auto = one process per core (~18-way on the M5)
 # or: scripts/run_datagen_mujoco.sh data/pseudo_marble 16 16 256
 ```
+
+**Parallelism (`--workers`).** Scenes are fully independent, so generation fans
+out across processes (not threads — a MuJoCo render/sim context is per-process).
+`--workers 0` (the default) uses one process per core; pass an explicit number to
+cap it (e.g. to leave cores free). Manifest order is preserved regardless of which
+scene finishes first. The GSO path (`generate_gso`) takes the same `--workers`
+flag. Throughput scales ~linearly until cores run out.
 
 Why primary: MuJoCo is arm64-native (no Docker, no bpy), and the
 appearance↔physics coupling lives in **one geom** (`rgba` + `density` +

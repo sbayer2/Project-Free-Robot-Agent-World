@@ -17,9 +17,17 @@ we additionally simulate probes to get behavior.
 Run on your Mac (``pip install -e ".[mujoco]"``)::
 
     python -m pseudomarble.data.generate_mujoco \
-        --output data/pseudo_marble --num-scenes 64 --views 16 --resolution 256
+        --output data/pseudo_marble --num-scenes 64 --views 16 --resolution 256 \
+        --workers 0          # 0 = auto = one process per core (~18-way on the M5)
 
-The MJCF builder and outcome summarization are pure-Python and unit-tested
+Scenes are fully independent (each builds its own MJCF, renders, runs the
+drop/tilt/push battery, and writes its own directory), so generation is
+embarrassingly parallel: ``--workers`` fans it out across processes — not threads,
+because a MuJoCo render/sim context is per-process — and the manifest order is
+preserved regardless of finish order.
+
+The MJCF builder, outcome summarization, and the parallel scheduler
+(``resolve_workers`` / ``_ordered_parallel_map``) are pure-Python and unit-tested
 without a MuJoCo runtime; rendering/simulation are guarded behind ``mujoco``.
 """
 
@@ -37,6 +45,7 @@ from pseudomarble import materials as M
 from pseudomarble import probes as P
 from pseudomarble.config import PhysicsConfig, RenderConfig
 from pseudomarble.data import samples
+from pseudomarble.data.parallel import ordered_parallel_map, resolve_workers
 from pseudomarble.materials import MaterialSampler
 from pseudomarble.splits import (
     DEFAULT_REGION_HOLDOUT,
@@ -400,6 +409,20 @@ def build_scene(scene_id: str, shape: str, sample: "M.MaterialSample", split: st
     return record
 
 
+def _build_scene_task(task: Tuple) -> Dict:
+    """Module-level worker so it is picklable for ProcessPoolExecutor (spawn on
+    macOS). Unpacks an assignment + shared config and builds one scene.
+
+    Each scene is wholly self-contained — it constructs its own ``MjModel`` /
+    ``MjData`` / ``Renderer`` (MuJoCo contexts are per-process, not thread-safe,
+    which is exactly why we parallelize across *processes*, not threads) and
+    writes its own ``<scene>/`` directory — so workers never share state.
+    """
+    rec, out_root, render_cfg, physics_cfg, keep_traj = task
+    return build_scene(rec["scene_id"], rec["shape"], rec["sample"], rec["split"],
+                       out_root, render_cfg, physics_cfg, keep_traj)
+
+
 def assign_scenes(shapes: List[str], holdout: RegionHoldout, num_scenes: int,
                   seed: int) -> List[Dict]:
     """Sample (shape, continuous material) scenes and label train/test by region."""
@@ -440,6 +463,10 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
                    help="comma-separated MuJoCo primitive shape ids")
     p.add_argument("--keep-trajectory", action="store_true",
                    help="store full per-probe trajectories (larger files)")
+    p.add_argument("--workers", type=int, default=0,
+                   help="parallel worker processes (0 = auto = os.cpu_count(); "
+                        "scenes are independent, so this scales ~linearly until "
+                        "cores run out — on the M5, ~18-way)")
     return p.parse_args(argv)
 
 
@@ -454,13 +481,20 @@ def main(argv: List[str]) -> None:
                else DEFAULT_REGION_HOLDOUT)
     assignments = assign_scenes(shapes, holdout, args.num_scenes, args.seed)
     os.makedirs(args.output, exist_ok=True)
-    scenes: List[Dict] = []
-    for rec in assignments:
-        out = build_scene(rec["scene_id"], rec["shape"], rec["sample"], rec["split"],
-                          args.output, render_cfg, physics_cfg, args.keep_trajectory)
-        scenes.append(out)
+    workers = resolve_workers(args.workers, len(assignments))
+    print(f"[pseudo-marble:mujoco] generating {len(assignments)} scenes "
+          f"on {workers} worker process(es)")
+
+    tasks = [(rec, args.output, render_cfg, physics_cfg, args.keep_trajectory)
+             for rec in assignments]
+
+    def _progress(i: int, _record: Dict) -> None:
+        rec = assignments[i]
         print(f"[pseudo-marble:mujoco] built {rec['scene_id']} "
               f"({rec['shape']} / ess~{rec['sample'].nearest_anchor} / {rec['split']})")
+
+    scenes: List[Dict] = ordered_parallel_map(
+        _build_scene_task, tasks, workers, on_done=_progress)
 
     n_test = sum(1 for s in scenes if s["split"] == "test")
     manifest = samples.build_manifest(
