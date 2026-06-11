@@ -48,7 +48,11 @@ from typing import Dict, List, Optional, Tuple
 from pseudomarble import probes as P
 from pseudomarble.config import PhysicsConfig, RenderConfig
 from pseudomarble.data import samples
-from pseudomarble.data.parallel import ordered_parallel_map, resolve_workers
+from pseudomarble.data.parallel import (
+    default_cpu_workers,
+    ordered_parallel_map,
+    resolve_workers,
+)
 from pseudomarble.splits import make_category_holdout, make_object_holdout
 
 MESH_EXTS = (".obj", ".glb", ".gltf", ".stl", ".ply")
@@ -384,9 +388,9 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--keep-trajectory", action="store_true")
     p.add_argument("--workers", type=int, default=0,
-                   help="parallel worker processes (0 = auto = os.cpu_count(); "
-                        "objects are independent, so this scales ~linearly with "
-                        "cores — on the M5, ~18-way)")
+                   help="parallel worker processes (0 = auto = a conservative CPU "
+                        "default that leaves the shared GPU + memory bus headroom; "
+                        "objects are independent so it scales ~linearly with cores)")
     return p.parse_args(argv)
 
 
@@ -418,7 +422,11 @@ def main(argv: List[str]) -> None:
     render_cfg = RenderConfig(resolution=args.resolution, num_views=args.views)
     physics_cfg = replace(PhysicsConfig(), collision_method=args.collision_method)
     os.makedirs(args.output, exist_ok=True)
-    workers = resolve_workers(args.workers, len(objects))
+    # Per-object work mixes mesh decomposition + sim (CPU-heavy) with render (GPU),
+    # so it stays a single phase for now (a full render/sim/decompose split is a
+    # follow-up), but the auto width is the conservative CPU default — NOT
+    # os.cpu_count() — to leave the one shared GPU + memory bus headroom.
+    workers = resolve_workers(args.workers, len(objects), default=default_cpu_workers())
     print(f"[gso] generating {len(objects)} scenes on {workers} worker process(es)")
 
     tasks = []

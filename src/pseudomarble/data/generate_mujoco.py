@@ -18,17 +18,24 @@ Run on your Mac (``pip install -e ".[mujoco]"``)::
 
     python -m pseudomarble.data.generate_mujoco \
         --output data/pseudo_marble --num-scenes 64 --views 16 --resolution 256 \
-        --workers 0          # 0 = auto = one process per core (~18-way on the M5)
+        --render-workers 0 --sim-workers 0      # 0 = phase-specific auto
 
-Scenes are fully independent (each builds its own MJCF, renders, runs the
-drop/tilt/push battery, and writes its own directory), so generation is
-embarrassingly parallel: ``--workers`` fans it out across processes — not threads,
-because a MuJoCo render/sim context is per-process — and the manifest order is
-preserved regardless of finish order.
+Scenes are fully independent, so generation is embarrassingly parallel — across
+*processes*, not threads (a MuJoCo render/sim context is per-process), with manifest
+order preserved regardless of finish order. Crucially the two stages have OPPOSITE
+optimal widths on a unified-memory Mac, so they run as separate phases:
 
-The MJCF builder, outcome summarization, and the parallel scheduler
-(``resolve_workers`` / ``_ordered_parallel_map``) are pure-Python and unit-tested
-without a MuJoCo runtime; rendering/simulation are guarded behind ``mujoco``.
+  * **render** (GPU/Metal) — ``--render-workers``, kept small: there is one GPU
+    sharing the 64 GB / 307 GB-s pool with the CPU, so a worker-per-core just
+    queues on it (oversubscription, not speedup);
+  * **simulate** (CPU ``mj_step``) — ``--sim-workers``, wide: the GPU is idle in
+    this phase, so it scales ~linearly across the performance cores.
+
+``--workers`` remains a combined fallback for both when the per-phase flags are 0.
+
+The MJCF builder, outcome summarization, the assemble/serialize seam, and the
+parallel scheduler (``parallel.py``) are pure-Python and unit-tested without a
+MuJoCo runtime; rendering/simulation are guarded behind ``mujoco``.
 """
 
 from __future__ import annotations
@@ -45,7 +52,12 @@ from pseudomarble import materials as M
 from pseudomarble import probes as P
 from pseudomarble.config import PhysicsConfig, RenderConfig
 from pseudomarble.data import samples
-from pseudomarble.data.parallel import ordered_parallel_map, resolve_workers
+from pseudomarble.data.parallel import (
+    default_cpu_workers,
+    default_render_workers,
+    ordered_parallel_map,
+    resolve_workers,
+)
 from pseudomarble.materials import MaterialSampler
 from pseudomarble.splits import (
     DEFAULT_REGION_HOLDOUT,
@@ -388,14 +400,33 @@ def run_probes(shape: str, material: M.Material,
     return records
 
 
-def build_scene(scene_id: str, shape: str, sample: "M.MaterialSample", split: str,
-                out_root: str, render_cfg: RenderConfig, physics_cfg: PhysicsConfig,
-                keep_trajectory: bool = False) -> Dict:
-    """Generate one paired sample (appearance + behavior) and write sample.json."""
+# --------------------------------------------------------------------------- #
+# Scene built in three separable stages so the GPU-bound render and the CPU-bound
+# simulation can be scheduled at DIFFERENT widths (see data/parallel.py):
+#   render_scene   — GPU (Metal): multi-view images           → frames
+#   simulate_scene — CPU (mj_step): drop/tilt/push battery     → behavior records
+#   assemble_scene — cheap, no mujoco: build the record + write sample.json
+# build_scene runs all three in order (the serial / backward-compatible path).
+# --------------------------------------------------------------------------- #
+def render_scene(scene_id: str, shape: str, sample: "M.MaterialSample",
+                 out_root: str, render_cfg: RenderConfig) -> List[Dict]:
+    """GPU stage: render the multi-view images for one scene; returns the frames."""
     scene_dir = os.path.join(out_root, scene_id)
-    frames = render_views(shape, sample.material, os.path.join(scene_dir, "renders"),
-                          render_cfg)
-    behavior = run_probes(shape, sample.material, physics_cfg, keep_trajectory)
+    return render_views(shape, sample.material, os.path.join(scene_dir, "renders"),
+                        render_cfg)
+
+
+def simulate_scene(shape: str, sample: "M.MaterialSample",
+                   physics_cfg: PhysicsConfig, keep_trajectory: bool = False) -> List[Dict]:
+    """CPU stage: run the drop/tilt/push battery for one scene; returns behavior."""
+    return run_probes(shape, sample.material, physics_cfg, keep_trajectory)
+
+
+def assemble_scene(scene_id: str, shape: str, sample: "M.MaterialSample", split: str,
+                   out_root: str, render_cfg: RenderConfig, physics_cfg: PhysicsConfig,
+                   frames: List[Dict], behavior: List[Dict]) -> Dict:
+    """Assemble the paired record from rendered frames + simulated behavior, and
+    write ``sample.json``. Pure-Python (no mujoco): the join/serialize seam."""
     record = samples.build_sample_record(
         scene_id=scene_id, split=split, shape=shape, frames=frames,
         resolution=render_cfg.resolution, generator="mujoco",
@@ -403,24 +434,42 @@ def build_scene(scene_id: str, shape: str, sample: "M.MaterialSample", split: st
         behavior=behavior, material_truth_block=samples.material_truth(sample),
         fps=physics_cfg.fps,
     )
+    scene_dir = os.path.join(out_root, scene_id)
     os.makedirs(scene_dir, exist_ok=True)
     with open(os.path.join(scene_dir, "sample.json"), "w") as fh:
         json.dump(record, fh, indent=2)
     return record
 
 
-def _build_scene_task(task: Tuple) -> Dict:
-    """Module-level worker so it is picklable for ProcessPoolExecutor (spawn on
-    macOS). Unpacks an assignment + shared config and builds one scene.
+def build_scene(scene_id: str, shape: str, sample: "M.MaterialSample", split: str,
+                out_root: str, render_cfg: RenderConfig, physics_cfg: PhysicsConfig,
+                keep_trajectory: bool = False) -> Dict:
+    """Generate one paired sample (appearance + behavior) and write sample.json.
 
-    Each scene is wholly self-contained — it constructs its own ``MjModel`` /
-    ``MjData`` / ``Renderer`` (MuJoCo contexts are per-process, not thread-safe,
-    which is exactly why we parallelize across *processes*, not threads) and
-    writes its own ``<scene>/`` directory — so workers never share state.
+    Runs the three stages in order; the parallel ``main`` instead schedules the
+    render and sim stages separately so each can use its own worker width.
     """
-    rec, out_root, render_cfg, physics_cfg, keep_traj = task
-    return build_scene(rec["scene_id"], rec["shape"], rec["sample"], rec["split"],
-                       out_root, render_cfg, physics_cfg, keep_traj)
+    frames = render_scene(scene_id, shape, sample, out_root, render_cfg)
+    behavior = simulate_scene(shape, sample, physics_cfg, keep_trajectory)
+    return assemble_scene(scene_id, shape, sample, split, out_root, render_cfg,
+                          physics_cfg, frames, behavior)
+
+
+def _render_task(task: Tuple) -> List[Dict]:
+    """Module-level (picklable) GPU-stage worker: render one scene's views.
+
+    Each worker builds its own ``MjModel`` / ``Renderer`` (MuJoCo contexts are
+    per-process and not thread-safe — exactly why this fans out across *processes*)
+    and writes only into that scene's ``renders/`` dir, so workers share no state.
+    """
+    rec, out_root, render_cfg = task
+    return render_scene(rec["scene_id"], rec["shape"], rec["sample"], out_root, render_cfg)
+
+
+def _sim_task(task: Tuple) -> List[Dict]:
+    """Module-level (picklable) CPU-stage worker: run one scene's probe battery."""
+    rec, physics_cfg, keep_traj = task
+    return simulate_scene(rec["shape"], rec["sample"], physics_cfg, keep_traj)
 
 
 def assign_scenes(shapes: List[str], holdout: RegionHoldout, num_scenes: int,
@@ -464,9 +513,18 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
     p.add_argument("--keep-trajectory", action="store_true",
                    help="store full per-probe trajectories (larger files)")
     p.add_argument("--workers", type=int, default=0,
-                   help="parallel worker processes (0 = auto = os.cpu_count(); "
-                        "scenes are independent, so this scales ~linearly until "
-                        "cores run out — on the M5, ~18-way)")
+                   help="combined fallback width for BOTH phases when the per-phase "
+                        "flags are 0 (0 = phase-specific auto). Render and sim have "
+                        "opposite optima on a unified-memory Mac, so prefer the "
+                        "per-phase flags below")
+    p.add_argument("--render-workers", type=int, default=0,
+                   help="GPU-stage (Metal render) processes (0 = auto, kept small: "
+                        "one GPU shares the memory bus, so a worker-per-core just "
+                        "queues on it — oversubscription, not speedup)")
+    p.add_argument("--sim-workers", type=int, default=0,
+                   help="CPU-stage (drop/tilt/push mj_step) processes (0 = auto: "
+                        "most cores; the GPU is idle during this phase so it scales "
+                        "~linearly across the performance cores)")
     return p.parse_args(argv)
 
 
@@ -481,20 +539,39 @@ def main(argv: List[str]) -> None:
                else DEFAULT_REGION_HOLDOUT)
     assignments = assign_scenes(shapes, holdout, args.num_scenes, args.seed)
     os.makedirs(args.output, exist_ok=True)
-    workers = resolve_workers(args.workers, len(assignments))
-    print(f"[pseudo-marble:mujoco] generating {len(assignments)} scenes "
-          f"on {workers} worker process(es)")
+    n = len(assignments)
 
-    tasks = [(rec, args.output, render_cfg, physics_cfg, args.keep_trajectory)
-             for rec in assignments]
+    # Per-phase widths: explicit per-phase flag > --workers fallback > phase auto.
+    render_workers = resolve_workers(args.render_workers or args.workers, n,
+                                     default=default_render_workers())
+    sim_workers = resolve_workers(args.sim_workers or args.workers, n,
+                                  default=default_cpu_workers())
+    print(f"[pseudo-marble:mujoco] generating {n} scenes "
+          f"(render phase: {render_workers} proc / sim phase: {sim_workers} proc)")
 
-    def _progress(i: int, _record: Dict) -> None:
-        rec = assignments[i]
+    # Phase 1 — GPU: render every scene's views (narrow; one shared GPU).
+    render_tasks = [(rec, args.output, render_cfg) for rec in assignments]
+    frames_list: List[List[Dict]] = ordered_parallel_map(
+        _render_task, render_tasks, render_workers,
+        on_done=lambda i, _f: print(
+            f"[pseudo-marble:mujoco] rendered {assignments[i]['scene_id']}"))
+
+    # Phase 2 — CPU: run the drop/tilt/push battery (wide; GPU idle now).
+    sim_tasks = [(rec, physics_cfg, args.keep_trajectory) for rec in assignments]
+    behavior_list: List[List[Dict]] = ordered_parallel_map(
+        _sim_task, sim_tasks, sim_workers,
+        on_done=lambda i, _b: print(
+            f"[pseudo-marble:mujoco] simulated {assignments[i]['scene_id']}"))
+
+    # Phase 3 — cheap join: assemble each record + write sample.json (serial).
+    scenes: List[Dict] = []
+    for i, rec in enumerate(assignments):
+        record = assemble_scene(rec["scene_id"], rec["shape"], rec["sample"],
+                                rec["split"], args.output, render_cfg, physics_cfg,
+                                frames_list[i], behavior_list[i])
+        scenes.append(record)
         print(f"[pseudo-marble:mujoco] built {rec['scene_id']} "
               f"({rec['shape']} / ess~{rec['sample'].nearest_anchor} / {rec['split']})")
-
-    scenes: List[Dict] = ordered_parallel_map(
-        _build_scene_task, tasks, workers, on_done=_progress)
 
     n_test = sum(1 for s in scenes if s["split"] == "test")
     manifest = samples.build_manifest(

@@ -12,6 +12,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from pseudomarble.data.parallel import (  # noqa: E402
+    default_cpu_workers,
+    default_render_workers,
     ordered_parallel_map,
     resolve_workers,
 )
@@ -41,6 +43,37 @@ def test_resolve_workers_explicit_is_clamped():
     # A nonsense negative falls through to the auto path (same as 0/None).
     assert resolve_workers(-5, 8) == resolve_workers(0, 8)
     assert resolve_workers(1, 8) == 1
+
+
+def test_resolve_workers_honors_phase_default():
+    # default= sets the auto target when requested is 0/None; explicit still wins.
+    assert resolve_workers(0, 1000, default=3) == 3
+    assert resolve_workers(None, 1000, default=5) == 5
+    assert resolve_workers(0, 2, default=8) == 2          # clamped to #items
+    assert resolve_workers(7, 1000, default=3) == 7       # explicit overrides default
+    # A nonsense default falls back to cpu_count (same as no default given).
+    assert resolve_workers(0, 1000, default=0) == resolve_workers(0, 1000)
+
+
+def test_render_default_is_capped_and_narrower_on_real_machines():
+    # The GPU-bound phase must not oversubscribe the one shared GPU: its auto width
+    # is capped small regardless of core count.
+    cpu = default_cpu_workers()
+    gpu = default_render_workers()
+    assert gpu >= 1 and cpu >= 1
+    assert gpu <= 4                         # capped small no matter how many cores
+    assert cpu <= (os.cpu_count() or 1)     # never claims more than the machine has
+    # On a real many-core target (e.g. the 18-core M5), render is strictly narrower
+    # than sim — the whole point of splitting the phases.
+    if (os.cpu_count() or 1) >= 8:
+        assert gpu < cpu
+
+
+def test_cpu_default_reserve_leaves_headroom():
+    n = os.cpu_count() or 1
+    assert default_cpu_workers(reserve=0) == n
+    assert default_cpu_workers(reserve=2) == max(1, n - 2)
+    assert default_cpu_workers(reserve=10_000) == 1        # never below 1
 
 
 def test_serial_map_preserves_order_and_reports_progress():

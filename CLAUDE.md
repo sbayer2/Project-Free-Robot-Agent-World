@@ -50,10 +50,16 @@ Personal research. Not affiliated with World Labs. Not an attempt to copy Marble
 - `data/generate_mujoco.py` — PRIMARY generator (continuous materials → renders →
   drop/tilt/push). MJCF builder is pure-Python/tested; sim+render guarded by `mujoco`.
 - `data/parallel.py` — generator-agnostic process-parallel scheduler
-  (`resolve_workers` + `ordered_parallel_map`, order-preserving). Both generators
-  take `--workers` (0 = auto = `os.cpu_count()`, ~18-way on the M5); scenes are
-  independent so it scales ~linearly. Processes not threads (MuJoCo context is
-  per-process). Pure stdlib, unit-tested in-sandbox (`tests/test_parallel.py`).
+  (`resolve_workers(default=...)` + `ordered_parallel_map`, order-preserving) +
+  phase-aware auto widths. **Unified-memory aware** (M5 Pro: 18-core CPU / 20-core
+  GPU / 64 GB @ 307 GB/s, one shared pool): the primary generator runs render and
+  sim as SEPARATE phases because they have opposite optima — `default_render_workers`
+  (GPU/Metal: small, one shared GPU) vs `default_cpu_workers` (CPU `mj_step`: most
+  cores). Flags: `--render-workers` / `--sim-workers` (+ `--workers` combined
+  fallback); GSO single-phase but auto = conservative CPU width, not `cpu_count`.
+  Processes not threads (MuJoCo context per-process). Pure stdlib, unit-tested
+  (`tests/test_parallel.py`); the assemble/serialize seam tested in `test_mujoco_mjcf.py`.
+  The model's heavy compute stays MLX/Metal on the GPU's Neural Accelerators.
 - `data/generate_blender.py` — optional high-fidelity appearance generator, same contract.
 - `data/dataset.py` — `PseudoMarbleDataset`: manifest/target logic pure-Python;
   image loading + `mlx` conversion lazy.
