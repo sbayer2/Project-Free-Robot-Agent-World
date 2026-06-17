@@ -207,6 +207,56 @@ applied):
 Reproduce: `python tests/batch_probe_stability.py` (writes
 `runs/stability/probe_stability.json` with the raw sweep arrays for plotting).
 
+---
+
+### F9 — Mid-scale coherence pilot: training raises coherence above the architectural baseline (PROVISIONAL — single trained seed)
+
+**This is the first measurement of the project's headline number on real renders.**
+It is a **single-trained-seed pilot**, explicitly NOT a confirmed result (per the
+multi-seed standard) — read it as "what a mid-scale run gives," then see the
+confirmation plan below.
+
+Setup: MuJoCo dataset `pm_mid` — 256 scenes, 8 views, 128px, **extrapolation**
+holdout (heavy+bouncy corner), 246 train / 10 test. Shared MLX model trained 40
+epochs (`runs/mid_shared`). Coherence on the **held-out** test region via
+`scripts/run_coherence_experiment.py` (forward-only finite diff, 48 dirs);
+architectural baseline averaged over 5 fresh untrained inits.
+
+| target | trained shared | architectural baseline (5 seeds) | learned = trained − arch |
+|---|---|---|---|
+| **essence** | 0.462 | 0.093 ± 0.048 | **+0.369** (~7.7σ) |
+| **behavior** | 0.257 | 0.105 ± 0.041 | **+0.152** (~3.7σ) |
+
+Both clear the baseline band; essence (smooth head) ≫ behavior — exactly the F8
+signature (the noisy `push.toppled` / tilt fields dilute behavior coupling), not a
+true absence of coupling.
+
+**Two confounds checked (both addressed):**
+- *Generalization context.* Held-out MSE vs predict-train-mean: behavior 0.034 vs
+  0.052 (**1.53× better than mean** — modest real generalization); essence 0.151 vs
+  0.143 (**0.95×, i.e. WORSE than the mean** — the essence head does not extrapolate
+  to the corner). So essence shows **high coherence with poor extrapolation
+  accuracy**: appearance and the essence head co-move in *direction* through z, even
+  where the head's absolute predictions are wrong. Coupling of direction, not value.
+- *Latent-rank collapse.* If high trained coherence were a "z collapsed to a few
+  dims ⇒ both heads trivially co-respond" artifact, the trained participation ratio
+  would be LOW. It is the opposite: trained PR ≈ **61.7** vs untrained ≈ **7.6** (of
+  256). Training *spread* the representation; the artifact is ruled out.
+
+**Honest gaps before this becomes a finding:**
+- **Single trained seed.** Need ≥3–5 training seeds → `learned_coherence` mean ± std.
+- **No independent (disjoint-latent) control yet.** The render-only/behavior-only
+  ~0 floor (needs masked-loss training) is the gold-standard comparison; not run.
+- The architectural baseline uses an untrained encoder whose output is low-rank
+  (PR 7.6); whether that depresses the baseline deserves a matched-z check.
+- Only 10 held-out scenes; coherence is a mean over them (per-scene spread not yet
+  reported).
+
+Confirmation plan: multi-seed trained models + the independent control + a larger
+held-out set, then promote (or retract) this to a confirmed finding. Reproduce:
+train then `python scripts/run_coherence_experiment.py --data data/pm_mid
+--checkpoint runs/mid_shared/model.safetensors` (writes `runs/*/coherence_report.json`).
+
 ## 3. What is NOT yet known (honest gaps)
 
 - **No training on real renders.** Every "training" result above overfits random
