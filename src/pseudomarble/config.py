@@ -47,6 +47,14 @@ class PhysicsConfig:
     collision_method: str = "coacd"  # "coacd" | "vhacd" | "convex_hull"
     collision_max_hulls: int = 16
 
+    # Soft-topple option (mitigates the chaotic binary `toppled` near tipping points;
+    # see docs/FINDINGS.md F8). With reps > 0 the PUSH probe is run reps extra times
+    # with small action jitter and the `toppled` field records P(topple) in [0,1]
+    # (a smooth target) instead of the hard bool. reps = 0 keeps the binary default.
+    topple_jitter_reps: int = 0
+    topple_jitter_impulse_rel: float = 0.03   # relative push-impulse jitter (std)
+    topple_jitter_azimuth_deg: float = 2.0    # push-azimuth jitter in degrees (std)
+
 
 @dataclass(frozen=True)
 class DatagenConfig:

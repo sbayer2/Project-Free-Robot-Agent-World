@@ -87,6 +87,13 @@ look weaker than opaque ones. See `docs/ARCHITECTURE.md`.
 > (cup, cone, torus) need a mesh asset — that's the GSO/Objaverse path
 > (`docs/GSO_EXPERIMENT.md`).
 
+**Soft-topple labels (optional, mitigates tipping-point chaos).** Add
+`--topple-jitter-reps K` (e.g. 16–32) to record the push `toppled` field as a
+smooth P(topple) ∈ [0,1] averaged over K action-jittered pushes, instead of the
+chaotic hard bool near the tipping point (see `docs/FINDINGS.md` F8). Tune the
+jitter with `--topple-jitter-impulse` / `--topple-jitter-azimuth`. Default (0) keeps
+the binary label.
+
 ### 3b. Blender — optional high-fidelity path
 
 Install [Blender 4.x](https://www.blender.org/download/); the pipeline runs in

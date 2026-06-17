@@ -62,6 +62,21 @@ def test_resting_object_settles_and_does_not_topple():
     assert out.n_bounces == 0
 
 
+def test_soft_topple_probability():
+    # 50 deg is the threshold; > 50 counts as toppled.
+    assert P.soft_topple_probability([10.0, 20.0, 30.0]) == 0.0      # none topple
+    assert P.soft_topple_probability([60.0, 90.0]) == 1.0            # all topple
+    assert P.soft_topple_probability([10.0, 90.0, 90.0, 10.0]) == 0.5  # smooth, in [0,1]
+    # exactly at the threshold does NOT count (strict >), matching summarize()
+    assert P.soft_topple_probability([50.0, 90.0]) == 0.5
+    try:
+        P.soft_topple_probability([])
+    except ValueError:
+        pass
+    else:  # pragma: no cover
+        raise AssertionError("expected ValueError on empty input")
+
+
 def test_outcome_vector_matches_field_order():
     out = P.summarize(_traj(zs=[0.5, 0.2, 0.2]))
     vec = P.outcome_vector(out)
