@@ -151,6 +151,17 @@ def summarize(trajectory: Sequence[Dict]) -> ProbeOutcome:
     )
 
 
+def soft_topple_probability(final_tilts: Sequence[float]) -> float:
+    """Fraction of (jittered) push outcomes whose final tilt exceeds the topple
+    threshold — a smooth [0,1] target that replaces the binary ``toppled`` near the
+    chaotic tipping point (docs/FINDINGS.md F8). The sim is deterministic, so the
+    spread comes from jittering the *action*, not from re-running the same push.
+    """
+    if not final_tilts:
+        raise ValueError("need at least one final tilt to estimate P(topple)")
+    return sum(1 for t in final_tilts if t > TOPPLE_ANGLE_DEG) / len(final_tilts)
+
+
 # Order of the numeric outcome fields when flattened to a model target vector.
 OUTCOME_FIELDS: Tuple[str, ...] = (
     "toppled", "settle_time", "slid_distance",

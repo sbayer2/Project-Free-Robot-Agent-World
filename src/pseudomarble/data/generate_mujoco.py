@@ -386,15 +386,57 @@ def run_push(shape: str, material: M.Material, spec: P.PushSpec,
 _PROBE_RUNNERS = {"drop": run_drop, "tilt": run_tilt, "push": run_push}
 
 
+def _jitter_seed(material: M.Material) -> int:
+    """Deterministic per-material seed so soft-topple sampling is reproducible
+    across runs without threading a seed through the phased pipeline."""
+    return int(abs(material.physics.density) * 1000.0) % (2 ** 31)
+
+
+def _soft_topple_final_tilts(shape: str, material: M.Material, base_spec: "P.PushSpec",
+                             physics_cfg: PhysicsConfig, base_tilt: float) -> List[float]:
+    """Final tilts from the base push plus ``topple_jitter_reps`` action-jittered
+    pushes — the sample used to estimate P(topple). Uses ``_PROBE_RUNNERS['push']``
+    so it follows any (test) monkeypatch of the push runner."""
+    import random
+
+    rng = random.Random(_jitter_seed(material))
+    push = _PROBE_RUNNERS["push"]
+    tilts = [base_tilt]
+    for _ in range(physics_cfg.topple_jitter_reps):
+        spec = P.PushSpec(
+            impulse=base_spec.impulse * (1.0 + rng.gauss(0.0, physics_cfg.topple_jitter_impulse_rel)),
+            height_frac=base_spec.height_frac,
+            azimuth_deg=base_spec.azimuth_deg + rng.gauss(0.0, physics_cfg.topple_jitter_azimuth_deg),
+        )
+        tilts.append(P.summarize(push(shape, material, spec, physics_cfg)).final_tilt_deg)
+    return tilts
+
+
 def run_probes(shape: str, material: M.Material,
                physics_cfg: PhysicsConfig, keep_trajectory: bool = False) -> List[Dict]:
-    """Run the drop+tilt+push battery and summarize each into a probe record."""
+    """Run the drop+tilt+push battery and summarize each into a probe record.
+
+    With ``physics_cfg.topple_jitter_reps > 0`` the push probe's ``toppled`` field
+    holds a smooth P(topple) in [0,1] (jitter-averaged) instead of the hard bool —
+    the F8 mitigation; the deterministic fields still come from the base push."""
     records: List[Dict] = []
     for spec in P.default_probes():
         traj = _PROBE_RUNNERS[spec.kind](shape, material, spec, physics_cfg)
         outcome = P.summarize(traj)
+        outcome_dict = outcome.to_dict()
+        spec_dict = P.spec_to_dict(spec)
+        if spec.kind == "push" and physics_cfg.topple_jitter_reps > 0:
+            tilts = _soft_topple_final_tilts(shape, material, spec, physics_cfg,
+                                             outcome.final_tilt_deg)
+            outcome_dict["toppled"] = P.soft_topple_probability(tilts)
+            spec_dict["topple_jitter"] = {
+                "reps": physics_cfg.topple_jitter_reps,
+                "impulse_rel": physics_cfg.topple_jitter_impulse_rel,
+                "azimuth_deg": physics_cfg.topple_jitter_azimuth_deg,
+                "n_samples": len(tilts),
+            }
         records.append(samples.build_probe_record(
-            P.spec_to_dict(spec), outcome.to_dict(),
+            spec_dict, outcome_dict,
             trajectory=traj if keep_trajectory else None,
         ))
     return records
@@ -512,6 +554,14 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
                    help="comma-separated MuJoCo primitive shape ids")
     p.add_argument("--keep-trajectory", action="store_true",
                    help="store full per-probe trajectories (larger files)")
+    p.add_argument("--topple-jitter-reps", type=int, default=0,
+                   help="if > 0, record the push `toppled` field as a smooth P(topple) "
+                        "in [0,1] averaged over this many action-jittered pushes (the F8 "
+                        "mitigation for chaotic binary toppling); 0 = hard bool (default)")
+    p.add_argument("--topple-jitter-impulse", type=float, default=0.03,
+                   help="relative push-impulse jitter std for soft topple")
+    p.add_argument("--topple-jitter-azimuth", type=float, default=2.0,
+                   help="push-azimuth jitter std (degrees) for soft topple")
     p.add_argument("--workers", type=int, default=0,
                    help="combined fallback width for BOTH phases when the per-phase "
                         "flags are 0 (0 = phase-specific auto). Render and sim have "
@@ -533,7 +583,11 @@ def main(argv: List[str]) -> None:
     args = parse_args(argv)
     shapes = [s.strip() for s in args.shapes.split(",") if s.strip()]
     render_cfg = RenderConfig(resolution=args.resolution, num_views=args.views)
-    physics_cfg = PhysicsConfig()
+    physics_cfg = PhysicsConfig(
+        topple_jitter_reps=args.topple_jitter_reps,
+        topple_jitter_impulse_rel=args.topple_jitter_impulse,
+        topple_jitter_azimuth_deg=args.topple_jitter_azimuth,
+    )
 
     holdout = (EXTRAPOLATION_REGION_HOLDOUT if args.holdout_kind == "extrapolation"
                else DEFAULT_REGION_HOLDOUT)

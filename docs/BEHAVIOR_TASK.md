@@ -122,8 +122,12 @@ probe spec (action)─┘             │
 ## Honest risks of this version
 
 - **Chaos near boundaries.** An object balanced at its tipping point is sensitive
-  to tiny differences → noisy `toppled` labels. Mitigation: treat near-boundary
-  toppling as probabilistic, average over seeds, prefer smooth outcomes.
+  to tiny differences → noisy `toppled` labels. Measured in `docs/FINDINGS.md` F8
+  (sharp but localised; ~2–4% of scenes). **Mitigation implemented:** the MuJoCo
+  generator's `--topple-jitter-reps K` runs the push K extra times with small action
+  jitter and records `toppled` as a smooth P(topple) ∈ [0,1] instead of the hard
+  bool (same 21-dim target; the sim is deterministic, so the jitter is on the
+  *action*). Default off (binary). Prefer the continuous `final_tilt_deg` too.
 - **Harder learning problem** than regressing three numbers — more compute, more
   careful design. That cost is the price of the task meaning something.
 - **Appearance must really encode the essence.** With MuJoCo's simple renderer,

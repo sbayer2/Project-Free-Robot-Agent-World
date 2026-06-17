@@ -123,6 +123,53 @@ def test_assemble_scene_joins_render_and_sim_without_mujoco():
         assert on_disk["behavior"]["probes"] == behavior
 
 
+def test_topple_jitter_flags_parse():
+    from pseudomarble.data.generate_mujoco import parse_args
+    ns = parse_args(["--topple-jitter-reps", "8", "--topple-jitter-impulse", "0.05",
+                     "--topple-jitter-azimuth", "1.5"])
+    assert ns.topple_jitter_reps == 8
+    assert ns.topple_jitter_impulse == 0.05 and ns.topple_jitter_azimuth == 1.5
+    assert parse_args([]).topple_jitter_reps == 0   # default = hard binary toppled
+
+
+def test_run_probes_soft_topple_without_mujoco():
+    # Soft-topple averages the push label over action-jittered runs. We monkeypatch
+    # the probe runners with a fake whose push topples iff impulse exceeds the base
+    # 1.5, so impulse jitter straddling 1.5 yields a probability strictly in (0,1) —
+    # exercising the F8 mitigation without a MuJoCo runtime.
+    from pseudomarble.config import PhysicsConfig
+    from pseudomarble.data import generate_mujoco as G
+    from pseudomarble.materials import MaterialSampler
+
+    def fake_runner(shape, material, spec, physics_cfg):
+        toppled = getattr(spec, "impulse", 0.0) > 1.5
+        up = [1.0, 0.0, 0.02] if toppled else [0.0, 0.0, 1.0]
+        return [{"t": 0.0, "pos": [0.0, 0.0, 0.2], "up": [0.0, 0.0, 1.0]},
+                {"t": 0.1, "pos": [0.0, 0.0, 0.2], "up": up}]
+
+    saved = dict(G._PROBE_RUNNERS)
+    try:
+        for k in ("drop", "tilt", "push"):
+            G._PROBE_RUNNERS[k] = fake_runner
+        material = MaterialSampler(seed=3).sample(material_id="t").material
+        recs = G.run_probes("cylinder", material,
+                            PhysicsConfig(topple_jitter_reps=40, topple_jitter_impulse_rel=0.10))
+        push = next(r for r in recs if r["probe"] == "push")
+        tp = push["outcome"]["toppled"]
+        assert isinstance(tp, float) and 0.0 < tp < 1.0   # smooth probability, not a bool
+        assert push["spec"]["topple_jitter"] == {
+            "reps": 40, "impulse_rel": 0.10, "azimuth_deg": 2.0, "n_samples": 41}
+
+        # default (reps=0) keeps the hard binary label and adds no jitter metadata
+        hard = G.run_probes("cylinder", material, PhysicsConfig())
+        hpush = next(r for r in hard if r["probe"] == "push")
+        assert isinstance(hpush["outcome"]["toppled"], bool)
+        assert "topple_jitter" not in hpush["spec"]
+    finally:
+        G._PROBE_RUNNERS.clear()
+        G._PROBE_RUNNERS.update(saved)
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
