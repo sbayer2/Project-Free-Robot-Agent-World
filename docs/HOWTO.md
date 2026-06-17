@@ -156,11 +156,39 @@ pip install coacd            # preferred
 returns convex pieces that preserve concavity. Without a backend it falls back to
 a convex hull **and warns** — see `docs/ARCHITECTURE.md`.
 
-## 5. Train (coming soon)
+## 5. Train + run the coherence experiment (Mac)
 
-The MLX encoder + dual decoder and the coherence benchmark harness are the next
-build steps (see `docs/ARCHITECTURE.md#build-order`). The interface is fixed in
-`pseudomarble.models`; the coherence loss is already implemented and tested.
+Both are implemented and have been run on the Mac (MLX/Metal). Train a shared model:
+
+```bash
+pip install -e ".[mlx]"
+python -m pseudomarble.models.train --data data/pm --epochs 50 \
+    --image-size 128 --out runs/shared_s0 --seed 0
+```
+
+For the coherence experiment's **independent** baseline, per-head loss weights make
+a render-only and a physics-only model from the same config:
+
+```bash
+python -m pseudomarble.models.train --data data/pm --image-size 128 \
+    --behavior-weight 0 --essence-weight 0 --render-weight 1 --out runs/render_only
+python -m pseudomarble.models.train --data data/pm --image-size 128 \
+    --render-weight 0 --out runs/physics_only
+```
+
+Then measure coherence on the held-out region across several trained seeds:
+
+```bash
+python scripts/run_coherence_experiment.py --data data/pm \
+    --checkpoints runs/shared_s0/model.safetensors,runs/shared_s1/model.safetensors \
+    --render-only runs/render_only/model.safetensors \
+    --physics-only runs/physics_only/model.safetensors \
+    --untrained-seeds 5 --n-dirs 48
+```
+
+It reports `learned_coherence = mean(trained) − mean(untrained)` for both the
+behavior and essence targets, against the architectural and independent baselines.
+See `docs/FINDINGS.md` F9 for the result (a weak, seed-unstable positive) and caveats.
 
 ## 6. Troubleshooting
 

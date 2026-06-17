@@ -88,9 +88,18 @@ Personal research. Not affiliated with World Labs. Not an attempt to copy Marble
 - Render head decision: a **conv decoder** (upsample+conv → image_size, which must
   be render_seed·2^k), reconstructing the **mean view**; NOT a splat decoder —
   we measure coherence, not photorealism. Splat/`brush` is a later option.
-- 76 tests across 14 suites; core imports with **no** mujoco/bpy/trimesh/numpy/mlx/torch.
+- `tests/batch_probe_stability.py` — probe-label stability study (pure-sim, ~5s, no
+  render); the F8 result. `scripts/run_coherence_experiment.py` — the coherence
+  experiment runner (multi-seed trained checkpoints + architectural + independent
+  disjoint-latent baselines, both targets); the F9 result. Per-head loss weights
+  (`ModelConfig.behavior_weight` + `train.py --behavior-weight/--render-weight/
+  --essence-weight`) build the render-only / physics-only independent models.
+  Soft-topple option (`generate_mujoco --topple-jitter-reps K`) records
+  `push.toppled` as smooth P(topple)∈[0,1] (F8 mitigation; default off, no model change).
+- 136 tests across 21 suites; core imports with **no** mujoco/bpy/trimesh/numpy/mlx/torch.
 
-PRs #1–#5 merged to `main`. PR #6 = render head.
+PRs #1–#20 merged to `main` (through 2026-06-17: #18 stability/F8, #19 coherence
+experiment + per-head weights/F9, #20 soft-topple).
 
 ### Sandbox note on MLX / backends
 The pip `mlx` wheel on plain Linux x86 is **non-functional** (missing
@@ -126,21 +135,33 @@ Implication for how we work, not what we build:
 - Data generation can also run off-Mac if needed (`MuJoCo` has Linux/CPU wheels,
   slower software GL), but the canonical runs happen on the Mac.
 
-## Next steps (when resumed)
+## Status (2026-06-17): the experiment has been RUN on the Mac
 
-1. On the Mac: generate a small real dataset with MuJoCo and sanity-check that
-   probe outcomes are stable (watch the "chaos near tipping points" risk in
-   `docs/BEHAVIOR_TASK.md`) and that renders load. (Can be smoke-tested off-Mac.)
-2. Encoder + behavior head — **done** (`models/mlx_net.py` + `numpy_net.py` +
-   `train.py`). On the Mac: `python -m pseudomarble.models.train --data <dir>` and
-   confirm behavior MSE drops on the held-out essence region.
-3. Render head — **done** (conv decoder in mlx/numpy/torch; recon loss; trains at
-   128px/~1M in-sandbox). On the Mac: generate at `--resolution 128` and train.
-4. Coherence harness — **done** (`models/coherence_bench.py`, with the
-   architectural-baseline control). RUN THE EXPERIMENT on the Mac: train shared +
-   two independent models on real renders; report `learned_coherence` (over
-   several untrained seeds) + behavior generalization on held-out essence regions.
-   Report honestly, including a null. This is the project's payoff.
+The full loop now runs on the Mac (MLX/Metal + MuJoCo): generate → train → measure.
+Steps 1–4 below are all **done**; the payoff experiment produced a real result.
+
+1. Real-dataset generation + probe stability — **done.** MuJoCo generation is fast
+   on the GPU (256 scenes/128px in ~3s). Stability study (`tests/batch_probe_stability.py`)
+   → **F8**: the binary `toppled` is locally chaotic but bounded (~2–4% of scenes)
+   and degenerate for box/capsule/sphere; mitigated by the soft-topple option.
+2. Encoder + behavior head — **done & trained.** behavior MSE drops on the held-out
+   essence region (modestly beats predict-mean); essence does NOT extrapolate to the
+   heavy+bouncy corner (worse than mean — the "test with teeth" biting).
+3. Render head — **done & trained** (render MSE → ~1e-3 at 128px).
+4. Coherence experiment — **done → F9 (the payoff, reported honestly).** On `pm_big`
+   (512 scenes, 5 shared seeds + render-only + physics-only): ordering
+   independent(~0.04) < architectural(~0.10) < trained(~0.27 avg) holds ON AVERAGE,
+   but trained coherence is **seed-unstable** (essence 0.10–0.49) — learned gain
+   (+0.16) is WITHIN the cross-seed band. A single-seed pilot overstated it (7.7σ);
+   multi-seed corrected it. Prediction quality is stable across seeds; coupling is not.
+
+### Next (to sharpen F9, when resumed)
+- More training seeds (10–20) to settle the marginal significance of the +0.16 gain.
+- Re-run the coherence experiment on a **soft-topple** dataset
+  (`generate_mujoco --topple-jitter-reps K`) — should cut the F8 label noise that
+  dilutes the behavior-target coupling (the one lever likely to tighten F9).
+- Investigate WHY coupling is init-sensitive (loss-landscape basins vs. label noise).
+- Longer training / larger held-out set. The real-objects (GSO) route stays parked.
 
 ## Working conventions
 
