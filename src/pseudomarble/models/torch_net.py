@@ -115,14 +115,16 @@ def build_model(cfg: ModelConfig = ModelConfig()):
 
 
 def loss_fn(out: Dict, behavior_t, essence_t, cfg: ModelConfig, render_t=None):
-    """behavior MSE + essence_weight*essence MSE (+ render_weight*recon MSE).
+    """behavior_weight*behavior MSE + essence_weight*essence MSE
+    (+ render_weight*recon MSE).
 
     ``render_t`` is the mean-view target (B, image_size, image_size, 3); when
-    omitted the render term is skipped (e.g. behavior-only checks)."""
+    omitted the render term is skipped (e.g. behavior-only checks). Per-head weights
+    mirror cfg so this matches the MLX objective exactly."""
     _require_torch()
     b = torch.mean((out["behavior"] - behavior_t) ** 2)
     e = torch.mean((out["essence"] - essence_t) ** 2)
-    loss = b + cfg.essence_weight * e
+    loss = cfg.behavior_weight * b + cfg.essence_weight * e
     if render_t is not None:
         loss = loss + cfg.render_weight * torch.mean((out["render"] - render_t) ** 2)
     return loss

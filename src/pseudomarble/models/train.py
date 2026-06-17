@@ -34,6 +34,14 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
     p.add_argument("--image-size", type=int, default=None,
                    help="model render size; must match the dataset's resolution")
     p.add_argument("--max-views", type=int, default=None, help="cap views per scene")
+    p.add_argument("--behavior-weight", type=float, default=None,
+                   help="loss weight on the behavior head (default 1.0; set 0 for a "
+                        "render-only model)")
+    p.add_argument("--essence-weight", type=float, default=None,
+                   help="loss weight on the auxiliary essence head (default 0.3)")
+    p.add_argument("--render-weight", type=float, default=None,
+                   help="loss weight on the render head (default 1.0; set 0 for a "
+                        "behavior-only model)")
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--out", default="runs/exp", help="checkpoint/metrics dir")
     return p.parse_args(argv)
@@ -46,6 +54,12 @@ def make_config(args: argparse.Namespace) -> ModelConfig:
         cfg = replace(cfg, latent_dim=args.latent_dim)
     if args.image_size is not None:
         cfg = replace(cfg, image_size=args.image_size)
+    if args.behavior_weight is not None:
+        cfg = replace(cfg, behavior_weight=args.behavior_weight)
+    if args.essence_weight is not None:
+        cfg = replace(cfg, essence_weight=args.essence_weight)
+    if args.render_weight is not None:
+        cfg = replace(cfg, render_weight=args.render_weight)
     return cfg
 
 

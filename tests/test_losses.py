@@ -28,6 +28,21 @@ def test_combined_loss_weights_essence():
     assert out["total"] == 4.0 + 0.5 * 4.0
 
 
+def test_combined_loss_behavior_weight_scales_and_zeroes():
+    bp, bt = [[0.0]], [[2.0]]   # behavior mse = 4
+    ep, et = [[0.0]], [[2.0]]   # essence  mse = 4
+    # behavior_weight defaults to 1.0 (the full objective)
+    assert losses.combined_loss(bp, bt, ep, et, essence_weight=0.0)["total"] == 4.0
+    # weight scales the behavior term
+    out = losses.combined_loss(bp, bt, ep, et, essence_weight=0.5, behavior_weight=2.0)
+    assert out["total"] == 2.0 * 4.0 + 0.5 * 4.0
+    # behavior_weight=0 -> render-only objective drops the behavior term entirely
+    rp, rt = [[[[0.0, 0.0, 0.0]]]], [[[[1.0, 0.0, 0.0]]]]   # render mse = 1/3
+    ronly = losses.combined_loss(bp, bt, ep, et, essence_weight=0.0, behavior_weight=0.0,
+                                 render_pred=rp, render_target=rt, render_weight=1.0)
+    assert abs(ronly["total"] - 1.0 / 3.0) < 1e-9
+
+
 def test_per_field_mse():
     pred = [[0.0, 0.0], [0.0, 0.0]]
     target = [[1.0, 2.0], [3.0, 4.0]]  # field0: (1+9)/2=5 ; field1: (4+16)/2=10
