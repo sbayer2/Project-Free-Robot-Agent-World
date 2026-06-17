@@ -41,7 +41,15 @@ from typing import Dict, List, Sequence
 def parse_args(argv: List[str]) -> argparse.Namespace:
     p = argparse.ArgumentParser(description="coherence experiment on a trained MLX model")
     p.add_argument("--data", required=True, help="dataset root (must have a test split)")
-    p.add_argument("--checkpoint", required=True, help="trained shared model .safetensors")
+    p.add_argument("--checkpoints", required=True,
+                   help="comma-separated trained shared model .safetensors (one per seed; "
+                        "the multi-seed set whose mean±std is the result)")
+    p.add_argument("--render-only", default=None,
+                   help="render-only model .safetensors (independent baseline; render head)")
+    p.add_argument("--physics-only", default=None,
+                   help="physics-only model .safetensors (independent baseline; behavior+"
+                        "essence heads, render off). Pair with --render-only for the "
+                        "disjoint-latent ~0 control on both targets.")
     p.add_argument("--out", default="runs/coherence", help="report dir")
     p.add_argument("--split", default="test", help="which split to measure on (held-out=test)")
     p.add_argument("--image-size", type=int, default=128, help="must match the checkpoint")
@@ -144,6 +152,29 @@ def participation_ratio(model, imgs) -> Dict[str, float]:
     return {"participation_ratio": pr, "n_dims": int(z.shape[1])}
 
 
+def independent_coherence_mlx(render_model, physics_model, imgs, target, n_dirs, eps,
+                              seed, mean_coherence) -> float:
+    """Independent (disjoint-latent) baseline — the 'two outputs glued together'
+    control. z = [z_render ; z_physics]; the render head reads the first block (its
+    own encoding), the physics-side head (`target`) the second (its own encoding).
+    Independent by construction ⇒ expected ~0 (mirrors coherence_bench)."""
+    zr = encode_to_lists(render_model, imgs)
+    zp = encode_to_lists(physics_model, imgs)
+    dr = len(zr[0])
+    frr, _, _ = make_decoders(render_model)
+    _, pfb, pfe = make_decoders(physics_model)
+    fp = pfb if target == "behavior" else pfe
+
+    def f_render(z):
+        return frr(z[:dr])
+
+    def f_phys(z):
+        return fp(z[dr:])
+
+    joint = [list(a) + list(b) for a, b in zip(zr, zp)]
+    return mean_coherence(joint, f_render, f_phys, n_dirs=n_dirs, eps=eps, seed=seed)
+
+
 def main(argv: List[str]) -> None:
     args = parse_args(argv)
     try:
@@ -161,27 +192,34 @@ def main(argv: List[str]) -> None:
                                                       cfg.image_size)
     beh_mean = mx.mean(tr_beh, axis=0, keepdims=True)
     ess_mean = mx.mean(tr_ess, axis=0, keepdims=True)
+    checkpoints = [c.strip() for c in args.checkpoints.split(",") if c.strip()]
     print(f"[coherence] split={args.split}: {n} held-out scenes ({n_tr} train), "
-          f"images {tuple(imgs.shape)}, latent_dim={cfg.latent_dim}, n_dirs={args.n_dirs}")
+          f"images {tuple(imgs.shape)}, latent_dim={cfg.latent_dim}, n_dirs={args.n_dirs}; "
+          f"{len(checkpoints)} trained seeds")
 
-    # --- trained shared model -------------------------------------------------
-    trained = build_model(cfg)
-    trained.load_weights(args.checkpoint)
-    zs = encode_to_lists(trained, imgs)
-    fr, fb, fe = make_decoders(trained)
-    shared = {
-        "behavior": mean_coherence(zs, fr, fb, n_dirs=args.n_dirs, eps=args.eps, seed=args.seed),
-        "essence": mean_coherence(zs, fr, fe, n_dirs=args.n_dirs, eps=args.eps, seed=args.seed),
-    }
-    mse = test_mse(trained, imgs, beh, ess, beh_mean, ess_mean)
-    pr_trained = participation_ratio(trained, tr_imgs)
-    print(f"[coherence] trained shared  behavior={shared['behavior']:.4f}  "
-          f"essence={shared['essence']:.4f}")
-    print(f"[coherence] held-out MSE    behavior={mse['behavior_mse']:.4f} "
-          f"(mean {mse['behavior_mse_baseline']:.4f}, {mse['behavior_gain_over_mean']:.2f}x)  "
-          f"essence={mse['essence_mse']:.4f} "
-          f"(mean {mse['essence_mse_baseline']:.4f}, {mse['essence_gain_over_mean']:.2f}x)  "
-          f"render={mse['render_mse']:.4f}")
+    def coh(model):
+        zs = encode_to_lists(model, imgs)
+        fr, fb, fe = make_decoders(model)
+        return {"behavior": mean_coherence(zs, fr, fb, n_dirs=args.n_dirs, eps=args.eps,
+                                           seed=args.seed),
+                "essence": mean_coherence(zs, fr, fe, n_dirs=args.n_dirs, eps=args.eps,
+                                          seed=args.seed)}
+
+    # --- trained shared models (one per seed) ---------------------------------
+    trained = {"behavior": [], "essence": []}
+    mses: List[Dict] = []
+    pr_trained: List[float] = []
+    for ckpt in checkpoints:
+        m = build_model(cfg)
+        m.load_weights(ckpt)
+        c = coh(m)
+        trained["behavior"].append(c["behavior"])
+        trained["essence"].append(c["essence"])
+        mses.append(test_mse(m, imgs, beh, ess, beh_mean, ess_mean))
+        pr_trained.append(participation_ratio(m, tr_imgs)["participation_ratio"])
+        print(f"[coherence] trained {os.path.basename(os.path.dirname(ckpt)) or ckpt}: "
+              f"behavior={c['behavior']:.4f}  essence={c['essence']:.4f}  "
+              f"beh_mse={mses[-1]['behavior_mse']:.4f}")
 
     # --- architectural baseline over fresh untrained inits --------------------
     arch = {"behavior": [], "essence": []}
@@ -189,44 +227,69 @@ def main(argv: List[str]) -> None:
     for k in range(args.untrained_seeds):
         mx.random.seed(1000 + k)
         um = build_model(cfg)
-        zsu = encode_to_lists(um, imgs)
-        ufr, ufb, ufe = make_decoders(um)
-        arch["behavior"].append(mean_coherence(zsu, ufr, ufb, n_dirs=args.n_dirs,
-                                                eps=args.eps, seed=args.seed))
-        arch["essence"].append(mean_coherence(zsu, ufr, ufe, n_dirs=args.n_dirs,
-                                               eps=args.eps, seed=args.seed))
+        c = coh(um)
+        arch["behavior"].append(c["behavior"])
+        arch["essence"].append(c["essence"])
         pr_untrained.append(participation_ratio(um, tr_imgs)["participation_ratio"])
-        print(f"[coherence] untrained seed {k}: behavior={arch['behavior'][-1]:.4f}  "
-              f"essence={arch['essence'][-1]:.4f}")
+        print(f"[coherence] untrained seed {k}: behavior={c['behavior']:.4f}  "
+              f"essence={c['essence']:.4f}")
+
+    # --- independent (disjoint-latent ~0) baseline ----------------------------
+    independent = None
+    if args.render_only and args.physics_only:
+        rm = build_model(cfg); rm.load_weights(args.render_only)
+        pm = build_model(cfg); pm.load_weights(args.physics_only)
+        independent = {t: independent_coherence_mlx(rm, pm, imgs, t, args.n_dirs, args.eps,
+                                                    args.seed, mean_coherence)
+                       for t in ("behavior", "essence")}
+        print(f"[coherence] independent (disjoint-latent) baseline: "
+              f"behavior={independent['behavior']:.4f}  essence={independent['essence']:.4f}")
 
     def agg(vals: List[float]) -> Dict[str, float]:
         return {"mean": statistics.mean(vals),
                 "std": statistics.pstdev(vals) if len(vals) > 1 else 0.0,
-                "min": min(vals), "max": max(vals)}
+                "min": min(vals), "max": max(vals), "n": len(vals)}
 
+    def mse_field(name):  # mean of a per-seed mse field
+        return statistics.mean(m[name] for m in mses)
+
+    pr_tr_mean = statistics.mean(pr_trained)
     pr_un_mean = statistics.mean(pr_untrained) if pr_untrained else None
-    report = {"split": args.split, "n_scenes": n, "n_train": n_tr, "n_dirs": args.n_dirs,
-              "untrained_seeds": args.untrained_seeds, "config_image_size": cfg.image_size,
-              "latent_dim": cfg.latent_dim, "held_out_mse": mse,
-              "latent_participation": {"trained": pr_trained["participation_ratio"],
-                                       "untrained_mean": pr_un_mean, "n_dims": cfg.latent_dim},
-              "targets": {}}
-    print(f"[coherence] latent participation ratio: trained={pr_trained['participation_ratio']:.1f}"
-          f"  untrained={pr_un_mean:.1f} (of {cfg.latent_dim})  "
-          f"— rules out rank-collapse if trained > untrained")
-    print("\n[coherence] === learned_coherence = trained_shared - mean(untrained) ===")
+    print(f"[coherence] latent participation ratio: trained={pr_tr_mean:.1f}  "
+          f"untrained={pr_un_mean:.1f} (of {cfg.latent_dim}) — rules out rank-collapse")
+
+    report = {
+        "split": args.split, "n_scenes": n, "n_train": n_tr, "n_dirs": args.n_dirs,
+        "n_trained_seeds": len(checkpoints), "untrained_seeds": args.untrained_seeds,
+        "config_image_size": cfg.image_size, "latent_dim": cfg.latent_dim,
+        "held_out_mse_mean": {
+            "behavior_mse": mse_field("behavior_mse"),
+            "essence_mse": mse_field("essence_mse"),
+            "behavior_gain_over_mean": mse_field("behavior_gain_over_mean"),
+            "essence_gain_over_mean": mse_field("essence_gain_over_mean"),
+            "render_mse": mse_field("render_mse")},
+        "held_out_mse_per_seed": mses,
+        "latent_participation": {"trained_mean": pr_tr_mean, "untrained_mean": pr_un_mean,
+                                 "n_dims": cfg.latent_dim},
+        "independent_baseline": independent,
+        "targets": {},
+    }
+    print("\n[coherence] === learned_coherence = mean(trained) - mean(untrained) ===")
     for tgt in ("behavior", "essence"):
+        t = agg(trained[tgt])
         a = agg(arch[tgt])
-        learned = shared[tgt] - a["mean"]
+        learned = t["mean"] - a["mean"]
+        indep = independent[tgt] if independent else None
         report["targets"][tgt] = {
-            "trained_shared": shared[tgt],
-            "architectural_baseline": a,
-            "learned_coherence": learned,
-            "clears_band": learned > a["std"],   # crude: above one std of the baseline noise
+            "trained_shared": t, "architectural_baseline": a,
+            "independent_baseline": indep, "learned_coherence": learned,
+            "gap_vs_independent": (t["mean"] - indep) if indep is not None else None,
+            "clears_band": learned > (t["std"] + a["std"]),
         }
-        print(f"  {tgt:9s} trained={shared[tgt]:.4f}  "
-              f"arch={a['mean']:.4f}±{a['std']:.4f} [{a['min']:.3f},{a['max']:.3f}]  "
-              f"=> learned={learned:+.4f}  {'(clears band)' if learned > a['std'] else '(within noise)'}")
+        extra = f"  indep={indep:.4f}" if indep is not None else ""
+        print(f"  {tgt:9s} trained={t['mean']:.4f}±{t['std']:.4f}  "
+              f"arch={a['mean']:.4f}±{a['std']:.4f}{extra}  => learned={learned:+.4f}  "
+              f"{'(clears)' if learned > (t['std'] + a['std']) else '(within noise)'}")
 
     os.makedirs(args.out, exist_ok=True)
     path = os.path.join(args.out, "coherence_report.json")

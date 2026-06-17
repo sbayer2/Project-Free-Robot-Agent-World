@@ -209,53 +209,58 @@ Reproduce: `python tests/batch_probe_stability.py` (writes
 
 ---
 
-### F9 — Mid-scale coherence pilot: training raises coherence above the architectural baseline (PROVISIONAL — single trained seed)
+### F9 — ⭐ Coherence experiment: a weak, seed-UNSTABLE positive — the multi-seed run CORRECTS the single-seed pilot
 
-**This is the first measurement of the project's headline number on real renders.**
-It is a **single-trained-seed pilot**, explicitly NOT a confirmed result (per the
-multi-seed standard) — read it as "what a mid-scale run gives," then see the
-confirmation plan below.
+This is the project's headline measurement, run properly. **The honest verdict:
+training raises render↔physics coherence modestly above both baselines *on
+average*, but the effect is small and swings wildly with the training seed — it is
+NOT (yet) evidence of a reliable shared eigenvector.** A single-seed pilot badly
+overstated it; this entry is the correction.
 
-Setup: MuJoCo dataset `pm_mid` — 256 scenes, 8 views, 128px, **extrapolation**
-holdout (heavy+bouncy corner), 246 train / 10 test. Shared MLX model trained 40
-epochs (`runs/mid_shared`). Coherence on the **held-out** test region via
-`scripts/run_coherence_experiment.py` (forward-only finite diff, 48 dirs);
-architectural baseline averaged over 5 fresh untrained inits.
+Setup: dataset `pm_big` — 512 scenes, 8 views, 128px, **extrapolation** holdout
+(heavy+bouncy corner), 492 train / **20 test**. **5 shared seeds** (50 epochs each)
++ a **render-only** and a **physics-only** model (per-head loss weights) for the
+independent control. Coherence on the held-out region (48 dirs); architectural
+baseline over 5 fresh untrained inits. `scripts/run_coherence_experiment.py`.
 
-| target | trained shared | architectural baseline (5 seeds) | learned = trained − arch |
-|---|---|---|---|
-| **essence** | 0.462 | 0.093 ± 0.048 | **+0.369** (~7.7σ) |
-| **behavior** | 0.257 | 0.105 ± 0.041 | **+0.152** (~3.7σ) |
+| target | trained (5 seeds) | architectural (5 seeds) | independent (disjoint-latent) | learned = trained − arch |
+|---|---|---|---|---|
+| behavior | 0.276 **± 0.166** | 0.109 ± 0.029 | 0.030 | +0.168 (within seed noise) |
+| essence  | 0.261 **± 0.157** | 0.096 ± 0.021 | 0.046 | +0.165 (within seed noise) |
 
-Both clear the baseline band; essence (smooth head) ≫ behavior — exactly the F8
-signature (the noisy `push.toppled` / tilt fields dilute behavior coupling), not a
-true absence of coupling.
+**What holds:** the ordering **independent (~0.04) < architectural (~0.10) <
+trained (~0.27 avg)** is real — the disjoint-latent ~0 control works, and trained
+models sit above both baselines on average.
 
-**Two confounds checked (both addressed):**
-- *Generalization context.* Held-out MSE vs predict-train-mean: behavior 0.034 vs
-  0.052 (**1.53× better than mean** — modest real generalization); essence 0.151 vs
-  0.143 (**0.95×, i.e. WORSE than the mean** — the essence head does not extrapolate
-  to the corner). So essence shows **high coherence with poor extrapolation
-  accuracy**: appearance and the essence head co-move in *direction* through z, even
-  where the head's absolute predictions are wrong. Coupling of direction, not value.
-- *Latent-rank collapse.* If high trained coherence were a "z collapsed to a few
-  dims ⇒ both heads trivially co-respond" artifact, the trained participation ratio
-  would be LOW. It is the opposite: trained PR ≈ **61.7** vs untrained ≈ **7.6** (of
-  256). Training *spread* the representation; the artifact is ruled out.
+**What breaks the strong claim:** trained coherence is **enormously seed-unstable**
+— essence ranges **0.10 → 0.49**, behavior **0.17 → 0.60** across the 5 seeds. The
+trained std (~0.16) is as large as the gain. Crucially the architectural baseline's
+std on the *same* 20 scenes and directions is only ~0.03, so the spread is **genuine
+training-seed variance, not measurement noise**: some inits learn the coupling, some
+don't. By mean ± std the learned gain is *within* the cross-seed band (t≈2.2, n=5 —
+marginal, not significant).
 
-**Honest gaps before this becomes a finding:**
-- **Single trained seed.** Need ≥3–5 training seeds → `learned_coherence` mean ± std.
-- **No independent (disjoint-latent) control yet.** The render-only/behavior-only
-  ~0 floor (needs masked-loss training) is the gold-standard comparison; not run.
-- The architectural baseline uses an untrained encoder whose output is low-rank
-  (PR 7.6); whether that depresses the baseline deserves a matched-z check.
-- Only 10 held-out scenes; coherence is a mean over them (per-scene spread not yet
-  reported).
+**The correction.** The earlier provisional pilot (`pm_mid`, single seed 0) reported
+essence learned **+0.369 at ~7.7σ**. That was a lucky draw: on `pm_big` the **seed-0**
+model gives essence coherence **0.110** — right at the untrained baseline. Multi-seed
+collapses the headline to +0.165 and reclassifies it as marginal. The pilot's other
+"tell" was also atypical: its participation ratio was 61.7 (vs untrained 7.6); across
+the 5 `pm_big` seeds it is **10.8 vs 8.3** — the trained models barely spread the
+representation here.
 
-Confirmation plan: multi-seed trained models + the independent control + a larger
-held-out set, then promote (or retract) this to a confirmed finding. Reproduce:
-train then `python scripts/run_coherence_experiment.py --data data/pm_mid
---checkpoint runs/mid_shared/model.safetensors` (writes `runs/*/coherence_report.json`).
+**A precise sub-finding:** prediction quality is **stable** across seeds (held-out
+behavior MSE 0.032–0.051, all modestly beating predict-mean) while representational
+**coupling is not**. The heads *predict* consistently; whether they *share structure*
+depends on initialization. Coupling of direction (when it appears) without reliable
+accuracy on the extrapolation corner.
+
+**Open:** more seeds (10–20) to settle significance; longer training / larger
+held-out set; investigate the init-sensitivity (loss-landscape basins, or the F8
+behavior-label noise). Reproduce: train the 7 models (`runs/big/*`), then
+`python scripts/run_coherence_experiment.py --data data/pm_big --checkpoints
+runs/big/shared_s0/model.safetensors,…,shared_s4/… --render-only
+runs/big/render_only/model.safetensors --physics-only
+runs/big/physics_only/model.safetensors` (writes `runs/big_coherence/coherence_report.json`).
 
 ## 3. What is NOT yet known (honest gaps)
 
