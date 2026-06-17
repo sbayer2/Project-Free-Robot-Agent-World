@@ -123,12 +123,15 @@ def build_model(cfg: ModelConfig = ModelConfig()):
 
 
 def loss_fn(model, batch: Dict, cfg: ModelConfig):
-    """Total = behavior MSE + essence_weight*essence MSE + render_weight*recon MSE.
+    """Total = behavior_weight*behavior MSE + essence_weight*essence MSE
+    + render_weight*recon MSE.
 
     ``batch`` holds mlx arrays: ``images`` (B,N,H,W,C), ``behavior`` (B,behavior_dim),
     ``essence`` (B,essence_dim). The render target is the mean over the N views
     (the pose-averaged canonical appearance); input H,W must equal cfg.image_size
-    so it matches the decoder output.
+    so it matches the decoder output. Per-head weights let one config train the
+    shared model (all on) or the independent baseline's render-only / behavior-only
+    models (zero the other heads).
     """
     _require_mlx()
     out = model(batch["images"])
@@ -136,4 +139,4 @@ def loss_fn(model, batch: Dict, cfg: ModelConfig):
     e = mx.mean((out["essence"] - batch["essence"]) ** 2)
     render_target = mx.mean(batch["images"], axis=1)  # (B, H, W, C)
     r = mx.mean((out["render"] - render_target) ** 2)
-    return b + cfg.essence_weight * e + cfg.render_weight * r
+    return cfg.behavior_weight * b + cfg.essence_weight * e + cfg.render_weight * r

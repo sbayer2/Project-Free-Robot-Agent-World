@@ -82,6 +82,9 @@ class ModelConfig:
     # probes.BEHAVIOR_DIM (PROBE_ORDER x OUTCOME_FIELDS); a test guards the match.
     behavior_dim: int = 21
     behavior_head_width: int = 256
+    behavior_weight: float = 1.0   # the real target's loss weight; set 0 to train a
+                                   # render-only model (and render_weight=0 -> behavior-only)
+                                   # for the coherence experiment's independent baseline.
 
     # Auxiliary essence head (z -> density/friction/restitution, normalized).
     essence_dim: int = 3

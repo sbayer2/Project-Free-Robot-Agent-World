@@ -61,6 +61,20 @@ def test_train_args_defaults_and_overrides():
 def test_make_config_default_keeps_model_config():
     ns = train.parse_args([])
     assert train.make_config(ns).latent_dim == ModelConfig().latent_dim
+    # default per-head weights match the full shared objective
+    assert train.make_config(ns).behavior_weight == 1.0
+    assert train.make_config(ns).render_weight == ModelConfig().render_weight
+
+
+def test_make_config_per_head_weight_overrides():
+    # render-only: behavior + essence heads off
+    ro = train.make_config(train.parse_args(
+        ["--behavior-weight", "0", "--essence-weight", "0", "--render-weight", "1"]))
+    assert (ro.behavior_weight, ro.essence_weight, ro.render_weight) == (0.0, 0.0, 1.0)
+    # behavior-only: render head off
+    bo = train.make_config(train.parse_args(
+        ["--render-weight", "0", "--essence-weight", "0"]))
+    assert (bo.render_weight, bo.essence_weight, bo.behavior_weight) == (0.0, 0.0, 1.0)
 
 
 if __name__ == "__main__":
