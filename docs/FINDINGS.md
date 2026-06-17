@@ -1,9 +1,10 @@
 # pseudo-marble — model & initial sandbox findings
 
-Status as of the apparatus being complete (PRs #1–#7 merged). This records the
-model and what the **in-sandbox** (Linux CPU, no Mac) tests have and have *not*
-established. The headline scientific result is deliberately **not** here yet — it
-requires training on real renders on the Mac.
+Status as of the apparatus being complete. F1–F7 record the model and what the
+**in-sandbox** (Linux CPU, no Mac) tests established; **F8 is the first result run
+on real MuJoCo on the Mac** (probe-label stability). The headline scientific
+result — `learned_coherence` on held-out essence — is deliberately **not** here
+yet; it requires training on real renders on the Mac.
 
 ---
 
@@ -141,6 +142,71 @@ cleanly near the tipping point (the "chaos near tipping points" risk from
 every field. The *numbers* are from a synthetic stand-in
 (`scripts/figure_probe_difficulty.py`); the real ordering comes from the Mac run.
 
+---
+
+### F8 — ⭐ First real-MuJoCo result: the topple label is locally chaotic but the contamination is bounded — and degenerate for half the shapes
+
+This is the **first empirical result from real MuJoCo on the Mac** (not a synthetic
+stand-in), produced by `tests/batch_probe_stability.py` (pure-sim, no rendering,
+~5 s). It de-risks the behavior labels before training, directly testing the
+"chaos near tipping points" risk in `docs/BEHAVIOR_TASK.md`. The PUSH probe records
+`toppled = final_tilt_deg > 50°` — a hard threshold.
+
+**The sim is deterministic.** Same `(shape, material)` run 3× ⇒ max field diff
+`0`. So the docs' "average over seeds" mitigation cannot work by re-running a
+scene; it requires injecting initial-condition / action jitter.
+
+**Chaos is real, sharp, and localised to the crossover** (sweeping heaviness→density
+at grip=0.5, hardness=0.3). The cylinder — the docs' canonical "tall topples where
+squat slides" case — flips from upright to over across a near-step transition
+(slope ≈ 2160°/heaviness-unit at crossover h≈0.23). Under a **3% push-impulse
+jitter** (24 reps), the binary label's flip-rate is:
+
+| location (cylinder) | p_topple | flip-rate | final_tilt |
+|---|---|---|---|
+| far_light (h=0.00) | 1.00 | 0.00 | 90.0 ± 0.0° |
+| **near boundary (h=0.23)** | **0.33** | **0.33** | **31.5 ± 41.3°** |
+| far_heavy (h=0.53) | 0.00 | 0.00 | 0.0 ± 0.0° |
+
+A tiny action difference flips the label ~⅓ of the time **only** at the crossover;
+30% away on either side it is rock-stable (σ=0°). Chaos is a thin shell, not a fog.
+
+**But `toppled` is degenerate for half the shape set** (multi-seed population,
+5 seeds × 200 scenes, the generator's own sampler):
+
+| shape | topple_rate (mean ± std) | label class |
+|---|---|---|
+| box | 0.000 ± 0.000 | **never** (always slides) |
+| capsule | 1.000 ± 0.000 | **always** (rolls onto its side) |
+| sphere | 0.447 ± 0.101 | **ill-posed** (no upright pose; tilt just measures rolling) |
+| cylinder | 0.244 ± 0.047 | genuine boundary |
+| ellipsoid | 0.062 ± 0.033 | genuine boundary |
+
+So the topple bit carries **zero learnable signal for box/capsule** (a constant)
+and is **meaningless for the sphere** (rotational symmetry → arbitrary final
+orientation). It is a genuine, non-degenerate target only for the cylinder and
+ellipsoid — and that is exactly where it is chaotic.
+
+**The contamination is bounded** (fraction of all scenes within a deadband of the
+50° threshold, multi-seed): `±5°: 0.017 ± 0.015`, `±10°: 0.030 ± 0.018`,
+`±15°: 0.043 ± 0.021`. Only ~2–4% of sampled scenes sit in the ambiguous band;
+overall topple_rate `0.357 ± 0.033`.
+
+**Implications for the experiment** (to decide before the coherence run, not yet
+applied):
+- Prefer the **continuous `final_tilt_deg`** over the binary `toppled` (no
+  threshold discontinuity), or replace `toppled` with a **jitter-averaged soft
+  topple probability** — a well-defined, smooth target.
+- `toppled`'s degeneracy means a behavior head can score "well" on it for free
+  (box/capsule) or be supervised by noise (sphere). When reading per-field
+  behavior MSE and `learned_coherence`, treat `push.toppled` separately — consider
+  reporting coherence with and without it, and excluding the sphere from
+  topple-based analysis.
+- The smooth fields (settle_time, max_height, slid_distance, …) are unaffected.
+
+Reproduce: `python tests/batch_probe_stability.py` (writes
+`runs/stability/probe_stability.json` with the raw sweep arrays for plotting).
+
 ## 3. What is NOT yet known (honest gaps)
 
 - **No training on real renders.** Every "training" result above overfits random
@@ -174,6 +240,6 @@ outputs in one wrapper." Either way, report it straight.
 
 ---
 
-*Tests: 81 across 15 suites, all passing; core imports with no
+*Tests: 131 across 21 suites, all passing; core imports with no
 mujoco/bpy/trimesh/numpy/mlx/torch. Personal research; not affiliated with World
 Labs.*
