@@ -145,7 +145,7 @@ Full setup (including the optional Blender path and Apple-silicon/MLX) is in
 | Training verified in-sandbox (PyTorch CPU stand-in; loss drops) | ✅ done + tested |
 | Render head (appearance): conv decoder → mean-view reconstruction | ✅ done + tested (128px/~1M trains) |
 | Coherence benchmark harness (shared vs. glued, with controls) | ✅ done + tested |
-| Run the experiment on real renders (the result) | 🔜 on the Mac |
+| Run the experiment on real renders (the result) | ✅ run on the Mac — a **weak, seed-unstable positive** ([FINDINGS F9](docs/FINDINGS.md)); hardening (more seeds) next |
 | Real scanned objects (GSO): measured mass + concave mesh physics | ✅ data layer done; **physics path sandbox-verified** ([GSO_EXPERIMENT.md](docs/GSO_EXPERIMENT.md)) |
 
 ## Repository layout

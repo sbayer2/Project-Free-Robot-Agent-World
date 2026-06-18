@@ -1,10 +1,10 @@
 # pseudo-marble — model & initial sandbox findings
 
-Status as of the apparatus being complete. F1–F7 record the model and what the
-**in-sandbox** (Linux CPU, no Mac) tests established; **F8 is the first result run
-on real MuJoCo on the Mac** (probe-label stability). The headline scientific
-result — `learned_coherence` on held-out essence — is deliberately **not** here
-yet; it requires training on real renders on the Mac.
+Status: the apparatus is complete **and the headline experiment has been run on the
+Mac.** F1–F7 record the model and what the **in-sandbox** (Linux CPU, no Mac) tests
+established; **F8** is the first real-MuJoCo result (probe-label stability) and
+**F9** is the headline `learned_coherence` measurement on real renders — a weak,
+seed-unstable positive (read F9 for the honest verdict and the pilot it corrects).
 
 ---
 
@@ -264,37 +264,56 @@ runs/big/physics_only/model.safetensors` (writes `runs/big_coherence/coherence_r
 
 ## 3. What is NOT yet known (honest gaps)
 
-- **No training on real renders.** Every "training" result above overfits random
-  or synthetic data; it shows gradients flow, nothing about generalization.
+- **The learned coupling is real on average but not yet reliable.** F9 measured
+  `learned_coherence` ≈ **+0.165** above baseline on real renders, but it is
+  **seed-unstable** (essence 0.10–0.49 across 5 inits) and statistically marginal
+  (t≈2.2, n=5). It is a weak positive, not a confirmed shared eigenvector — more
+  seeds (10–20), longer training, and a larger held-out set are needed to settle
+  significance.
+- **Why initialization decides coupling is unexplained.** Prediction quality is
+  *stable* across seeds while representational *coupling* is not (F9). The open
+  question is what separates the inits that couple from those that don't —
+  loss-landscape basins, or the F8 behavior-label noise.
 - **The coupling is authored.** MuJoCo/Blender decouple appearance and physics, so
   we are (at best) learning the *generator's* eigenvector, not reality's. The GSO
   experiment (`docs/GSO_EXPERIMENT.md`) is the parked route to real measured data.
-- **The headline result is unmeasured.** `learned_coherence` on held-out essence
-  regions — the number that answers "one understanding or two?" — has not been
-  produced.
-- **Behavior-label stability at scale** (the "chaos near tipping points" risk in
-  `docs/BEHAVIOR_TASK.md`) hasn't been observed on real sims yet.
+- **The clean-label coherence run hasn't been done.** `push.toppled` is degenerate
+  for box/capsule and ill-posed for the sphere (F8); the jitter-averaged soft-topple
+  label exists (`--topple-jitter-reps`) but hasn't been pushed through a full
+  coherence experiment. The smooth fields (settle_time, max_height, …) are
+  unaffected.
 
 ---
 
-## 4. The one remaining step — the result (on the Mac)
+## 4. Next steps — the result is in; now harden it
+
+F8 (label stability) and F9 (the coherence experiment) have both been run on the
+Mac (MLX/Metal). What remains is to firm up the marginal F9 positive and to escape
+authored coupling:
+
+1. **More seeds (10–20)** to settle whether the +0.165 learned gain clears the
+   cross-seed band; pair with a larger held-out region and longer training.
+2. **Investigate init-sensitivity** — why some inits couple and some don't (F9).
+3. **Re-run with cleaner labels** — the soft-topple probability
+   (`--topple-jitter-reps`) and/or `push.toppled` excluded and the sphere dropped
+   (F8) — to see whether less label noise steadies the coupling.
+4. **GSO** — real measured objects, to test reality's coupling rather than the
+   generator's (`docs/GSO_EXPERIMENT.md`).
+
+Reproduce F9: train the 7 models (`runs/big/*`), then
 
 ```bash
-pip install -e ".[mlx]"
-python -m pseudomarble.data.generate_mujoco --output data/pm --resolution 128 --num-scenes 256
-python -m pseudomarble.models.train --data data/pm --epochs 30 --image-size 128 --out runs/shared
-# + train render-only and behavior-only models, then:
-#   coherence_bench.compare(shared, render_only, behavior_only, images,
-#                           untrained_shared_model=fresh_init)
+python scripts/run_coherence_experiment.py --data data/pm_big \
+    --checkpoints runs/big/shared_s0/model.safetensors,…,shared_s4/model.safetensors \
+    --render-only runs/big/render_only/model.safetensors \
+    --physics-only runs/big/physics_only/model.safetensors
+# writes runs/big_coherence/coherence_report.json
 ```
 
-Read `learned_coherence` against the 0.36–0.46 architectural band on the held-out
-region, alongside behavior MSE. If it clears the band → evidence the latent
-learned to couple appearance and physics. If it sits at ~0 → a real null: "two
-outputs in one wrapper." Either way, report it straight.
+Reproduce F8: `python tests/batch_probe_stability.py`.
 
 ---
 
-*Tests: 131 across 21 suites, all passing; core imports with no
+*Tests: 142 across 21 suites, all passing; core imports with no
 mujoco/bpy/trimesh/numpy/mlx/torch. Personal research; not affiliated with World
 Labs.*

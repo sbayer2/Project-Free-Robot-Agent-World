@@ -96,7 +96,7 @@ Personal research. Not affiliated with World Labs. Not an attempt to copy Marble
   --essence-weight`) build the render-only / physics-only independent models.
   Soft-topple option (`generate_mujoco --topple-jitter-reps K`) records
   `push.toppled` as smooth P(topple)∈[0,1] (F8 mitigation; default off, no model change).
-- 136 tests across 21 suites; core imports with **no** mujoco/bpy/trimesh/numpy/mlx/torch.
+- 142 tests across 21 suites; core imports with **no** mujoco/bpy/trimesh/numpy/mlx/torch.
 
 PRs #1–#20 merged to `main` (through 2026-06-17: #18 stability/F8, #19 coherence
 experiment + per-head weights/F9, #20 soft-topple).
