@@ -96,12 +96,14 @@ Personal research. Not affiliated with World Labs. Not an attempt to copy Marble
   --essence-weight`) build the render-only / physics-only independent models.
   Soft-topple option (`generate_mujoco --topple-jitter-reps K`) records
   `push.toppled` as smooth P(topple)∈[0,1] (F8 mitigation; default off, no model change).
-- 142 tests across 21 suites; core imports with **no** mujoco/bpy/trimesh/numpy/mlx/torch.
+- `llm_transfer.py` + `scripts/eval_llm_transfer.py` — the LLM world-model
+  transfer test (external language world model vs our exact MuJoCo ground truth,
+  scored with the behavior-head normalizers; pure-stdlib core, endpoint runner).
+- 155 tests across 22 suites; core imports with **no** mujoco/bpy/trimesh/numpy/mlx/torch.
 
-PRs #1–#21 merged to `main` (through 2026-06-18: #18 stability/F8, #19 coherence
-experiment + per-head weights/F9, #20 soft-topple, #21 docs reconciliation —
-FINDINGS §3/§4 + README status now reflect that F8/F9 have RUN; test counts
-synced to 142).
+PRs #1–#24 merged to `main` (through 2026-07-02: #18 stability/F8, #19 coherence
+experiment + per-head weights/F9, #20 soft-topple, #21/#22 docs reconciliation,
+#23 LLM transfer harness, #24 F10 two-basins finding — test counts synced to 155).
 
 ### Sandbox note on MLX / backends
 The pip `mlx` wheel on plain Linux x86 is **non-functional** (missing
@@ -170,7 +172,7 @@ The 20-seed sweep (F9's agreed next step) is DONE, plus its falsification test:
   by patience. Honest headline: escaped-only learned coherence ≈ **+0.15** both
   targets (t≈3–4). Artifacts: `runs/big/shared_s0..19`, `runs/big_coherence_20seed/`,
   `runs/big/shared_s*_e150`, `runs/big_coherence_e150/` (gitignored, regenerable).
-- **LLM transfer harness** (PR #23, `claude/llm-transfer-harness`): prompts a local
+- **LLM transfer harness** (PR #23, MERGED): prompts a local
   language world model (Qwen-AgentWorld-35B-A3B Q8 MLX, in the user's HF cache;
   text-only — NO AgentWorld artifact ships vision tensors, verified upstream) with
   scene state + probe action, scores JSON predictions with the behavior-head
