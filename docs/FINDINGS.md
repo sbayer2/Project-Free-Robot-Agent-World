@@ -2,9 +2,11 @@
 
 Status: the apparatus is complete **and the headline experiment has been run on the
 Mac.** F1–F7 record the model and what the **in-sandbox** (Linux CPU, no Mac) tests
-established; **F8** is the first real-MuJoCo result (probe-label stability) and
-**F9** is the headline `learned_coherence` measurement on real renders — a weak,
-seed-unstable positive (read F9 for the honest verdict and the pilot it corrects).
+established; **F8** is the first real-MuJoCo result (probe-label stability); **F9**
+is the 5-seed coherence measurement (a weak, seed-unstable positive); **F10** is the
+20-seed resolution — the mean gain is significant, the "instability" is two training
+basins (escaped vs encoder-collapsed), and raw coherence is inflated by the collapsed
+basin. **Quote F10, not F9.**
 
 ---
 
@@ -262,18 +264,97 @@ runs/big/shared_s0/model.safetensors,…,shared_s4/… --render-only
 runs/big/render_only/model.safetensors --physics-only
 runs/big/physics_only/model.safetensors` (writes `runs/big_coherence/coherence_report.json`).
 
+**→ Settled by F10:** the 20-seed sweep resolved the significance question and
+explained the instability — read F10 before quoting any F9 number.
+
+---
+
+### F10 — ⭐ 20-seed sweep: the mean gain is real — but "seed instability" is two basins, and the coherence metric prefers the DEGENERATE one
+
+Setup: same data + protocol as F9 (`pm_big`, extrapolation holdout, 50 epochs,
+48 dirs), extended to **20 shared seeds** (F9's s0–s4 reused, s5–s19 new), the
+architectural baseline widened to **10 fresh untrained inits**, same independent
+(disjoint-latent) controls. `scripts/run_coherence_experiment.py` →
+`runs/big_coherence_20seed/coherence_report.json`.
+
+| target | trained (20 seeds) | architectural (10 inits) | independent | learned = trained − arch | t (diff of means) |
+|---|---|---|---|---|---|
+| behavior | 0.346 ± 0.184 | 0.125 ± 0.031 | 0.030 | **+0.221** | **5.2** |
+| essence  | 0.237 ± 0.150 | 0.072 ± 0.040 | 0.046 | **+0.165** | **4.6** |
+
+**At the mean level, F9's "marginal" is corrected to "significant":** with n=20
+the learned gain is well-resolved for both targets, and the F6 ordering
+independent < architectural < trained is intact.
+
+**But the per-seed spread is not noise — it is bimodal.** Held-out behavior MSE
+splits the 20 seeds into two exact populations:
+
+| basin | seeds | held-out gain over predict-mean | latent participation ratio (PR) | coherence (behavior) |
+|---|---|---|---|---|
+| **escaped** | 13/20 | 1.36–1.64× | 8–84 | 0.279 ± 0.167 |
+| **collapsed** | 7/20 (s2,5,6,11,12,15,19) | 1.00–1.01× (exactly predict-mean) | **0.0 — all of them** | **0.469 ± 0.173** |
+
+The collapsed basin is an **encoder collapse**: PR ≈ 0 means `z` is (numerically)
+the *same vector for every scene* — the encoder ignores its input (untrained
+encoders score PR ≈ 8, so training actively destroys input-dependence in this
+basin). Train loss never leaves the 0.0746 plateau; the behavior head can only
+predict the mean. The separation is binary — every stuck seed has PR 0.0, every
+escaped seed PR ≥ 8 — so PR is a clean post-hoc basin classifier.
+
+**The falsification test (run, negative, informative).** Escaped seeds leave the
+plateau at epochs 3–48, which *looked* like a stochastic waiting time — implying
+"train longer and everyone escapes." Training is deterministic per seed (init
+seeded by `--seed`, shuffles seeded per-epoch), so we retrained all 7 collapsed
+seeds to **150 epochs** (first 50 reproduce exactly): **0/7 escaped** (loss
+0.0746 → 0.0742, flat). The basin is **selected at initialization**; longer
+training does not rescue it. And at 150 epochs the collapsed models' pooled
+"learned coherence" rises to **+0.288 — it "clears the band"** — while two of
+them score held-out behavior MSE *worse* than predict-mean (0.0537–0.0539 vs
+0.0516 baseline).
+
+**Methodological caution (the load-bearing lesson).** Across the 20 seeds,
+coherence *positively* correlates with held-out error — corr(behavior coherence,
+behavior MSE) = **+0.54**. Mechanism: a constant-`z` encoder gives every scene
+the same latent operating point, and whatever local render↔behavior alignment
+exists at that one point is credited for the whole test set. **Raw coherence is
+therefore inflated by degeneracy and must never be reported alone — pair it with
+(a) held-out prediction gain-over-mean and (b) latent participation ratio. A
+high-coherence model with gain ≈ 1 or PR ≈ 0 is collapsed, not coupled.**
+
+**The honest headline, conditional on non-collapse:** among the 13 escaped seeds,
+learned coherence = **+0.154 behavior (t≈3.3)** and **+0.155 essence (t≈4.2)** —
+real, modest, and now statistically resolved. This replaces both F9's +0.168
+"within noise" and the raw 20-seed +0.221 (which is partly collapse-inflated) as
+the number to quote.
+
+**Open:** what property of an init selects the basin (13:7 escape:collapse at
+these hyperparameters); whether a behavior-weight warmup or LR schedule changes
+the collapse rate; the soft-topple clean-label re-run (unchanged from F8/F9).
+
+Reproduce: train seeds 5–19 (as F9, `--seed N --out runs/big/shared_sN`), then
+
+```bash
+python scripts/run_coherence_experiment.py --data data/pm_big \
+    --checkpoints runs/big/shared_s0/model.safetensors,…,shared_s19/model.safetensors \
+    --render-only runs/big/render_only/model.safetensors \
+    --physics-only runs/big/physics_only/model.safetensors \
+    --untrained-seeds 10 --out runs/big_coherence_20seed
+# escape test: retrain s2,5,6,11,12,15,19 with --epochs 150 --out runs/big/shared_sN_e150,
+# then the same runner over those checkpoints -> runs/big_coherence_e150
+```
+
 ## 3. What is NOT yet known (honest gaps)
 
-- **The learned coupling is real on average but not yet reliable.** F9 measured
-  `learned_coherence` ≈ **+0.165** above baseline on real renders, but it is
-  **seed-unstable** (essence 0.10–0.49 across 5 inits) and statistically marginal
-  (t≈2.2, n=5). It is a weak positive, not a confirmed shared eigenvector — more
-  seeds (10–20), longer training, and a larger held-out set are needed to settle
-  significance.
-- **Why initialization decides coupling is unexplained.** Prediction quality is
-  *stable* across seeds while representational *coupling* is not (F9). The open
-  question is what separates the inits that couple from those that don't —
-  loss-landscape basins, or the F8 behavior-label noise.
+- **The learned coupling is now resolved but modest.** F10 (20 seeds): among
+  non-collapsed seeds, `learned_coherence` ≈ **+0.15** on both targets (t≈3–4).
+  Real, but small — and still coupling of the *generator's* authored structure
+  (see below), measured on one dataset scale.
+- **Why initialization selects the training basin is unexplained.** 7/20 inits
+  fall into an encoder-collapse basin that longer training does not rescue
+  (F10's falsification test). What distinguishes those inits — and whether a
+  behavior-weight warmup, LR schedule, or the F8 label noise changes the 13:7
+  rate — is open. Prediction quality *within* the escaped basin is stable;
+  basin membership is the lottery.
 - **The coupling is authored.** MuJoCo/Blender decouple appearance and physics, so
   we are (at best) learning the *generator's* eigenvector, not reality's. The GSO
   experiment (`docs/GSO_EXPERIMENT.md`) is the parked route to real measured data.
@@ -287,30 +368,26 @@ runs/big/physics_only/model.safetensors` (writes `runs/big_coherence/coherence_r
 
 ## 4. Next steps — the result is in; now harden it
 
-F8 (label stability) and F9 (the coherence experiment) have both been run on the
-Mac (MLX/Metal). What remains is to firm up the marginal F9 positive and to escape
-authored coupling:
+F8 (label stability), F9 (5-seed coherence), and F10 (20-seed resolution +
+basin falsification test) have all been run on the Mac (MLX/Metal). What
+remains:
 
-1. **More seeds (10–20)** to settle whether the +0.165 learned gain clears the
-   cross-seed band; pair with a larger held-out region and longer training.
-2. **Investigate init-sensitivity** — why some inits couple and some don't (F9).
-3. **Re-run with cleaner labels** — the soft-topple probability
+1. **Explain basin selection** — what distinguishes the 7/20 collapsing inits;
+   try a behavior-weight warmup or LR schedule and measure whether the collapse
+   rate moves (F10).
+2. **Re-run with cleaner labels** — the soft-topple probability
    (`--topple-jitter-reps`) and/or `push.toppled` excluded and the sphere dropped
-   (F8) — to see whether less label noise steadies the coupling.
-4. **GSO** — real measured objects, to test reality's coupling rather than the
+   (F8) — to see whether less label noise widens the escaped basin or tightens
+   its coherence spread.
+3. **GSO** — real measured objects, to test reality's coupling rather than the
    generator's (`docs/GSO_EXPERIMENT.md`).
+4. **LLM world-model transfer test** — score an external language world model
+   (Qwen-AgentWorld) against this dataset's exact MuJoCo ground truth, same
+   normalized MSE as the behavior head (`scripts/eval_llm_transfer.py`); tests
+   whether a pretrained prior beats predict-mean where the small model cannot
+   (the extrapolation corner).
 
-Reproduce F9: train the 7 models (`runs/big/*`), then
-
-```bash
-python scripts/run_coherence_experiment.py --data data/pm_big \
-    --checkpoints runs/big/shared_s0/model.safetensors,…,shared_s4/model.safetensors \
-    --render-only runs/big/render_only/model.safetensors \
-    --physics-only runs/big/physics_only/model.safetensors
-# writes runs/big_coherence/coherence_report.json
-```
-
-Reproduce F8: `python tests/batch_probe_stability.py`.
+Reproduce F10: see the F10 entry. Reproduce F8: `python tests/batch_probe_stability.py`.
 
 ---
 

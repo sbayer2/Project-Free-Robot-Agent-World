@@ -157,20 +157,36 @@ Steps 1–4 below are all **done**; the payoff experiment produced a real result
    (+0.16) is WITHIN the cross-seed band. A single-seed pilot overstated it (7.7σ);
    multi-seed corrected it. Prediction quality is stable across seeds; coupling is not.
 
-### Next (to sharpen F9) — the agreed immediate plan
-The user now has the M5 Pro **in hand** and intends to work from a **local Claude
-Code CLI session on the Mac** (fresh clone + venv + `pip install -e ".[mujoco,mlx,dev]"`;
-expect 142 tests green). This section is the handoff. Priority order:
-1. **Multi-seed sweep (the agreed next step):** train 10–20 shared seeds on
-   `pm_big`-style data and re-run `scripts/run_coherence_experiment.py` to settle
-   the marginal +0.16 learned-coherence gain. (A one-command driver script that
-   automates generate → train-N-seeds → coherence report → figure was discussed
-   and would be welcome.)
-2. Re-run on a **soft-topple** dataset (`generate_mujoco --topple-jitter-reps K`,
-   K≈16–32) — should cut the F8 label noise that dilutes behavior-target coupling
-   (the one lever likely to tighten F9).
-3. Investigate WHY coupling is init-sensitive (loss-landscape basins vs. label noise).
-4. Longer training / larger held-out set. The real-objects (GSO) route stays parked.
+### Status (2026-07-02): F10 run on the Mac — F9 resolved into two basins
+The 20-seed sweep (F9's agreed next step) is DONE, plus its falsification test:
+- **F10** (`docs/FINDINGS.md`): mean learned coherence is significant (behavior
+  +0.221 t≈5.2; essence +0.165 t≈4.6; 20 trained seeds vs 10 untrained), BUT the
+  seed spread is **two basins**: 13/20 escaped (really predict, gain 1.36–1.64×,
+  PR 8–84), 7/20 **encoder-collapsed** (exactly predict-mean, participation ratio
+  0.0 — z constant across scenes). Collapsed seeds score HIGHER raw coherence
+  (0.469 vs 0.279; corr(coherence, held-out MSE)=+0.54) → **never report coherence
+  without gain-over-mean + PR**. Retraining all 7 stuck seeds to 150 epochs (runs
+  are deterministic per seed): **0/7 escaped** — basin is selected at init, not
+  by patience. Honest headline: escaped-only learned coherence ≈ **+0.15** both
+  targets (t≈3–4). Artifacts: `runs/big/shared_s0..19`, `runs/big_coherence_20seed/`,
+  `runs/big/shared_s*_e150`, `runs/big_coherence_e150/` (gitignored, regenerable).
+- **LLM transfer harness** (PR #23, `claude/llm-transfer-harness`): prompts a local
+  language world model (Qwen-AgentWorld-35B-A3B Q8 MLX, in the user's HF cache;
+  text-only — NO AgentWorld artifact ships vision tensors, verified upstream) with
+  scene state + probe action, scores JSON predictions with the behavior-head
+  normalizers. Core `src/pseudomarble/llm_transfer.py` (pure stdlib, 13 offline
+  tests → suite 155), runner `scripts/eval_llm_transfer.py` (OpenAI-compatible
+  endpoint, e.g. oMLX; response caching; `--condition essence|appearance`).
+  NOT yet run — needs the GPU free (34 GB model, one unified-memory pool).
+
+Next, in priority order:
+1. **Explain basin selection** (why 7/20 inits collapse; try behavior-weight
+   warmup / LR schedule, measure the collapse rate).
+2. **Soft-topple re-run** (`generate_mujoco --topple-jitter-reps K`, K≈16–32) —
+   does cleaner push labels widen the escaped basin / tighten coherence?
+3. **Run the LLM transfer test** (serve the model via oMLX, then
+   `scripts/eval_llm_transfer.py`; both conditions; compare the extrapolation corner).
+4. GSO stays parked.
 
 ### Housekeeping (pending, safe)
 All 17 merged `claude/*` remote branches are safe to delete (verified: every one
