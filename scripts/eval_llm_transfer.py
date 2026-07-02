@@ -47,6 +47,10 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
     p.add_argument("--base-url", default="http://127.0.0.1:8080/v1",
                    help="OpenAI-compatible server base URL")
     p.add_argument("--model", default="default", help="served model name")
+    p.add_argument("--api-key", default=os.environ.get("OMLX_API_KEY")
+                   or os.environ.get("OPENAI_API_KEY"),
+                   help="Bearer token for the server (default: $OMLX_API_KEY or "
+                        "$OPENAI_API_KEY; oMLX requires one even on localhost)")
     p.add_argument("--max-tokens", type=int, default=4096)
     p.add_argument("--temperature", type=float, default=0.0)
     p.add_argument("--timeout", type=float, default=600.0, help="per-request seconds")
@@ -73,7 +77,7 @@ def cached_response(path: str, messages: List[Dict], args) -> str:
         return json.load(open(path))["response"]
     text = chat_completion(args.base_url, args.model, messages,
                            temperature=args.temperature, max_tokens=args.max_tokens,
-                           timeout=args.timeout)
+                           timeout=args.timeout, api_key=args.api_key)
     with open(path, "w") as fh:
         json.dump({"messages": messages, "response": text}, fh, indent=2)
     return text

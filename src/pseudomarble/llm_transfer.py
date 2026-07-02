@@ -51,7 +51,8 @@ REST_SPEED = 0.03  # probes.REST_SPEED; restated next to its prompt description
 _FIELD_SPECS = f"""Report these outcome fields, measured over the {SIM_SECONDS:.0f}-second episode
 (the object's position means its CENTER; sampling at 60 Hz):
 - "toppled": true if the object's up-axis ends more than {TOPPLE_ANGLE_DEG:.0f} degrees from vertical.
-- "settle_time": seconds until the object's speed last drops below {REST_SPEED} m/s (capped near {SIM_SECONDS:.2f}).
+- "settle_time": seconds until the object's speed last drops below {REST_SPEED} m/s; if it is
+  still moving when the episode ends, this is simply ~the episode length ({SIM_SECONDS:.2f}).
 - "slid_distance": horizontal displacement of the center from start to rest, in meters.
 - "n_bounces": integer count of upward reversals of vertical velocity (floor impacts).
 - "max_height": peak height of the object's center above the ground, in meters.
@@ -68,9 +69,12 @@ coefficient. The object is a rigid body, free to translate and rotate.
 
 {_FIELD_SPECS}
 
-Reason step by step first. Then output ONE fenced ```json code block containing exactly
-the keys toppled, settle_time, slid_distance, n_bounces, max_height, path_length,
-final_tilt_deg. The LAST fenced JSON block in your reply is taken as your answer."""
+Reason step by step first, but keep it compact (a few hundred words): estimate, don't
+derive exhaustively, and when a quantity is uncertain or a definition seems ambiguous,
+commit to your best numeric estimate and move on. Then output ONE fenced ```json code
+block containing exactly the keys toppled, settle_time, slid_distance, n_bounces,
+max_height, path_length, final_tilt_deg. ALWAYS end with that JSON block, even if
+unsure. The LAST fenced JSON block in your reply is taken as your answer."""
 
 
 # --------------------------------------------------------------------------- #
@@ -318,12 +322,15 @@ def chat_completion(
     temperature: float = 0.0,
     max_tokens: int = 4096,
     timeout: float = 600.0,
-    transport: Optional[Callable[[str, bytes], bytes]] = None,
+    api_key: Optional[str] = None,
+    transport: Optional[Callable[[str, bytes, Dict[str, str]], bytes]] = None,
 ) -> str:
     """POST /chat/completions and return the reply text.
 
-    ``transport(url, body) -> raw response bytes`` is injectable for tests; the
-    default uses urllib against a local server (oMLX / mlx-lm serve).
+    ``api_key`` is sent as a Bearer token when given (oMLX requires one even on
+    localhost). ``transport(url, body, headers) -> raw response bytes`` is
+    injectable for tests; the default uses urllib against a local server
+    (oMLX / mlx-lm serve).
     """
     url = base_url.rstrip("/") + "/chat/completions"
     body = json.dumps({
@@ -332,13 +339,15 @@ def chat_completion(
         "temperature": temperature,
         "max_tokens": max_tokens,
     }).encode()
+    headers = {"Content-Type": "application/json"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
     if transport is None:
-        def transport(u: str, b: bytes) -> bytes:  # pragma: no cover - network
-            req = urllib.request.Request(
-                u, data=b, headers={"Content-Type": "application/json"})
+        def transport(u: str, b: bytes, h: Dict[str, str]) -> bytes:  # pragma: no cover - network
+            req = urllib.request.Request(u, data=b, headers=h)
             with urllib.request.urlopen(req, timeout=timeout) as resp:
                 return resp.read()
-    raw = json.loads(transport(url, body))
+    raw = json.loads(transport(url, body, headers))
     try:
         return raw["choices"][0]["message"]["content"]
     except (KeyError, IndexError, TypeError) as e:

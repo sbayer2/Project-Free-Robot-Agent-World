@@ -183,17 +183,31 @@ def test_score_imputes_baseline_for_missing_and_failed():
 def test_chat_completion_fake_transport_roundtrip():
     seen = {}
 
-    def transport(url, body):
+    def transport(url, body, headers):
         seen["url"] = url
         seen["payload"] = json.loads(body)
+        seen["headers"] = headers
         return json.dumps(
             {"choices": [{"message": {"content": "reply-text"}}]}).encode()
 
     s = _sample()
     msgs = build_messages(s, s["behavior"]["probes"][0], "essence")
-    out = chat_completion("http://host/v1", "m", msgs, transport=transport)
+    out = chat_completion("http://host/v1", "m", msgs, api_key="sk-x",
+                          transport=transport)
     assert out == "reply-text"
     assert seen["url"] == "http://host/v1/chat/completions"
     assert seen["payload"]["model"] == "m"
     assert seen["payload"]["temperature"] == 0.0
     assert seen["payload"]["messages"][0]["role"] == "system"
+    assert seen["headers"]["Authorization"] == "Bearer sk-x"
+
+
+def test_chat_completion_no_key_no_auth_header():
+    def transport(url, body, headers):
+        assert "Authorization" not in headers
+        return json.dumps(
+            {"choices": [{"message": {"content": "ok"}}]}).encode()
+
+    s = _sample()
+    msgs = build_messages(s, s["behavior"]["probes"][0], "essence")
+    assert chat_completion("http://host/v1", "m", msgs, transport=transport) == "ok"
