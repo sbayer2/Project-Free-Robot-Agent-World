@@ -98,8 +98,10 @@ Personal research. Not affiliated with World Labs. Not an attempt to copy Marble
   `push.toppled` as smooth P(topple)∈[0,1] (F8 mitigation; default off, no model change).
 - 142 tests across 21 suites; core imports with **no** mujoco/bpy/trimesh/numpy/mlx/torch.
 
-PRs #1–#20 merged to `main` (through 2026-06-17: #18 stability/F8, #19 coherence
-experiment + per-head weights/F9, #20 soft-topple).
+PRs #1–#21 merged to `main` (through 2026-06-18: #18 stability/F8, #19 coherence
+experiment + per-head weights/F9, #20 soft-topple, #21 docs reconciliation —
+FINDINGS §3/§4 + README status now reflect that F8/F9 have RUN; test counts
+synced to 142).
 
 ### Sandbox note on MLX / backends
 The pip `mlx` wheel on plain Linux x86 is **non-functional** (missing
@@ -116,7 +118,7 @@ to ~1M params / 128px / 16 views (sub-second–~1.4s/step); past ~192px / multi-
 params CPU step-time (7–22s) makes real training impractical — memory never bound.
 Legacy GPU backends (cudamat/gnumpy/Theano) were ruled out: no GPU here, deprecated.
 
-## Hardware note (2026-06): MacBook Pro exists, just not always on hand
+## Hardware note (2026-06): MacBook Pro M5 Pro — now in hand (per-session caveat below)
 
 The target substrate **is** the user's **MacBook Pro (Apple silicon, M5 Pro:
 18-core CPU / 20-core GPU / 64 GB @ 307 GB/s)** — the MLX / Metal plan is intact
@@ -155,13 +157,25 @@ Steps 1–4 below are all **done**; the payoff experiment produced a real result
    (+0.16) is WITHIN the cross-seed band. A single-seed pilot overstated it (7.7σ);
    multi-seed corrected it. Prediction quality is stable across seeds; coupling is not.
 
-### Next (to sharpen F9, when resumed)
-- More training seeds (10–20) to settle the marginal significance of the +0.16 gain.
-- Re-run the coherence experiment on a **soft-topple** dataset
-  (`generate_mujoco --topple-jitter-reps K`) — should cut the F8 label noise that
-  dilutes the behavior-target coupling (the one lever likely to tighten F9).
-- Investigate WHY coupling is init-sensitive (loss-landscape basins vs. label noise).
-- Longer training / larger held-out set. The real-objects (GSO) route stays parked.
+### Next (to sharpen F9) — the agreed immediate plan
+The user now has the M5 Pro **in hand** and intends to work from a **local Claude
+Code CLI session on the Mac** (fresh clone + venv + `pip install -e ".[mujoco,mlx,dev]"`;
+expect 142 tests green). This section is the handoff. Priority order:
+1. **Multi-seed sweep (the agreed next step):** train 10–20 shared seeds on
+   `pm_big`-style data and re-run `scripts/run_coherence_experiment.py` to settle
+   the marginal +0.16 learned-coherence gain. (A one-command driver script that
+   automates generate → train-N-seeds → coherence report → figure was discussed
+   and would be welcome.)
+2. Re-run on a **soft-topple** dataset (`generate_mujoco --topple-jitter-reps K`,
+   K≈16–32) — should cut the F8 label noise that dilutes behavior-target coupling
+   (the one lever likely to tighten F9).
+3. Investigate WHY coupling is init-sensitive (loss-landscape basins vs. label noise).
+4. Longer training / larger held-out set. The real-objects (GSO) route stays parked.
+
+### Housekeeping (pending, safe)
+All 17 merged `claude/*` remote branches are safe to delete (verified: every one
+is merged into `main`, none unmerged). The user may delete them from the GitHub UI
+or any session; use `git fetch --prune` locally afterwards. No work is lost either way.
 
 ## Working conventions
 
