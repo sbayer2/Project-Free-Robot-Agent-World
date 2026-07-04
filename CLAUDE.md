@@ -176,18 +176,36 @@ The 20-seed sweep (F9's agreed next step) is DONE, plus its falsification test:
   language world model (Qwen-AgentWorld-35B-A3B Q8 MLX, in the user's HF cache;
   text-only — NO AgentWorld artifact ships vision tensors, verified upstream) with
   scene state + probe action, scores JSON predictions with the behavior-head
-  normalizers. Core `src/pseudomarble/llm_transfer.py` (pure stdlib, 13 offline
-  tests → suite 155), runner `scripts/eval_llm_transfer.py` (OpenAI-compatible
-  endpoint, e.g. oMLX; response caching; `--condition essence|appearance`).
-  NOT yet run — needs the GPU free (34 GB model, one unified-memory pool).
+  normalizers. Core `src/pseudomarble/llm_transfer.py` (pure stdlib), runner
+  `scripts/eval_llm_transfer.py` (OpenAI-compatible endpoint, e.g. oMLX on
+  127.0.0.1:8000, Bearer auth via `--api-key`/`$OMLX_API_KEY`; response caching;
+  `--condition essence|appearance`; needs `--max-tokens 32768` — the model
+  reasons in ~17k-token chains at ~64 tok/s).
+
+### Status (2026-07-04): F11 RUN — the transfer test result is in
+Both text conditions complete (120/120 responses, zero parse failures), scored
+on the 20 held-out extrapolation-corner scenes. **F11** (`docs/FINDINGS.md`):
+aggregate 15–25× worse than predict-mean, but the decomposition is the finding —
+essence condition beats predict-mean on **8/21 fields** (ballistics: max_height
+2–4×, drop settle/path, push final_tilt) with **push.toppled Brier 0.10 vs 0.20**
+(calibrated topple on the F8-chaotic label); catastrophic on ramp contact
+(tilt.slid_distance 18.7 vs 0.013 — it derives sliding down the 20° ramp,
+MuJoCo's high-friction objects stay put). Essence→appearance ablation: hiding
+physics numbers shrinks blowups but collapses ballistic wins (8→4 fields) —
+the model measurably uses the quantitative inputs. Trained model still wins
+aggregate by 15–40×. Artifacts: `runs/llm_transfer_{essence,appearance}/`
+(gitignored; responses cached per scene,probe). Don't run eval while MLX
+training uses the GPU (one unified-memory pool).
 
 Next, in priority order:
 1. **Explain basin selection** (why 7/20 inits collapse; try behavior-weight
    warmup / LR schedule, measure the collapse rate).
 2. **Soft-topple re-run** (`generate_mujoco --topple-jitter-reps K`, K≈16–32) —
    does cleaner push labels widen the escaped basin / tighten coherence?
-3. **Run the LLM transfer test** (serve the model via oMLX, then
-   `scripts/eval_llm_transfer.py`; both conditions; compare the extrapolation corner).
+3. **Optional F11 vision condition** — needs a vision-capable AgentWorld;
+   only candidate is havok2's VL36 graft (70 GB BF16 → local 4–6-bit mlx-vlm
+   conversion; sanity-check its vision on trivial images first — the graft is
+   a confound).
 4. GSO stays parked.
 
 ### Housekeeping (pending, safe)

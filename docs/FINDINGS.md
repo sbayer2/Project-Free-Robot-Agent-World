@@ -6,7 +6,9 @@ established; **F8** is the first real-MuJoCo result (probe-label stability); **F
 is the 5-seed coherence measurement (a weak, seed-unstable positive); **F10** is the
 20-seed resolution — the mean gain is significant, the "instability" is two training
 basins (escaped vs encoder-collapsed), and raw coherence is inflated by the collapsed
-basin. **Quote F10, not F9.**
+basin. **Quote F10, not F9.** **F11** turns the instrument outward: an external LLM
+world model (Qwen-AgentWorld) scored against our MuJoCo ground truth — reasoning
+format transfers, contact physics doesn't, topple calibration beats our own model.
 
 ---
 
@@ -343,6 +345,81 @@ python scripts/run_coherence_experiment.py --data data/pm_big \
 # then the same runner over those checkpoints -> runs/big_coherence_e150
 ```
 
+---
+
+### F11 — ⭐ LLM world-model transfer test: the reasoning *format* transfers, the contact physics doesn't — and its topple call is better-calibrated than our own trained model's
+
+An external "language world model" — **Qwen-AgentWorld-35B-A3B** (Alibaba,
+arXiv:2606.24597; community Q8 MLX quant, text-only — Qwen shipped no vision
+tensors) — was scored against this project's exact MuJoCo ground truth with
+`scripts/eval_llm_transfer.py`, served locally (oMLX, M5 Pro). Design point:
+AgentWorld's CPT→SFT→RL tuning covers seven **digital** domains (MCP, Search,
+Terminal, SWE, Android, Web, OS); rigid-body physics is **out-of-domain** for
+that tuning, so this measures whether next-state-prediction *skill* transfers
+to a physical substrate — its physics content can only come from base-model
+pretraining.
+
+Setup: all 20 held-out `pm_big` scenes (the heavy+bouncy **extrapolation
+corner**) × 3 probes × 2 information conditions; temperature 0; scored with
+the behavior-head normalizers against the predict-train-mean baseline. The
+model reasons long (typically ~17k-token chains, ~4.5 min/request at ~64
+tok/s; 4k and 16k budgets truncate mid-derivation — 32k needed). **Zero parse
+failures in 120/120 responses.**
+
+| condition | normalized MSE | baseline | gain | push.toppled Brier | fields beating baseline |
+|---|---|---|---|---|---|
+| essence (true density/friction/restitution given) | 1.277 | 0.052 | 0.04× | **0.100** | **8/21** |
+| appearance (rendering params only) | 0.789 | 0.052 | 0.07× | 0.150 | 4/21 |
+
+**Aggregate: ~15–25× worse than predict-the-mean** — but the aggregate is
+outlier-dominated and the decomposition is the finding:
+
+1. **The failures are one coherent mistake, not noise.** Nearly all of the MSE
+   is ramp-contact: `tilt.slid_distance` 18.70 vs baseline 0.013 (~1400×),
+   tilt path_length/n_bounces. The model *derives*, at length, objects
+   bouncing and rolling down the 20° incline; MuJoCo's high-friction objects
+   grip and stay put. Its bounce counts are ideal restitution-series counts,
+   where the simulator's velocity-threshold counter reports few — partly a
+   measurement-convention mismatch, partly a different contact world.
+2. **The wins are real and structured (essence, 8/21 fields):** `max_height`
+   on all three probes (2–4× better than baseline), drop settle_time and
+   path_length, push final_tilt_deg — ballistics and geometry. And
+   **push.toppled Brier 0.100 vs 0.199 base-rate**: a *calibrated* topple
+   judgment on exactly the label F8 showed is chaotic and our regression head
+   handles worst.
+3. **The essence→appearance ablation shows it actually uses the numbers.**
+   Hiding the physics parameters shrinks the contact blow-ups (tilt MSE 3.54
+   → 2.08 — it hedges toward typical materials) but collapses the ballistic
+   wins (8 → 4 fields; drop settle/path/max_height and push final_tilt all
+   lost). Quantitative inputs measurably flow through its derivations.
+4. **Against our trained model:** the escaped-basin trained networks score
+   held-out behavior MSE 0.033–0.051 (gain 1.36–1.64×) on the same scenes —
+   ~15–40× better than the LLM in aggregate. 492 in-world scenes beat a 35B
+   out-of-world prior. But the LLM holds two things the small model lacks:
+   calibrated topple probability, and per-field wins with **zero** training
+   scenes.
+
+**Honest verdict:** "world modeling" transfers as *form* — hold a state, apply
+an action, derive the next state, with usable uncertainty on discrete events —
+while the *content* (MuJoCo's contact regime) does not. A language world model
+is a prior over worlds, and it reasons confidently in a nearby-but-different
+one.
+
+Caveats: one model, one community quant, one prompt format; normalized MSE is
+outlier-dominated (hence per-field reporting); some "errors" are convention
+mismatches with our summarizers (n_bounces counter, 50° threshold); the
+appearance condition *describes* rendering parameters in text — the true
+picture→physics condition needs a vision-capable AgentWorld artifact, and the
+only one that exists is an unvalidated community graft (see next steps).
+
+Reproduce: serve the model (oMLX, OpenAI-compatible), then per condition::
+
+    python scripts/eval_llm_transfer.py --data data/pm_big --split test \
+        --base-url http://127.0.0.1:8000/v1 --model <served-name> \
+        --max-tokens 32768 --condition essence --out runs/llm_transfer_essence
+    # and --condition appearance -> runs/llm_transfer_appearance
+    # responses cached per (scene, probe); reports: transfer_report.json
+
 ## 3. What is NOT yet known (honest gaps)
 
 - **The learned coupling is now resolved but modest.** F10 (20 seeds): among
@@ -368,9 +445,9 @@ python scripts/run_coherence_experiment.py --data data/pm_big \
 
 ## 4. Next steps — the result is in; now harden it
 
-F8 (label stability), F9 (5-seed coherence), and F10 (20-seed resolution +
-basin falsification test) have all been run on the Mac (MLX/Metal). What
-remains:
+F8 (label stability), F9 (5-seed coherence), F10 (20-seed resolution + basin
+falsification test), and F11 (LLM world-model transfer, both text conditions)
+have all been run on the Mac (MLX/Metal). What remains:
 
 1. **Explain basin selection** — what distinguishes the 7/20 collapsing inits;
    try a behavior-weight warmup or LR schedule and measure whether the collapse
@@ -381,16 +458,20 @@ remains:
    its coherence spread.
 3. **GSO** — real measured objects, to test reality's coupling rather than the
    generator's (`docs/GSO_EXPERIMENT.md`).
-4. **LLM world-model transfer test** — score an external language world model
-   (Qwen-AgentWorld) against this dataset's exact MuJoCo ground truth, same
-   normalized MSE as the behavior head (`scripts/eval_llm_transfer.py`); tests
-   whether a pretrained prior beats predict-mean where the small model cannot
-   (the extrapolation corner).
+4. **F11 vision condition (optional follow-up)** — show the model our actual
+   renders instead of text-described appearance params (the picture→physics
+   inverse proper). Blocked on a vision-capable AgentWorld artifact: the only
+   one is `havok2/Qwen-AgentWorld-35B-A3B-VL36`, an unvalidated cross-generation
+   weight graft (Qwen3.6 vision tower on the Qwen3.5 backbone, no co-training;
+   70 GB BF16 → needs local 4–6-bit mlx-vlm conversion to fit 64 GB). Gate on
+   sanity-checking its vision on trivial images first — the graft is a built-in
+   confound.
 
-Reproduce F10: see the F10 entry. Reproduce F8: `python tests/batch_probe_stability.py`.
+Reproduce F10: see the F10 entry. Reproduce F11: see the F11 entry.
+Reproduce F8: `python tests/batch_probe_stability.py`.
 
 ---
 
-*Tests: 142 across 21 suites, all passing; core imports with no
+*Tests: 156 across 22 suites, all passing; core imports with no
 mujoco/bpy/trimesh/numpy/mlx/torch. Personal research; not affiliated with World
 Labs.*
