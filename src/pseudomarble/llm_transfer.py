@@ -13,13 +13,19 @@ Why "transfer": AgentWorld-style models are tuned on *digital* environments
 tuning. This measures whether next-state-prediction skill transfers to a
 physical substrate — against exact, resimulable ground truth, not an LLM judge.
 
-Two state conditions:
+Three state conditions:
   * ``essence``    — the model is told the true physical parameters (density,
     friction, restitution). Tests quantitative dynamics prediction alone.
   * ``appearance`` — the model is told only the *rendering* parameters (color,
     roughness, metallic, transmission, ior) and must infer the material first —
     the words->physics inverse, text-side. By construction (MaterialSampler
     noise) appearance is predictive but not invertible, so there is a ceiling.
+  * ``vision``     — the model is SHOWN rendered views (attached images) and
+    must infer the material from pixels — the picture->physics inverse proper.
+    Needs a vision-capable model (e.g. the VL36 graft); geometry text is kept
+    identical to the other conditions so the only variable is the material
+    channel. Read vision against appearance per-field: vision >= appearance
+    means the vision tower carried at least as much as our text description.
 
 Pure stdlib: prompt building, response parsing, and scoring are testable in any
 session (``tests/test_llm_transfer.py``). The only I/O is ``chat_completion``, a
@@ -41,7 +47,7 @@ from pseudomarble.probes import (
     TOPPLE_ANGLE_DEG,
 )
 
-CONDITIONS = ("essence", "appearance")
+CONDITIONS = ("essence", "appearance", "vision")
 
 # Mirrors _simulate/build_mjcf in data/generate_mujoco.py — restated here so the
 # prompt tells the model exactly what the simulator measured.
@@ -91,7 +97,7 @@ def _shape_text(shape: str) -> str:
     )
 
 
-def state_text(sample: Dict, condition: str) -> str:
+def state_text(sample: Dict, condition: str, n_images: int = 0) -> str:
     """The environment-state block for one scene, under one information condition."""
     if condition not in CONDITIONS:
         raise ValueError(f"condition must be one of {CONDITIONS}, got {condition!r}")
@@ -105,7 +111,7 @@ def state_text(sample: Dict, condition: str) -> str:
             f"sliding friction coefficient {raw['friction']:.3f}, "
             f"restitution coefficient {raw['restitution']:.3f}."
         )
-    else:
+    elif condition == "appearance":
         ap = sample["material_truth"]["appearance_params"]
         r, g, b, a = ap["base_color"]
         lines.append(
@@ -115,7 +121,29 @@ def state_text(sample: Dict, condition: str) -> str:
             f"transmission {ap['transmission']:.2f}, ior {ap['ior']:.2f}. "
             "Infer plausible physical properties from this appearance first."
         )
+    else:  # vision
+        lines.append(
+            f"Material: unknown — the {n_images} attached images are rendered "
+            "views of this exact object from different camera angles. Infer "
+            "plausible physical properties (density, friction, restitution) "
+            "from its visual appearance first."
+        )
     return "\n".join(lines)
+
+
+def scene_view_files(sample: Dict, k: int) -> List[str]:
+    """The first ``k`` render filenames of a scene (relative to the scene dir),
+    in the dataset's deterministic fibonacci-sphere view order."""
+    frames = sample.get("appearance", {}).get("frames", [])
+    return [f["file"] for f in frames[:k]]
+
+
+def encode_image_data_url(path: str) -> str:
+    """A PNG file as a base64 ``data:`` URL (OpenAI image_url content part)."""
+    import base64
+
+    with open(path, "rb") as fh:
+        return "data:image/png;base64," + base64.b64encode(fh.read()).decode()
 
 
 def action_text(probe_record: Dict) -> str:
@@ -141,15 +169,31 @@ def action_text(probe_record: Dict) -> str:
     raise ValueError(f"unknown probe kind {kind!r}")
 
 
-def build_messages(sample: Dict, probe_record: Dict, condition: str) -> List[Dict]:
-    """OpenAI-style chat messages for one (scene, probe, condition) query."""
-    user = (
-        f"{state_text(sample, condition)}\n\n{action_text(probe_record)}\n\n"
-        "Predict the outcome fields."
+def build_messages(sample: Dict, probe_record: Dict, condition: str,
+                   image_paths: Optional[Sequence[str]] = None) -> List[Dict]:
+    """OpenAI-style chat messages for one (scene, probe, condition) query.
+
+    For ``condition="vision"``, ``image_paths`` (rendered views of the scene)
+    are attached as base64 ``image_url`` content parts before the text.
+    """
+    if condition == "vision" and not image_paths:
+        raise ValueError("vision condition needs image_paths")
+    n = len(image_paths) if image_paths else 0
+    user_text = (
+        f"{state_text(sample, condition, n_images=n)}\n\n"
+        f"{action_text(probe_record)}\n\nPredict the outcome fields."
     )
+    if condition == "vision":
+        content: List[Dict] = [
+            {"type": "image_url", "image_url": {"url": encode_image_data_url(p)}}
+            for p in image_paths
+        ]
+        content.append({"type": "text", "text": user_text})
+    else:
+        content = user_text  # type: ignore[assignment]
     return [
         {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": user},
+        {"role": "user", "content": content},
     ]
 
 
