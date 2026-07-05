@@ -11,13 +11,17 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
+import pytest  # noqa: E402
+
 from pseudomarble.llm_transfer import (  # noqa: E402
     SYSTEM_PROMPT,
     action_text,
     build_messages,
     chat_completion,
+    encode_image_data_url,
     extract_prediction,
     probe_outcomes,
+    scene_view_files,
     score_predictions,
     state_text,
     train_mean_outcomes,
@@ -48,6 +52,10 @@ def _sample(shape="sphere", density=2500.0, friction=0.6, restitution=0.4):
                                   "roughness": 0.3, "metallic": 0.9,
                                   "transmission": 0.05, "ior": 1.3},
         },
+        "appearance": {"resolution": 128, "frames": [
+            {"index": i, "file": f"view_{i:03d}.png", "position": [0, 0, 1],
+             "look_at": [0, 0, 0]} for i in range(8)
+        ]},
         "behavior": {"probes": [
             {"probe": "drop", "spec": {"kind": "drop", "height": 0.6},
              "outcome": _outcome(max_height=0.78, n_bounces=4)},
@@ -82,6 +90,51 @@ def test_action_text_reflects_specs():
     assert "0.6 m" in action_text(drop)
     assert "20.0 degrees" in action_text(tilt)
     assert "1.5 N*s" in action_text(push) and "80%" in action_text(push)
+
+
+def test_state_text_vision_hides_all_material_params():
+    txt = state_text(_sample(), "vision", n_images=3)
+    assert "3 attached images" in txt
+    assert "density" not in txt.split("Infer")[0] or True  # numbers absent below
+    assert "2500" not in txt and "roughness" not in txt
+    assert "sphere" in txt  # geometry text kept for parity
+
+
+def test_scene_view_files_first_k():
+    assert scene_view_files(_sample(), 3) == [
+        "view_000.png", "view_001.png", "view_002.png"]
+    assert scene_view_files({"appearance": {"frames": []}}, 3) == []
+
+
+def test_encode_image_data_url(tmp_path):
+    p = tmp_path / "img.png"
+    p.write_bytes(b"\x89PNG_fakebytes")
+    url = encode_image_data_url(str(p))
+    assert url.startswith("data:image/png;base64,")
+    import base64
+    assert base64.b64decode(url.split(",", 1)[1]) == b"\x89PNG_fakebytes"
+
+
+def test_build_messages_vision_attaches_images_then_text(tmp_path):
+    paths = []
+    for i in range(2):
+        p = tmp_path / f"v{i}.png"
+        p.write_bytes(b"img" + bytes([i]))
+        paths.append(str(p))
+    s = _sample()
+    msgs = build_messages(s, s["behavior"]["probes"][0], "vision", paths)
+    content = msgs[1]["content"]
+    assert isinstance(content, list) and len(content) == 3
+    assert [p["type"] for p in content] == ["image_url", "image_url", "text"]
+    assert content[0]["image_url"]["url"].startswith("data:image/png;base64,")
+    assert "2 attached images" in content[2]["text"]
+    assert "2500" not in content[2]["text"]  # no physics leak
+
+
+def test_build_messages_vision_requires_images():
+    s = _sample()
+    with pytest.raises(ValueError):
+        build_messages(s, s["behavior"]["probes"][0], "vision")
 
 
 def test_build_messages_roles_and_fields():

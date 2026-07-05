@@ -202,11 +202,20 @@ Next, in priority order:
    warmup / LR schedule, measure the collapse rate).
 2. **Soft-topple re-run** (`generate_mujoco --topple-jitter-reps K`, K≈16–32) —
    does cleaner push labels widen the escaped basin / tighten coherence?
-3. **Optional F11 vision condition** — needs a vision-capable AgentWorld;
-   only candidate is havok2's VL36 graft (70 GB BF16 → local 4–6-bit mlx-vlm
-   conversion; sanity-check its vision on trivial images first — the graft is
-   a confound).
-4. GSO stays parked.
+3. GSO stays parked.
+
+### Status (2026-07-04 evening): F11 vision condition RUN — graft confound resolved
+VL36 pipeline complete: downloaded havok2 graft (65 GB), converted mixed_4_6
+via mlx_vlm → `~/mlx-models/Qwen-AgentWorld-35B-A3B-VL36-mixed46` (21 GB,
+5.01 bpw, 333 vision_tower tensors), vision sanity gate PASSED, then the
+20-scene vision condition (3 views/scene as base64 image parts, served by
+oMLX — `~/mlx-models` added to its model_dirs): **vision 0.798 ≈ appearance
+0.789** (same gain 0.065×, same Brier 0.150, 4/21 wins each; per-field 5
+better/6 worse/10 tied). The theoretically correct outcome — renders are
+generated FROM appearance params, so a lossless vision tower must reproduce
+the appearance condition. Harness `--condition vision` + `--views` on branch
+`claude/f11-vision-condition` (suite 161). Full addendum in docs/FINDINGS.md
+F11; artifacts `runs/llm_transfer_vision/` (gitignored).
 
 ### Housekeeping (pending, safe)
 All 17 merged `claude/*` remote branches are safe to delete (verified: every one

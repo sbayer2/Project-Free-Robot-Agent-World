@@ -33,6 +33,7 @@ from pseudomarble.llm_transfer import (  # noqa: E402
     chat_completion,
     extract_prediction,
     probe_outcomes,
+    scene_view_files,
     score_predictions,
     train_mean_outcomes,
 )
@@ -43,7 +44,10 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
     p = argparse.ArgumentParser(description="LLM world-model transfer eval")
     p.add_argument("--data", required=True, help="dataset root (schema v2)")
     p.add_argument("--split", default="test", help="split to evaluate (held-out=test)")
-    p.add_argument("--condition", default="essence", choices=("essence", "appearance"))
+    p.add_argument("--condition", default="essence",
+                   choices=("essence", "appearance", "vision"))
+    p.add_argument("--views", type=int, default=3,
+                   help="rendered views attached per scene (vision condition only)")
     p.add_argument("--base-url", default="http://127.0.0.1:8080/v1",
                    help="OpenAI-compatible server base URL")
     p.add_argument("--model", default="default", help="served model name")
@@ -92,13 +96,23 @@ def main(argv: List[str]) -> None:
         scenes = scenes[: args.limit]
     train_mean = train_mean_outcomes([s for _, s in load_split(args.data, "train")])
 
+    def images_for(sid: str, sample: Dict) -> Optional[List[str]]:
+        if args.condition != "vision":
+            return None
+        renders = os.path.join(args.data, sid, "renders")
+        return [os.path.join(renders, f) for f in scene_view_files(sample, args.views)]
+
     if args.dry_run:
         sid, sample = scenes[0]
         for record in sample["behavior"]["probes"]:
-            msgs = build_messages(sample, record, args.condition)
+            msgs = build_messages(sample, record, args.condition, images_for(sid, sample))
             print(f"--- {sid} / {record['probe']} ({args.condition}) ---")
             for m in msgs:
-                print(f"[{m['role']}]\n{m['content']}\n")
+                c = m["content"]
+                if isinstance(c, list):
+                    c = " + ".join(p["type"] if p["type"] != "text" else p["text"]
+                                   for p in c)
+                print(f"[{m['role']}]\n{c}\n")
         return
 
     resp_dir = os.path.join(args.out, "responses")
@@ -111,7 +125,9 @@ def main(argv: List[str]) -> None:
             if kind not in PROBE_ORDER:
                 continue
             cache = os.path.join(resp_dir, f"{sid}.{kind}.{args.condition}.json")
-            text = cached_response(cache, build_messages(sample, record, args.condition),
+            text = cached_response(cache,
+                                   build_messages(sample, record, args.condition,
+                                                  images_for(sid, sample)),
                                    args)
             pred = extract_prediction(text)
             rows.append((sid, kind, pred, truths[kind]))
