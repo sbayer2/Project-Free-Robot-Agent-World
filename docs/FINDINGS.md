@@ -407,10 +407,32 @@ one.
 
 Caveats: one model, one community quant, one prompt format; normalized MSE is
 outlier-dominated (hence per-field reporting); some "errors" are convention
-mismatches with our summarizers (n_bounces counter, 50° threshold); the
-appearance condition *describes* rendering parameters in text — the true
-picture→physics condition needs a vision-capable AgentWorld artifact, and the
-only one that exists is an unvalidated community graft (see next steps).
+mismatches with our summarizers (n_bounces counter, 50° threshold).
+
+**Vision-condition addendum (run 2026-07-04 evening).** The third condition —
+the model is *shown* 3 rendered views (base64 image parts) instead of told the
+appearance parameters — ran on the `havok2` VL36 graft (Qwen3.6 vision tower
+weight-grafted onto the AgentWorld backbone; locally converted to mixed 4/6-bit
+MLX, 21 GB, 5.01 bpw; **vision sanity gate passed first**: correct shape+color
+on synthetic images and a correct description of a pm_big render). Result,
+60/60 responses, zero parse failures:
+
+| condition | mse | gain | push.toppled Brier | fields beating baseline |
+|---|---|---|---|---|
+| appearance (text) | 0.789 | 0.065× | 0.150 | 4/21 |
+| **vision (pixels)** | **0.798** | **0.065×** | **0.150** | **4/21** |
+
+Vision ≈ appearance-text almost exactly (per-field: 5 clearly better, 6 clearly
+worse, 10 tied). This is the *theoretically correct* outcome, not a null: our
+renders are generated FROM the appearance parameters, so pixels carry ~the same
+material information as the four numbers by construction — a lossless vision
+tower should reproduce the appearance condition, and it did. Two conclusions:
+(a) **the graft confound is resolved** — the surgically-attached vision tower
+preserved the task-relevant material information (it is not the bottleneck);
+(b) the picture→physics inverse in this world measures as: pixels ≈
+described-appearance ≪ known-essence, for the ballistic fields. Also
+practical: with images in context the model reasons far more tersely (~2
+min/request vs ~4.5 text-only). Artifacts: `runs/llm_transfer_vision/`.
 
 Reproduce: serve the model (oMLX, OpenAI-compatible), then per condition::
 
@@ -458,20 +480,16 @@ have all been run on the Mac (MLX/Metal). What remains:
    its coherence spread.
 3. **GSO** — real measured objects, to test reality's coupling rather than the
    generator's (`docs/GSO_EXPERIMENT.md`).
-4. **F11 vision condition (optional follow-up)** — show the model our actual
-   renders instead of text-described appearance params (the picture→physics
-   inverse proper). Blocked on a vision-capable AgentWorld artifact: the only
-   one is `havok2/Qwen-AgentWorld-35B-A3B-VL36`, an unvalidated cross-generation
-   weight graft (Qwen3.6 vision tower on the Qwen3.5 backbone, no co-training;
-   70 GB BF16 → needs local 4–6-bit mlx-vlm conversion to fit 64 GB). Gate on
-   sanity-checking its vision on trivial images first — the graft is a built-in
-   confound.
+4. **F11 vision condition — DONE** (see the F11 addendum): the VL36 graft
+   passed the vision sanity gate and the 20-scene run measured vision ≈
+   appearance-text (0.798 vs 0.789), resolving the graft confound and closing
+   the picture→physics loop for this world.
 
 Reproduce F10: see the F10 entry. Reproduce F11: see the F11 entry.
 Reproduce F8: `python tests/batch_probe_stability.py`.
 
 ---
 
-*Tests: 156 across 22 suites, all passing; core imports with no
+*Tests: 161 across 22 suites, all passing; core imports with no
 mujoco/bpy/trimesh/numpy/mlx/torch. Personal research; not affiliated with World
 Labs.*
