@@ -42,9 +42,23 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
     p.add_argument("--render-weight", type=float, default=None,
                    help="loss weight on the render head (default 1.0; set 0 for a "
                         "behavior-only model)")
+    p.add_argument("--behavior-warmup-epochs", type=int, default=0,
+                   help="ramp the behavior-head loss weight linearly from 0 to its "
+                        "full value over the first K epochs (basin-selection lever: "
+                        "let render+essence shape the latent before behavior "
+                        "gradients act; 0 = off)")
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--out", default="runs/exp", help="checkpoint/metrics dir")
     return p.parse_args(argv)
+
+
+def behavior_warmup_scale(epoch: int, warmup_epochs: int) -> float:
+    """Linear 0->1 ramp for the behavior weight: 0 at epoch 0, 1 from epoch
+    ``warmup_epochs`` on. ``warmup_epochs <= 0`` disables the ramp (always 1).
+    Pure-Python (tested without MLX)."""
+    if warmup_epochs <= 0:
+        return 1.0
+    return min(1.0, epoch / float(warmup_epochs))
 
 
 def make_config(args: argparse.Namespace) -> ModelConfig:
@@ -61,6 +75,28 @@ def make_config(args: argparse.Namespace) -> ModelConfig:
     if args.render_weight is not None:
         cfg = replace(cfg, render_weight=args.render_weight)
     return cfg
+
+
+def latent_pr(model, dataset: PseudoMarbleDataset, batch_size: int, max_views,
+              cap: int = 128) -> float:
+    """Participation ratio of the latent over the first ``cap`` scenes:
+    (sum var)^2 / sum(var^2) across dims, variance taken across scenes. PR ~ 0
+    means the encoder maps every scene to the same z — the collapse-basin
+    signature (FINDINGS F10); healthy escaped models sit at PR ~ 8-84."""
+    import mlx.core as mx  # type: ignore
+    import numpy as np
+
+    zs, n = [], 0
+    for batch in dataset.iter_batches(batch_size, shuffle=False, with_images=True,
+                                      max_views=max_views, as_mlx=True):
+        z = model(batch["images"])["z"]
+        mx.eval(z)
+        zs.append(np.asarray(z))
+        n += z.shape[0]
+        if n >= cap:
+            break
+    v = np.concatenate(zs, axis=0)[:cap].var(axis=0)
+    return float((v.sum() ** 2) / (np.sum(v ** 2) + 1e-12))
 
 
 def evaluate(model, dataset: PseudoMarbleDataset, cfg: ModelConfig,
@@ -114,10 +150,14 @@ def main(argv: List[str]) -> None:
     os.makedirs(args.out, exist_ok=True)
     history: List[Dict] = []
 
+    from dataclasses import replace
+
     def batch_loss(m):
-        return loss_fn(m, batch, cfg)
+        return loss_fn(m, batch, epoch_cfg)
 
     for epoch in range(args.epochs):
+        scale = behavior_warmup_scale(epoch, args.behavior_warmup_epochs)
+        epoch_cfg = replace(cfg, behavior_weight=cfg.behavior_weight * scale)
         running, steps = 0.0, 0
         for batch in train.iter_batches(args.batch_size, shuffle=True, seed=epoch,
                                         with_images=True, max_views=args.max_views,
@@ -129,7 +169,10 @@ def main(argv: List[str]) -> None:
             steps += 1
         train_loss = running / max(1, steps)
         metrics = evaluate(model, test, cfg, args.batch_size, args.max_views) if len(test) else {}
+        metrics["latent_pr"] = latent_pr(model, train, args.batch_size, args.max_views)
         row = {"epoch": epoch, "train_loss": train_loss, **metrics}
+        if scale < 1.0:
+            row["behavior_weight_scale"] = scale
         history.append(row)
         print(f"[train] epoch {epoch:3d}  loss {train_loss:.4f}  "
               + "  ".join(f"{k} {v:.4f}" for k, v in metrics.items()))

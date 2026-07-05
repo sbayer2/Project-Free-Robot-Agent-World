@@ -197,11 +197,27 @@ aggregate by 15–40×. Artifacts: `runs/llm_transfer_{essence,appearance}/`
 (gitignored; responses cached per scene,probe). Don't run eval while MLX
 training uses the GPU (one unified-memory pool).
 
+### Status (2026-07-05): F12 RUN — basin selection solved
+Collapse is an early-LR overshoot pathology, not init destiny: per-epoch
+latent-PR logging (now in train.py, with --behavior-warmup-epochs lever)
+showed collapse is the UNIVERSAL early state (every seed PR≈0 in the first
+epochs); "escaped" = exits it, driven by BEHAVIOR gradients (warmup delayed/
+killed escapes — collapsed healthy s3 outright). Registered predictions were
+wrong; the decisive lever: **lr 5e-4 → 20/20 seeds healthy** (7/7 stuck
+rescued, none ever collapse, PR floor 6.7; 13/13 healthy confirm, s14 visits
+collapse ep0–17 and exits; gains 1.32–1.64 = healthy-basin range) vs 13/20
+at default 1e-3. F12 in docs/FINDINGS.md; artifacts runs/basin/ (gitignored);
+suite 164. train.py --lr default STAYS 1e-3 until the coherence re-run
+validates 5e-4 end-to-end.
+
 Next, in priority order:
-1. **Explain basin selection** (why 7/20 inits collapse; try behavior-weight
-   warmup / LR schedule, measure the collapse rate).
+1. **Re-run the 20-seed coherence experiment at lr 5e-4** — first
+   UNCONDITIONAL learned-coherence number (no escaped-only conditioning);
+   checkpoints for all 20 seeds already exist at runs/basin/lrlo_s*/ —
+   only the coherence measurement itself needs running. Then consider
+   flipping the --lr default.
 2. **Soft-topple re-run** (`generate_mujoco --topple-jitter-reps K`, K≈16–32) —
-   does cleaner push labels widen the escaped basin / tighten coherence?
+   does cleaner push labels tighten coherence?
 3. GSO stays parked.
 
 ### Status (2026-07-04 evening): F11 vision condition RUN — graft confound resolved
