@@ -101,9 +101,10 @@ Personal research. Not affiliated with World Labs. Not an attempt to copy Marble
   scored with the behavior-head normalizers; pure-stdlib core, endpoint runner).
 - 155 tests across 22 suites; core imports with **no** mujoco/bpy/trimesh/numpy/mlx/torch.
 
-PRs #1–#24 merged to `main` (through 2026-07-02: #18 stability/F8, #19 coherence
-experiment + per-head weights/F9, #20 soft-topple, #21/#22 docs reconciliation,
-#23 LLM transfer harness, #24 F10 two-basins finding — test counts synced to 155).
+PRs #1–#27 merged to `main` (through 2026-07-05: #23 LLM transfer harness,
+#24 F10 two-basins, #25 F11 transfer-test result + live-run fixes, #26 F11
+vision condition (VL36 graft validated), #27 F12 basin-selection solved +
+train.py PR-logging/warmup levers — test counts synced to 164 across 23 suites).
 
 ### Sandbox note on MLX / backends
 The pip `mlx` wheel on plain Linux x86 is **non-functional** (missing
