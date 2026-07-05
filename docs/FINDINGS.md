@@ -9,6 +9,9 @@ basins (escaped vs encoder-collapsed), and raw coherence is inflated by the coll
 basin. **Quote F10, not F9.** **F11** turns the instrument outward: an external LLM
 world model (Qwen-AgentWorld) scored against our MuJoCo ground truth — reasoning
 format transfers, contact physics doesn't, topple calibration beats our own model.
+**F12** closes F10's mystery: encoder collapse is an early-LR overshoot pathology —
+at lr 5e-4 all 20 seeds train healthy (20/20 vs 13/20), so the "two basins" were an
+avoidable artifact; the coherence re-run at 5e-4 is the new next step.
 
 ---
 
@@ -442,18 +445,84 @@ Reproduce: serve the model (oMLX, OpenAI-compatible), then per condition::
     # and --condition appearance -> runs/llm_transfer_appearance
     # responses cached per (scene, probe); reports: transfer_report.json
 
+### F12 — ⭐ Basin selection solved: collapse is an early-LR overshoot pathology; at lr 5e-4 all 20 seeds train healthy
+
+F10 left one mystery: why do 7/20 inits fall into the encoder-collapse basin,
+immune to patience (0/7 escaped at 150 epochs)? Two new instruments answered
+it: **per-epoch latent-PR logging** in `train.py` (collapse as a visible
+trajectory, not a post-hoc test) and a `--behavior-warmup-epochs` lever.
+All runs: `pm_big`, 50 epochs, same seeds as F10 (deterministic).
+
+**Discovery 1 — collapse is the universal early state, not a selected basin.**
+Every traced seed, healthy or stuck, sits at PR ≈ 0 within the first epochs
+(healthy s0 even differentiates to PR 29 after epoch 0, is crushed to 0.1 by
+epoch 1, and climbs out at epoch 20). F10's "two basins" are really a
+**bimodal escape-time distribution** out of one collapsed attractor — fast
+escapers (epochs ~3–25) and a right tail censored at 150.
+
+**Discovery 2 — behavior gradients are the escape force, not the collapse
+force.** The warmup hypothesis (defer behavior loss → protect the latent) ran
+on 3 healthy controls and failed with the opposite sign: warmup *delayed*
+s1's escape (≈4 → ≈15) and s14's (≈5 → ≈45), and **collapsed s3 outright**
+(a top-tier healthy seed, PR 0.0 for all 50 epochs). Render+essence gradients
+alone never lift PR off zero.
+
+**The registered predictions were wrong — and the data decided.** Predicted
+before the stuck-seed runs: warmup rescues 0/7 (actual **3/7**), doubled LR
+rescues "some" (actual **1/7**), halved LR rescues 0 (actual **7/7**):
+
+| lever (7 stuck seeds) | escaped | note |
+|---|---|---|
+| behavior warmup 10 ep | 3/7 | late escapes (ep 15–23) |
+| lr 2e-3 (doubled) | 1/7 | |
+| **lr 5e-4 (halved)** | **7/7** | **none ever collapse** (PR floor 6.7); gains 1.36–1.64× |
+
+**Confirmation on the 13 originally-healthy seeds at lr 5e-4: 13/13 healthy**
+(12 never dip; s14 visits collapse for epochs 0–17 and exits, ending PR 36.8,
+gain 1.32×). Combined: **20/20 seeds healthy at lr 5e-4** vs 13/20 at the
+default 1e-3, with final gains (mean 1.40×, range 1.32–1.64) indistinguishable
+from F10's escaped basin.
+
+**Mechanism (post-hoc, trajectory-supported):** at lr 1e-3 the first-epoch
+AdamW steps destroy the encoder's input-dependence faster than any gradient
+rebuilds it (s0: PR 29 → 0.1 in one epoch); whether a seed later escapes is a
+near-critical race the init decides. At 5e-4 the early differentiation
+survives, so there is nothing to escape from. Warmup's 3/7 and doubled-LR's
+1/7 read as perturbations of that near-critical dynamic — the LR-halving
+result is the categorical axis.
+
+**Implications:**
+- Every F10 statistic conditioned on "escaped seeds only" describes an
+  **avoidable training artifact**. The unconditional learned-coherence
+  question re-opens: re-run the 20-seed coherence experiment at lr 5e-4
+  (all-seed statistics, no conditioning) — the agreed next step.
+- Keep per-epoch PR in every training log; PR ≈ 0 past ~epoch 25 at these
+  hyperparameters means the run is (very likely) wasted.
+- `train.py --lr` default is left at 1e-3 until the coherence re-run
+  validates 5e-4 end-to-end; change it then, not silently now.
+
+Caveats: one dataset, one architecture, 50-epoch horizon, n=7+13 — but the
+effect is binary, sign-consistent across all 20 seeds, and both registered
+hypotheses failing is evidence this was measured, not narrated.
+
+Reproduce: `python -m pseudomarble.models.train --data data/pm_big --epochs 50
+--seed N --lr 5e-4 --out runs/basin/lrlo_sN` (stuck seeds N ∈ {2,5,6,11,12,
+15,19}; warmup lever: `--behavior-warmup-epochs 10`); artifacts under
+`runs/basin/` (gitignored, regenerable).
+
+---
+
 ## 3. What is NOT yet known (honest gaps)
 
 - **The learned coupling is now resolved but modest.** F10 (20 seeds): among
   non-collapsed seeds, `learned_coherence` ≈ **+0.15** on both targets (t≈3–4).
   Real, but small — and still coupling of the *generator's* authored structure
   (see below), measured on one dataset scale.
-- **Why initialization selects the training basin is unexplained.** 7/20 inits
-  fall into an encoder-collapse basin that longer training does not rescue
-  (F10's falsification test). What distinguishes those inits — and whether a
-  behavior-weight warmup, LR schedule, or the F8 label noise changes the 13:7
-  rate — is open. Prediction quality *within* the escaped basin is stable;
-  basin membership is the lottery.
+- **Basin selection is SOLVED (F12) but the unconditional coherence number
+  isn't measured yet.** Collapse is an lr-1e-3 overshoot artifact; at 5e-4 all
+  20 seeds train healthy. The 20-seed coherence experiment has not yet been
+  re-run at 5e-4 — until it is, the honest learned-coherence quote remains
+  F10's escaped-only ≈ +0.15.
 - **The coupling is authored.** MuJoCo/Blender decouple appearance and physics, so
   we are (at best) learning the *generator's* eigenvector, not reality's. The GSO
   experiment (`docs/GSO_EXPERIMENT.md`) is the parked route to real measured data.
@@ -471,9 +540,9 @@ F8 (label stability), F9 (5-seed coherence), F10 (20-seed resolution + basin
 falsification test), and F11 (LLM world-model transfer, both text conditions)
 have all been run on the Mac (MLX/Metal). What remains:
 
-1. **Explain basin selection** — what distinguishes the 7/20 collapsing inits;
-   try a behavior-weight warmup or LR schedule and measure whether the collapse
-   rate moves (F10).
+1. **Re-run the 20-seed coherence experiment at lr 5e-4** — F12 removed the
+   collapse artifact, so this yields the first *unconditional* learned-coherence
+   number (no escaped-only conditioning); then consider making 5e-4 the default.
 2. **Re-run with cleaner labels** — the soft-topple probability
    (`--topple-jitter-reps`) and/or `push.toppled` excluded and the sphere dropped
    (F8) — to see whether less label noise widens the escaped basin or tightens
@@ -485,11 +554,11 @@ have all been run on the Mac (MLX/Metal). What remains:
    appearance-text (0.798 vs 0.789), resolving the graft confound and closing
    the picture→physics loop for this world.
 
-Reproduce F10: see the F10 entry. Reproduce F11: see the F11 entry.
+Reproduce F10/F11/F12: see their entries.
 Reproduce F8: `python tests/batch_probe_stability.py`.
 
 ---
 
-*Tests: 161 across 22 suites, all passing; core imports with no
+*Tests: 164 across 23 suites, all passing; core imports with no
 mujoco/bpy/trimesh/numpy/mlx/torch. Personal research; not affiliated with World
 Labs.*
