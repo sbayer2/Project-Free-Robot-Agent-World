@@ -37,3 +37,6 @@ htmlcov/
 .idea/
 .DS_Store
 *.swp
+
+# MuJoCo instability warning logs (dropped in cwd by mj_step)
+MUJOCO_LOG.TXT
