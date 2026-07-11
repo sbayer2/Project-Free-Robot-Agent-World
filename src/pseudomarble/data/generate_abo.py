@@ -65,6 +65,8 @@ WEIGHT_TO_KG: Dict[str, float] = {
 DEFORMABLE_CATEGORIES = frozenset({
     "RUG", "PILLOW", "CUSHION", "BLANKET", "QUILT", "CURTAIN", "TOWEL",
     "MATTRESS", "BED_LINEN_SET", "SLEEPING_BAG", "TAPESTRY",
+    # added after the generation smoke surfaced leaks (2026-07-11):
+    "EXERCISE_MAT", "YOGA_MAT", "MOUSE_PAD",
 })
 
 # Effective-density plausibility band, kg/m^3. Lower bound admits hollow/foamy
@@ -177,6 +179,17 @@ def prepare_object(glb_path: str, mass_kg: float, category: str,
     ok, density = density_gate(mass_kg, volume)
     if not ok:
         return f"density_implausible:{density:.1f}"
+    if volume is None:
+        # Non-watertight (all of ABO in practice): the convex-hull volume is an
+        # UPPER bound on true volume, so mass/hull is a LOWER bound on density —
+        # an implausibly high lower bound still catches unit errors.
+        try:
+            hull_vol = float(mesh.convex_hull.volume)
+        except Exception:  # noqa: BLE001 - hull can fail on degenerate meshes
+            hull_vol = 0.0
+        if hull_vol > 0 and (mass_kg / hull_vol) > DENSITY_MAX:
+            return f"density_implausible_lb:{mass_kg / hull_vol:.1f}"
+        density = None if hull_vol <= 0 else mass_kg / hull_vol  # lower bound
 
     os.makedirs(os.path.join(obj_dir, "meshes"), exist_ok=True)
     tex_dir = os.path.join(obj_dir, "materials", "textures")
@@ -196,7 +209,9 @@ def prepare_object(glb_path: str, mass_kg: float, category: str,
     with open(os.path.join(obj_dir, "meta.json"), "w") as fh:
         json.dump({"mass_kg": mass_kg, "category": category,
                    "mass_provenance": "abo_listing", "watertight": volume is not None,
-                   "density_kg_m3": density}, fh, indent=2)
+                   "density_kg_m3": density if volume is not None else None,
+                   "density_lower_bound_kg_m3": None if volume is not None else density},
+                  fh, indent=2)
     return None
 
 

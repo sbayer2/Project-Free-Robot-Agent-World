@@ -103,6 +103,9 @@ def test_select_models_respects_per_category_cap():
 
 def test_deformable_list_is_frozen():
     assert "RUG" in DEFORMABLE_CATEGORIES and "PILLOW" in DEFORMABLE_CATEGORIES
+    # smoke-surfaced leaks, added 2026-07-11:
+    assert "EXERCISE_MAT" in DEFORMABLE_CATEGORIES
+    assert "MOUSE_PAD" in DEFORMABLE_CATEGORIES
 
 
 # --------------------------------------------------------------------------- #
