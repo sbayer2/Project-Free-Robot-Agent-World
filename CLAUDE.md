@@ -34,9 +34,10 @@ Personal research. Not affiliated with World Labs. Not an attempt to copy Marble
   prediction error; coherence control (`learned = trained − untrained`) as the same
   subtract-the-prior residual logic. A connection to neuroscience, not a result.
 - `docs/GSO_EXPERIMENT.md` — real scanned objects to escape "authored coupling";
-  **data layer now implemented** (`data/generate_gso.py`): measured-mass parsing,
-  mesh MJCF (`build_mjcf(mesh=...)`), category holdout, concave path
-  (mesh_validate + collision.py) wired; experiment run still pending real meshes.
+  **data layer implemented** (`data/generate_gso.py`) AND **run design
+  preregistered** (§ "Run design": subset gates, category holdout, lr 5e-4,
+  essence-weight 0, predictions P1–P5 incl. the ≈0-coherence falsifier);
+  execution pending a GSO download + `.[gso]` install (trimesh not in venv).
 
 ## What's built and merged to `main` (all tested)
 
@@ -219,7 +220,8 @@ Next, in priority order:
    flipping the --lr default.
 2. **Soft-topple re-run** (`generate_mujoco --topple-jitter-reps K`, K≈16–32) —
    does cleaner push labels tighten coherence?
-3. GSO stays parked.
+3. **GSO run** — design preregistered in docs/GSO_EXPERIMENT.md; needs the
+   dataset download, then ~one evening end-to-end.
 
 ### Status (2026-07-04 evening): F11 vision condition RUN — graft confound resolved
 VL36 pipeline complete: downloaded havok2 graft (65 GB), converted mixed_4_6
