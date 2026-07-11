@@ -29,7 +29,9 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
     p.add_argument("--data", default="data/pseudo_marble", help="dataset root")
     p.add_argument("--epochs", type=int, default=30)
     p.add_argument("--batch-size", type=int, default=16)
-    p.add_argument("--lr", type=float, default=1e-3)
+    p.add_argument("--lr", type=float, default=5e-4,
+                   help="AdamW learning rate (default 5e-4 per F12/F13: 1e-3 "
+                        "collapses ~1/3 of inits; 5e-4 trains 20/20 healthy)")
     p.add_argument("--latent-dim", type=int, default=None, help="override ModelConfig")
     p.add_argument("--image-size", type=int, default=None,
                    help="model render size; must match the dataset's resolution")

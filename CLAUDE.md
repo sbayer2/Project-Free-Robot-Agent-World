@@ -212,16 +212,30 @@ at default 1e-3. F12 in docs/FINDINGS.md; artifacts runs/basin/ (gitignored);
 suite 164. train.py --lr default STAYS 1e-3 until the coherence re-run
 validates 5e-4 end-to-end.
 
+### Status (2026-07-11): F13 + F14 RUN — headline number in; reality test void
+- **F13**: unconditional coherence over runs/basin/lrlo_s* (all 20 seeds
+  healthy): behavior **+0.146 (t≈8.3)**, essence **+0.123 (t≈5.5)** — both
+  clear the band, no conditioning; seed spread ±0.065 (was ±0.184). THE
+  project headline. `--lr` default FLIPPED to 5e-4 (guarded by test).
+- **F14 (ABO reality test)**: GSO canonical source failed its gate (0/1033
+  ship mass → docs/GSO_EXPERIMENT.md amendment); switched to ABO (user-
+  approved): 437 real products (listed weights, 2.65 OoM), gates tallied
+  (deformables, hull-bound density — caught 1 unit error), stability
+  spot-check kept binary topple, dataset data/pm_abo (355/82, category
+  holdout). Verdict VOID by preregistered gates: P1 pass (20/20 healthy,
+  PR 28), **P2 FAIL (held-out gain 0.96, no field >1.02)** → P3
+  uninterpretable per the F10 law. Mechanism: assumed contact params ⇒
+  probe battery nearly mass-blind; cross-category holdout doesn't
+  generalize from ~4 objs/category. Repair menu in F14. New loader
+  `data/generate_abo.py` (+ scipy dep); suite 177.
+
 Next, in priority order:
-1. **Re-run the 20-seed coherence experiment at lr 5e-4** — first
-   UNCONDITIONAL learned-coherence number (no escaped-only conditioning);
-   checkpoints for all 20 seeds already exist at runs/basin/lrlo_s*/ —
-   only the coherence measurement itself needs running. Then consider
-   flipping the --lr default.
-2. **Soft-topple re-run** (`generate_mujoco --topple-jitter-reps K`, K≈16–32) —
+1. **Soft-topple re-run** (`generate_mujoco --topple-jitter-reps K`, K≈16–32) —
    does cleaner push labels tighten coherence?
-3. **GSO run** — design preregistered in docs/GSO_EXPERIMENT.md; needs the
-   dataset download, then ~one evening end-to-end.
+2. **F14 repair candidates** (pick one): mass-sensitive probe family +
+   log-space labels; graspable-mass banding; within-category object holdout.
+3. **FSQ latent-bottleneck (F15 candidate)** — measure the essence's size in
+   bits/trits; preregistered asymmetric-knee predictions discussed 2026-07-10.
 
 ### Status (2026-07-04 evening): F11 vision condition RUN — graft confound resolved
 VL36 pipeline complete: downloaded havok2 graft (65 GB), converted mixed_4_6

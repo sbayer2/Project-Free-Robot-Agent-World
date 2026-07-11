@@ -223,3 +223,16 @@ from geometry. Everything in the run design carries over unchanged except:
 Predictions P1–P5 apply verbatim to the ABO run. This amendment was written
 before any ABO data was inspected beyond archive sizes (listings 87 MB,
 3D-models tar 165.6 GB).
+
+**EXECUTED (2026-07-11, same day): verdict VOID by the tree's own gates —
+see `docs/FINDINGS.md` F14.** P1 passed (20/20 healthy), P2 failed
+decisively (held-out gain 0.96; no field beats 1.02), therefore P3 is void
+(coherence uninterpretable without prediction), P4 behaved, P5 moot.
+Diagnosed mechanism: with friction/restitution assumed constant, the probe
+battery is nearly mass-blind (free fall is mass-invariant), so the one real
+label barely enters the outcomes; cross-category holdout carries the rest
+and does not generalize from ~4 objects/category. Repair menu in F14.
+Reproduce: `python -m pseudomarble.data.generate_abo --listings-dir
+<abo>/listings/metadata --glb-dir <abo>/glb --prepared-root <abo>/prepared
+--output data/pm_abo --camera-radius 0`, then the standard 20-seed train
+(lr 5e-4, --essence-weight 0) + `run_coherence_experiment.py`.
