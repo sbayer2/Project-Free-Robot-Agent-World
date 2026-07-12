@@ -520,6 +520,11 @@ Reproduce: `python -m pseudomarble.models.train --data data/pm_big --epochs 50
 
 ### F13 — ⭐ The unconditional number: learned coherence +0.146 (t≈8.3), no asterisks
 
+*Timeline: measured 2026-07-10 (coherence re-run over the F12 checkpoints,
+~5 min — no training needed); written up 2026-07-11 alongside F14; merged to
+main 2026-07-12. F12 (basin mechanism + the lr-5e-4 checkpoints) was run
+2026-07-05.*
+
 The F12 follow-through: the 20-seed coherence experiment re-run over the
 lr-5e-4 checkpoints (`runs/basin/lrlo_s*`), where all 20 seeds are healthy —
 so the statistics are **unconditional** (no escaped-only filtering, no
