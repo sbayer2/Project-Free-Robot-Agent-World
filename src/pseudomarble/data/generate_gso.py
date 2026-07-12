@@ -256,6 +256,15 @@ def build_collision(mesh_path: str, scene_dir: str, method: str,
     }
 
 
+def auto_camera_radius(half_height: float, configured: float) -> float:
+    """Camera orbit radius: the configured value when positive, else adaptive —
+    4x the object's z half-extent (floored) so metre-scale objects (ABO
+    furniture) frame as well as centimetre-scale scans. Pure (unit-tested)."""
+    if configured > 0:
+        return configured
+    return 4.0 * max(half_height, 0.05)
+
+
 def render_views_mesh(mesh_asset, renders_dir: str, render_cfg: RenderConfig) -> List[Dict]:
     """Static multi-view renders of the scanned object resting on the ground."""
     import mujoco  # type: ignore
@@ -270,8 +279,9 @@ def render_views_mesh(mesh_asset, renders_dir: str, render_cfg: RenderConfig) ->
     renderer = mujoco.Renderer(model, render_cfg.resolution, render_cfg.resolution)
     cam = mujoco.MjvCamera()
     cam.lookat[:] = [0.0, 0.0, mesh_asset.half_height]
+    radius = auto_camera_radius(mesh_asset.half_height, render_cfg.camera_radius)
     for i, pos in enumerate(samples.fibonacci_sphere_poses(
-            render_cfg.num_views, render_cfg.camera_radius)):
+            render_cfg.num_views, radius)):
         az, el, dist = samples.pose_to_az_el_dist(pos)
         cam.azimuth, cam.elevation, cam.distance = az, el, dist
         renderer.update_scene(data, camera=cam)
@@ -376,6 +386,9 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
     p.add_argument("--num-objects", type=int, default=None)
     p.add_argument("--resolution", type=int, default=128)
     p.add_argument("--views", type=int, default=16)
+    p.add_argument("--camera-radius", type=float, default=2.6,
+                   help="camera orbit radius in metres; <=0 = adaptive "
+                        "(4x object half-height — use for metre-scale objects)")
     p.add_argument("--scale", type=float, default=1.0)
     p.add_argument("--collision-method", default="coacd",
                    choices=["coacd", "vhacd", "convex_hull"],
@@ -419,7 +432,8 @@ def main(argv: List[str]) -> None:
           f"{len(split.train_ids)} train / {len(split.test_ids)} test "
           f"(holdout categories: {split.holdout_categories or 'random objects'})")
 
-    render_cfg = RenderConfig(resolution=args.resolution, num_views=args.views)
+    render_cfg = RenderConfig(resolution=args.resolution, num_views=args.views,
+                              camera_radius=args.camera_radius)
     physics_cfg = replace(PhysicsConfig(), collision_method=args.collision_method)
     os.makedirs(args.output, exist_ok=True)
     # Per-object work mixes mesh decomposition + sim (CPU-heavy) with render (GPU),

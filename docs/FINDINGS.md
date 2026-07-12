@@ -11,7 +11,13 @@ world model (Qwen-AgentWorld) scored against our MuJoCo ground truth — reasoni
 format transfers, contact physics doesn't, topple calibration beats our own model.
 **F12** closes F10's mystery: encoder collapse is an early-LR overshoot pathology —
 at lr 5e-4 all 20 seeds train healthy (20/20 vs 13/20), so the "two basins" were an
-avoidable artifact; the coherence re-run at 5e-4 is the new next step.
+avoidable artifact. **F13** is the payoff: unconditional learned coherence **+0.146
+(t≈8.3) / +0.123 (t≈5.5)**, both targets clearing the band with no conditioning —
+the project's headline number (quote F13). **F14** took the instrument to reality
+(ABO, real products, real listed masses) and returned VOID by its own preregistered
+gates: with contact parameters assumed constant, the probe battery is nearly
+mass-blind, so prediction fails on held-out categories and coherence is
+uninterpretable there — the reality test remains open, honestly.
 
 ---
 
@@ -512,17 +518,108 @@ Reproduce: `python -m pseudomarble.models.train --data data/pm_big --epochs 50
 
 ---
 
+### F13 — ⭐ The unconditional number: learned coherence +0.146 (t≈8.3), no asterisks
+
+*Timeline: measured 2026-07-10 (coherence re-run over the F12 checkpoints,
+~5 min — no training needed); written up 2026-07-11 alongside F14; merged to
+main 2026-07-12. F12 (basin mechanism + the lr-5e-4 checkpoints) was run
+2026-07-05.*
+
+The F12 follow-through: the 20-seed coherence experiment re-run over the
+lr-5e-4 checkpoints (`runs/basin/lrlo_s*`), where all 20 seeds are healthy —
+so the statistics are **unconditional** (no escaped-only filtering, no
+collapse contamination). `runs/basin_coherence_lrlo/coherence_report.json`:
+
+| target | trained (20 seeds) | architectural (10) | independent | learned | t |
+|---|---|---|---|---|---|
+| behavior | 0.271 ± 0.065 | 0.125 ± 0.031 | 0.030 | **+0.146** | **8.3** |
+| essence | 0.195 ± 0.083 | 0.072 ± 0.040 | 0.046 | **+0.123** | **5.5** |
+
+Both targets **clear the conservative band** for the first time in the
+project's history. The cross-seed spread collapsed from ±0.184 (F10) to
+±0.065 — most of F9's "seed instability" was the basin mixture plus
+near-critical escape dynamics, not coherence variance. F10's escaped-only
+estimate (+0.154) is vindicated within noise; the t-statistic rises from 3.3
+to 8.3 because nothing is discarded. PR 23.5, prediction gain 1.41× — the
+F10 reporting law satisfied in one report.
+
+**Consequence applied:** `train.py --lr` default flips 1e-3 → 5e-4 (the F12
+condition — "after the coherence re-run validates end-to-end" — is met).
+
+Reproduce: train 20 seeds `--lr 5e-4` (or reuse `runs/basin/lrlo_s*`), then
+`scripts/run_coherence_experiment.py ... --untrained-seeds 10`.
+
+---
+
+### F14 — ⭐ ABO reality test: VOID by its own preregistered gates — the probe battery cannot expose reality's coupling under assumed contact parameters
+
+The reality-coupling experiment ran end-to-end on **ABO** (Amazon Berkeley
+Objects) after the canonical GSO source failed its gate (0/1033 objects ship
+mass — see `docs/GSO_EXPERIMENT.md`, amendment). Dataset: 437 real products
+(listed weights spanning 2.65 orders of magnitude, 86 categories, deformables
+and one density-implausible listing gated out, all rejections tallied),
+`data/pm_abo`, 355 train / 82 test with **whole categories held out** (chair,
+bed, clock, …). Stability spot-check first (24 objects × jittered batteries):
+topple kept binary (1/24 flips ≈ F8's contamination), smooth fields CV ≤1.4%,
+`slid_distance` heavy tail noted. Then 20 seeds (lr 5e-4, essence-weight 0,
+per-epoch PR) + both independent controls + coherence.
+
+**Preregistered verdicts (predictions written before any ABO data):**
+
+- **P1 (trainability): PASS.** 20/20 healthy — no collapse (PR 28.1), F12's
+  mechanism is optimizer-side, as predicted.
+- **P2 (prediction): FAIL — decisively.** Held-out behavior gain-over-mean
+  **0.96** (predicted 1.10–1.40); per-seed max 1.00; per-field decomposition:
+  **no field beats 1.02**, and geometry-heavy fields anti-transfer (path/slid
+  gains 0.25–0.37 — train-category priors that mislead on unseen categories).
+- **P3 (headline): VOID, not negative.** Raw learned coherence +0.137
+  (t≈6.3) — but the tree's precondition (H₀.₃) failed, and the F10 law is
+  binding: coherence without prediction gain is uninterpretable. We do NOT
+  claim reality-coupling was recovered, and we equally do NOT claim it was
+  refuted. The instrument never got to ask the question.
+- **P4 (essence control): behaved** — untrained-weight essence head sits at
+  ≈0 coherence (−0.05 vs arch), inert as designed.
+- **P5 (shortcut check): moot** — there is no positive result to attribute.
+
+**The mechanism (diagnosed, not just observed):** with friction and
+restitution *assumed constant across all objects* (ABO measures neither),
+the probe battery loses almost all sensitivity to the one real physical
+label — mass. Free-fall and settling are mass-invariant (Galileo); bounce is
+restitution-driven (held constant); sliding is friction-driven (held
+constant). The only mass-sensitive channel left is the push response, and a
+fixed 1.5 N·s impulse across 0.1–450 kg objects yields labels spanning ~4
+orders of magnitude, whose normalized MSE is dominated by a few light
+objects. Meanwhile cross-**category** generalization from ~4 objects per
+category carries the rest of the target variance — and it does not
+generalize. The null was baked into the *probe design meeting this object
+distribution*, not measured out of reality.
+
+**What would fix it (the honest repair menu, for a future iteration):**
+mass-sensitive probe families (multiple impulses; log-space displacement
+labels), object-scale/mass banding (graspable subset ≤5 kg), within-category
+object holdout (tests material generalization instead of shape
+extrapolation), and — the expensive one — real contact parameters, which no
+public dataset ships. Until one of those runs, the honest status is:
+**pseudo-marble's reality test remains unanswered, and the synthetic F13
+number is the project's headline.**
+
+Artifacts: `data/pm_abo` + `runs/abo*` (gitignored, regenerable); pipeline
+`data/generate_abo.py` (gates tallied); reproduce commands in
+`docs/GSO_EXPERIMENT.md` amendment.
+
+---
+
 ## 3. What is NOT yet known (honest gaps)
 
-- **The learned coupling is now resolved but modest.** F10 (20 seeds): among
-  non-collapsed seeds, `learned_coherence` ≈ **+0.15** on both targets (t≈3–4).
-  Real, but small — and still coupling of the *generator's* authored structure
-  (see below), measured on one dataset scale.
-- **Basin selection is SOLVED (F12) but the unconditional coherence number
-  isn't measured yet.** Collapse is an lr-1e-3 overshoot artifact; at 5e-4 all
-  20 seeds train healthy. The 20-seed coherence experiment has not yet been
-  re-run at 5e-4 — until it is, the honest learned-coherence quote remains
-  F10's escaped-only ≈ +0.15.
+- **The learned coupling is resolved: ≈ +0.15 / +0.12, unconditional (F13).**
+  Real, modest, statistically solid — and still the *generator's* authored
+  structure. F14 shows why the reality version is hard: public real-object
+  datasets ship no contact parameters, and without them the probe battery
+  cannot expose reality's mass↔appearance coupling.
+- **The reality test is unanswered (F14), with a diagnosed mechanism and a
+  repair menu.** Mass-sensitive probes, mass banding, or within-category
+  holdout are the candidate fixes; measured contact parameters are the
+  expensive real fix no public dataset provides.
 - **The coupling is authored.** MuJoCo/Blender decouple appearance and physics, so
   we are (at best) learning the *generator's* eigenvector, not reality's. The GSO
   experiment (`docs/GSO_EXPERIMENT.md`) is the parked route to real measured data.
@@ -559,6 +656,6 @@ Reproduce F8: `python tests/batch_probe_stability.py`.
 
 ---
 
-*Tests: 164 across 23 suites, all passing; core imports with no
+*Tests: 176 across 24 suites, all passing; core imports with no
 mujoco/bpy/trimesh/numpy/mlx/torch. Personal research; not affiliated with World
 Labs.*

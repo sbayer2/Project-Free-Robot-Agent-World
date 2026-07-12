@@ -30,3 +30,9 @@ def test_parse_args_warmup_flag_default_off():
     assert args.behavior_warmup_epochs == 0
     args = parse_args(["--data", "d", "--behavior-warmup-epochs", "10"])
     assert args.behavior_warmup_epochs == 10
+
+
+def test_lr_default_is_5e4():
+    # F12/F13: 1e-3 collapses ~1/3 of inits; 5e-4 trains 20/20 healthy with
+    # the coherence result validated end-to-end. Guard the flipped default.
+    assert parse_args(["--data", "d"]).lr == 5e-4

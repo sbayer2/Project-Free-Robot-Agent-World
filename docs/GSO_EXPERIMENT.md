@@ -180,3 +180,59 @@ phase GPU-bound as usual). Training 20 seeds + 2 controls ≈ 40–60 min
 3. Step-3 outcome adjudication if topple is BOTH degenerate for most shapes
    AND chaotic for the rest (likely resolution: soft labels + report
    with-and-without, mirroring F8's guidance).
+
+---
+
+## AMENDMENT (2026-07-11): gate 1 met reality and lost — source migrates to ABO
+
+**What happened.** The full canonical GSO collection was downloaded from
+Gazebo Fuel (all 1,033 objects, 13 GB, zero transfer failures; geometry +
+textures + category tags intact at `~/datasets/gso_fuel`). **Gate 1
+(parseable measured mass) admits 0/1,033 objects**: no `model.sdf` contains
+an `<inertial>`/`<mass>` block, `metadata.pbtxt` carries brand/GTIN/SKU only,
+and the Fuel API exposes no physical fields. This document's original premise
+("GSO ships measured mass in model.sdf") was written from the paper's
+pipeline description and is **false for the shipped artifacts**. Recording
+the rejection tally as designed: gate 1 → 0/1,033.
+
+**The deeper problem even if annotated SDFs surfaced.** Per the GSO paper,
+only *some* objects were weighed at scan time; the rest received mass
+*estimated from volume at a default density of 0.1 g/ml*. A volume-derived
+mass is a pure function of geometry — a model could "recover" it from shape
+alone — so unflagged estimated masses are authored coupling, the exact
+contaminant this experiment exists to escape. (Decontamination gate, should
+mixed masses ever be recovered: compute density = mass / watertight-mesh
+volume and exclude objects at ≈0.1 g/cm³ — the default betrays itself.)
+
+**Decision (user-approved): switch the reality source to ABO** (Amazon
+Berkeley Objects): ~8k real products with 3D meshes (GLB) and listing
+metadata that includes **item weight** for a large fraction — manufacturer-
+listed rather than lab-measured, but real, object-specific, and not derivable
+from geometry. Everything in the run design carries over unchanged except:
+
+- loader: `data/generate_abo.py` (GLB → OBJ+texture via trimesh → the same
+  `MeshAsset`/`build_mjcf(mesh=...)` path; weight parsing with unit
+  normalization; category from `product_type`); same `sample.json` contract.
+- gate 1 becomes: parseable item weight AND a density sanity check
+  (mass / watertight volume within physical bounds, catching listing errors
+  and shipping-weight-includes-packaging cases).
+- a coverage report (weight × mesh join, mass-spread distribution, category
+  counts) is produced from the listings BEFORE the mesh download commits,
+  per the power guard (H₀.₆).
+
+Predictions P1–P5 apply verbatim to the ABO run. This amendment was written
+before any ABO data was inspected beyond archive sizes (listings 87 MB,
+3D-models tar 165.6 GB).
+
+**EXECUTED (2026-07-11, same day): verdict VOID by the tree's own gates —
+see `docs/FINDINGS.md` F14.** P1 passed (20/20 healthy), P2 failed
+decisively (held-out gain 0.96; no field beats 1.02), therefore P3 is void
+(coherence uninterpretable without prediction), P4 behaved, P5 moot.
+Diagnosed mechanism: with friction/restitution assumed constant, the probe
+battery is nearly mass-blind (free fall is mass-invariant), so the one real
+label barely enters the outcomes; cross-category holdout carries the rest
+and does not generalize from ~4 objects/category. Repair menu in F14.
+Reproduce: `python -m pseudomarble.data.generate_abo --listings-dir
+<abo>/listings/metadata --glb-dir <abo>/glb --prepared-root <abo>/prepared
+--output data/pm_abo --camera-radius 0`, then the standard 20-seed train
+(lr 5e-4, --essence-weight 0) + `run_coherence_experiment.py`.
