@@ -17,7 +17,11 @@ the project's headline number (quote F13). **F14** took the instrument to realit
 (ABO, real products, real listed masses) and returned VOID by its own preregistered
 gates: with contact parameters assumed constant, the probe battery is nearly
 mass-blind, so prediction fails on held-out categories and coherence is
-uninterpretable there — the reality test remains open, honestly.
+uninterpretable there — the reality test remains open, honestly. **F15** closes the
+soft-topple loose end (cleaner labels help the topple field 3.3→5.5×, not the
+coupling). **F16** falsifies the cheap F14 repair (within-category holdout: gain
+0.975) — the probes, not the split, are binding; a mass-sensitive probe family is
+the sole open route to reality's coupling on public data.
 
 ---
 
@@ -609,6 +613,62 @@ Artifacts: `data/pm_abo` + `runs/abo*` (gitignored, regenerable); pipeline
 
 ---
 
+### F15 — Soft-topple re-run: cleaner labels help the field, not the coupling — loose end closed
+
+*(Run 2026-07-12; registered prediction: learned coherence within ±0.03 of
+F13. Outcome: outside the band, in the negative direction — graded wrong,
+informatively.)*
+
+`pm_big` regenerated identically except `--topple-jitter-reps 24`
+(`push.toppled` becomes P(topple) averaged over 24 action-jittered pushes —
+the F8 mitigation). Only **18/512 scenes are strictly fractional**,
+confirming F8's thin-shell chaos. Standard protocol (20 seeds, lr 5e-4,
+controls, coherence):
+
+- **The field itself improves substantially:** held-out `push.toppled` gain
+  3.34 → **5.52** (model MSE halved) — soft labels are genuinely more
+  learnable.
+- **Coherence does not improve:** learned behavior coherence **+0.102 ±
+  0.081** vs F13's +0.146 ± 0.065 (difference ≈ −0.045, t ≈ 1.9 — marginal,
+  direction negative); aggregate prediction gain 1.20 vs 1.41.
+
+Verdict: the F9-era hypothesis "topple label noise dilutes the measured
+coupling" is **not supported** — 1 chaotic field in 21 was never the binding
+constraint, and making it smooth reallocates learning without strengthening
+the shared structure. Binary topple stays the default; soft labels are the
+right choice only when the topple field itself is the quantity of interest
+(as in F11's Brier scoring). Artifacts: `data/pm_big_soft`, `runs/big_soft*`.
+
+---
+
+### F16 — F14 repair #1 falsified: within-category holdout does not rescue prediction — the probes, not the split, are binding
+
+*(Run 2026-07-12; registered decision rule: held-out-object gain ≥ 1.1 ⇒
+coherence becomes interpretable; ≤ 1.0 ⇒ the F14 mechanism is
+probe-design-deep. Outcome: **0.975** — the second branch, right at the
+registered boundary.)*
+
+Same 437 ABO objects, same everything, one flag: `--holdout-kind object`
+(new lever in `generate_gso`/`generate_abo`) — test objects are unseen
+members of **seen** categories, so shape priors transfer and only
+material/size must generalize. 20 seeds, lr 5e-4, essence-weight 0:
+
+- P1 healthy (PR 41.7, no collapse).
+- **Held-out behavior gain 0.975** (per-seed 0.85–1.06) — indistinguishable
+  from the category split's 0.96. Raw learned coherence +0.069 is
+  uninterpretable per the F10 law, as before.
+
+Verdict: **the F14 void is confirmed as probe-design-binding.** Even with
+familiar shapes, appearance carries no usable behavior signal under the
+current battery — because with friction/restitution assumed constant, the
+probes barely encode the one real label (mass). The split was never the
+problem. The remaining repair path is a **mass-sensitive probe family**
+(e.g. multi-impulse push responses with log-space displacement labels) —
+now the sole open route to a reality-coupling measurement on public data.
+Artifacts: `data/pm_abo_objsplit`, `runs/abo_obj*`.
+
+---
+
 ## 3. What is NOT yet known (honest gaps)
 
 - **The learned coupling is resolved: ≈ +0.15 / +0.12, unconditional (F13).**
@@ -616,10 +676,11 @@ Artifacts: `data/pm_abo` + `runs/abo*` (gitignored, regenerable); pipeline
   structure. F14 shows why the reality version is hard: public real-object
   datasets ship no contact parameters, and without them the probe battery
   cannot expose reality's mass↔appearance coupling.
-- **The reality test is unanswered (F14), with a diagnosed mechanism and a
-  repair menu.** Mass-sensitive probes, mass banding, or within-category
-  holdout are the candidate fixes; measured contact parameters are the
-  expensive real fix no public dataset provides.
+- **The reality test is unanswered (F14), and the cheap repair is dead
+  (F16).** Within-category holdout changes nothing (gain 0.975 ≈ 0.96), so
+  the sole open route on public data is a mass-sensitive probe family;
+  measured contact parameters remain the expensive real fix no dataset
+  provides.
 - **The coupling is authored.** MuJoCo/Blender decouple appearance and physics, so
   we are (at best) learning the *generator's* eigenvector, not reality's. The GSO
   experiment (`docs/GSO_EXPERIMENT.md`) is the parked route to real measured data.
