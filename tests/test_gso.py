@@ -136,3 +136,17 @@ if __name__ == "__main__":
         fn()
         print(f"ok  {fn.__name__}")
     print(f"\n{len(fns)} passed")
+
+
+def test_plan_split_object_kind_ignores_categories():
+    # F14 repair lever: holdout_kind="object" holds out unseen objects of SEEN
+    # categories even when categories are known.
+    objs = [G.GsoObject(f"o{i}", "", "", "chair" if i % 2 else "table", 1.0, "json")
+            for i in range(10)]
+    sp = G.plan_split(objs, holdout_categories="", holdout_frac=0.2, seed=0,
+                      holdout_kind="object")
+    assert not sp.holdout_categories          # no whole category held out
+    assert len(sp.test_ids) == 2
+    test_cats = {o.category for o in objs if o.object_id in set(sp.test_ids)}
+    train_cats = {o.category for o in objs if o.object_id in set(sp.train_ids)}
+    assert test_cats <= train_cats            # every test category seen in train
