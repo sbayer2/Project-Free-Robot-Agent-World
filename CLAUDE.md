@@ -229,13 +229,26 @@ validates 5e-4 end-to-end.
   generalize from ~4 objs/category. Repair menu in F14. New loader
   `data/generate_abo.py` (+ scipy dep); suite 177.
 
+### Status (2026-07-12): F15 + F16 RUN — both loose ends closed as informative nulls
+- **F15 (soft topple)**: pm_big_soft regenerated with --topple-jitter-reps 24
+  (18/512 scenes fractional = F8's thin shell). The topple FIELD improves
+  (gain 3.34→5.52) but coherence does NOT (+0.102±0.081 vs F13 +0.146±0.065,
+  t≈1.9 negative-direction) — label noise was never binding. Binary stays
+  default.
+- **F16 (F14 repair #1 falsified)**: --holdout-kind object lever added to
+  generate_gso/abo (tested); same ABO data, unseen objects of SEEN
+  categories: gain **0.975** (≈ category split's 0.96) → the probes, not the
+  split, are binding. Sole open reality route: mass-sensitive probe family
+  (multi-impulse push, log-space labels).
+Artifacts runs/big_soft*, runs/abo_obj*, data/pm_big_soft, data/pm_abo_objsplit
+(gitignored). Suite 178.
+
 Next, in priority order:
-1. **Soft-topple re-run** (`generate_mujoco --topple-jitter-reps K`, K≈16–32) —
-   does cleaner push labels tighten coherence?
-2. **F14 repair candidates** (pick one): mass-sensitive probe family +
-   log-space labels; graspable-mass banding; within-category object holdout.
-3. **FSQ latent-bottleneck (F15 candidate)** — measure the essence's size in
-   bits/trits; preregistered asymmetric-knee predictions discussed 2026-07-10.
+1. **Mass-sensitive probe family** (the F16-mandated F14 repair): multi-impulse
+   push battery + log-space displacement labels; re-run ABO object-holdout.
+2. **FSQ latent-bottleneck** — measure the essence's size in bits/trits;
+   preregistered asymmetric-knee predictions discussed 2026-07-10.
+3. GSO Fuel geometry (13GB local) usable for a future no-mass study; parked.
 
 ### Status (2026-07-04 evening): F11 vision condition RUN — graft confound resolved
 VL36 pipeline complete: downloaded havok2 graft (65 GB), converted mixed_4_6

@@ -396,6 +396,11 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
     p.add_argument("--friction", type=float, default=samples.ASSUMED_FRICTION,
                    help="assumed friction (GSO does not measure it)")
     p.add_argument("--holdout-frac", type=float, default=0.2)
+    p.add_argument("--holdout-kind", default="auto",
+                   choices=("auto", "category", "object"),
+                   help="category = unseen kinds of object (extrapolation); "
+                        "object = unseen objects of seen categories (the F14 "
+                        "material-generalization repair); auto = category when known")
     p.add_argument("--holdout-categories", default="",
                    help="comma-separated categories to hold out for test")
     p.add_argument("--seed", type=int, default=0)
@@ -408,14 +413,28 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
 
 
 def plan_split(objects: List[GsoObject], holdout_categories: str, holdout_frac: float,
-               seed: int):
-    """Choose a category split when categories are known, else a random object split."""
+               seed: int, holdout_kind: str = "auto"):
+    """Choose the holdout split.
+
+    ``holdout_kind``:
+      * ``auto`` (default) — category split when categories are known, else a
+        random object split (the original behavior).
+      * ``category`` — force whole-category holdout (shape/category
+        extrapolation: unseen kinds of object).
+      * ``object`` — force within-category object holdout (material/size
+        generalization: unseen objects of SEEN categories — the F14 repair
+        lever).
+    """
+    if holdout_kind not in ("auto", "category", "object"):
+        raise ValueError(f"holdout_kind must be auto|category|object, got {holdout_kind!r}")
     pairs = [(o.object_id, o.category) for o in objects]
     known = {c for _, c in pairs if c != "unknown"}
+    if holdout_kind == "object":
+        return make_object_holdout([o.object_id for o in objects], holdout_frac, seed)
     if holdout_categories.strip():
         cats = [c.strip().lower() for c in holdout_categories.split(",") if c.strip()]
         return make_category_holdout(pairs, holdout_categories=cats, seed=seed)
-    if len(known) > 1:
+    if holdout_kind == "category" or len(known) > 1:
         return make_category_holdout(pairs, holdout_frac=holdout_frac, seed=seed)
     return make_object_holdout([o.object_id for o in objects], holdout_frac, seed)
 
@@ -425,7 +444,8 @@ def main(argv: List[str]) -> None:
     objects = discover_objects(args.gso_root, args.num_objects)
     if not objects:
         raise SystemExit(f"no scanned objects with a mesh found under {args.gso_root!r}")
-    split = plan_split(objects, args.holdout_categories, args.holdout_frac, args.seed)
+    split = plan_split(objects, args.holdout_categories, args.holdout_frac, args.seed,
+                       holdout_kind=args.holdout_kind)
     test_ids = set(split.test_ids)
     n_measured = sum(1 for o in objects if o.mass_kg is not None)
     print(f"[gso] {len(objects)} objects ({n_measured} with measured mass); "

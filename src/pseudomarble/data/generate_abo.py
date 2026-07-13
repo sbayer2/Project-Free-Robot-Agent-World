@@ -251,6 +251,9 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
                    help="<=0 = adaptive to object size (metre-scale furniture)")
     p.add_argument("--collision-method", default="coacd")
     p.add_argument("--holdout-frac", type=float, default=0.2)
+    p.add_argument("--holdout-kind", default="auto",
+                   choices=("auto", "category", "object"),
+                   help="passed through to the GSO pipeline (object = the F14 repair)")
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--workers", type=int, default=0)
     p.add_argument("--prepare-only", action="store_true",
@@ -277,6 +280,7 @@ def main(argv: List[str]) -> None:
         "--camera-radius", str(args.camera_radius),
         "--collision-method", args.collision_method,
         "--holdout-frac", str(args.holdout_frac),
+        "--holdout-kind", args.holdout_kind,
         "--seed", str(args.seed), "--workers", str(args.workers),
     ])
 
