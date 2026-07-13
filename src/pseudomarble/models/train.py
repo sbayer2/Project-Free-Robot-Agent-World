@@ -33,6 +33,9 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
                    help="AdamW learning rate (default 5e-4 per F12/F13: 1e-3 "
                         "collapses ~1/3 of inits; 5e-4 trains 20/20 healthy)")
     p.add_argument("--latent-dim", type=int, default=None, help="override ModelConfig")
+    p.add_argument("--latent-trits", type=int, default=None,
+                   help="FSQ bottleneck width in ternary dims (F17 rate-distortion "
+                        "lever); each trit carries log2(3)~1.585 bits; 0/absent = off")
     p.add_argument("--image-size", type=int, default=None,
                    help="model render size; must match the dataset's resolution")
     p.add_argument("--max-views", type=int, default=None, help="cap views per scene")
@@ -68,6 +71,8 @@ def make_config(args: argparse.Namespace) -> ModelConfig:
     cfg = ModelConfig()
     if args.latent_dim is not None:
         cfg = replace(cfg, latent_dim=args.latent_dim)
+    if args.latent_trits is not None:
+        cfg = replace(cfg, latent_trits=args.latent_trits)
     if args.image_size is not None:
         cfg = replace(cfg, image_size=args.image_size)
     if args.behavior_weight is not None:

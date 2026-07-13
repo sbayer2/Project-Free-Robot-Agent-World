@@ -243,11 +243,24 @@ validates 5e-4 end-to-end.
 Artifacts runs/big_soft*, runs/abo_obj*, data/pm_big_soft, data/pm_abo_objsplit
 (gitignored). Suite 178.
 
+### Status (2026-07-12 evening): F17 RUN — the essence is ~1.6 bits on this benchmark
+FSQ bottleneck (ModelConfig.latent_trits, all 3 backends mirrored, STE;
+--latent-trits on train.py + coherence runner; suite 182/25): behavior
+saturates at k=1 trit (gain 1.39 ≈ continuous 1.36; curve FLAT in k) while
+render never catches continuous even at 32 trits (0.00045 vs 0.00026).
+Coherence at k=1: +0.266/+0.289 (per-k baselines) — ~2× the continuous
++0.146, WITH intact prediction — narrow discrete bottlenecks MANUFACTURE
+coherence. Registered P1/P2/P4 wrong, P3 right-extreme. Honest reframe:
+the benchmark's resolution (20 held-out scenes, chaotic labels) is now the
+binding constraint, not the model. FSQ runs born collapsed (all-zeros code),
+escape by ep 3-20 at lr 5e-4. Artifacts runs/fsq*, gitignored.
+
 Next, in priority order:
-1. **Mass-sensitive probe family** (the F16-mandated F14 repair): multi-impulse
+1. **Benchmark upgrade** (F17-mandated): larger held-out set (e.g. 128+ test
+   scenes, interior+corner), harder targets — raise the eval's information
+   ceiling so a bigger essence is measurable.
+2. **Mass-sensitive probe family** (the F16-mandated F14 repair): multi-impulse
    push battery + log-space displacement labels; re-run ABO object-holdout.
-2. **FSQ latent-bottleneck** — measure the essence's size in bits/trits;
-   preregistered asymmetric-knee predictions discussed 2026-07-10.
 3. GSO Fuel geometry (13GB local) usable for a future no-mass study; parked.
 
 ### Status (2026-07-04 evening): F11 vision condition RUN — graft confound resolved

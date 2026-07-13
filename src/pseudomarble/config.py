@@ -84,6 +84,12 @@ class ModelConfig:
     conv_kernel: int = 3
     conv_stride: int = 2
     latent_dim: int = 256
+    # FSQ information bottleneck (F17): 0 = off (continuous z, the default).
+    # When k > 0, z is projected to k dims, each quantized to 3 levels
+    # ({-1,0,1} via round(tanh), straight-through gradient), then expanded
+    # back to latent_dim before the heads. The latent then carries AT MOST
+    # k trits = k*log2(3) ~ 1.585*k bits about the scene.
+    latent_trits: int = 0
     encoder_width: int = 512
 
     # Behavior head (z -> flattened drop/tilt/push outcomes). Equals

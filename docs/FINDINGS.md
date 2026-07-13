@@ -20,8 +20,11 @@ mass-blind, so prediction fails on held-out categories and coherence is
 uninterpretable there — the reality test remains open, honestly. **F15** closes the
 soft-topple loose end (cleaner labels help the topple field 3.3→5.5×, not the
 coupling). **F16** falsifies the cheap F14 repair (within-category holdout: gain
-0.975) — the probes, not the split, are binding; a mass-sensitive probe family is
-the sole open route to reality's coupling on public data.
+0.975) — the probes, not the split, are binding. **F17** measures the essence's
+size with an FSQ bottleneck: behavior saturates at ONE trit (~1.6 bits) while
+render starves at fifty, and a 1-trit code nearly doubles learned coherence with
+prediction intact — the benchmark's resolution, not the model, is now the
+binding constraint.
 
 ---
 
@@ -666,6 +669,65 @@ problem. The remaining repair path is a **mass-sensitive probe family**
 (e.g. multi-impulse push responses with log-space displacement labels) —
 now the sole open route to a reality-coupling measurement on public data.
 Artifacts: `data/pm_abo_objsplit`, `runs/abo_obj*`.
+
+---
+
+### F17 — ⭐ FSQ bottleneck: the usable essence is ~1.6 bits — behavior saturates at ONE trit, render starves at fifty
+
+*(Run 2026-07-12. Registered: P1 co-improvement over k=1..4; P2 behavior knee
+in 6–12 trits; P3 render knee ≥ behavior knee + 3; P4 k=32 ≈ continuous.
+Graded: P1 wrong, P2 wrong by ~an order of magnitude in bits, P3 right in
+direction and extreme in magnitude, P4 wrong for render. A 10-epoch k=4
+probe was seen before the sweep; the P2 band predates it.)*
+
+An FSQ information bottleneck (k ternary dims, round(tanh), straight-through;
+`ModelConfig.latent_trits`, mirrored in all three backends) was inserted
+between encoder and heads, capping the latent at k·log2(3) bits/scene.
+Sweep: k ∈ {1,2,3,4,6,8,16,32} × 3 seeds, `pm_big`, 50 epochs, lr 5e-4;
+continuous reference = `runs/basin/lrlo_s0..2` (median gain 1.36, median
+render MSE 0.00026).
+
+| k (trits) | bits | held-out behavior gain (med) | render MSE (med) |
+|---|---|---|---|
+| **1** | **1.6** | **1.39** | 0.00070 |
+| 2 | 3.2 | 1.33 | 0.00057 |
+| 4 | 6.3 | 1.27 | 0.00054 |
+| 8 | 12.7 | 1.42 | 0.00048 |
+| 32 | 50.7 | 1.45 | 0.00045 |
+| continuous | ~∞ | 1.36 | **0.00026** |
+
+- **Behavior knee = 1 trit.** Three latent states match the full continuous
+  model's held-out behavior prediction; the curve is flat in k. All the
+  behavior advantage this benchmark can express rides on ≈1.6 bits of scene
+  information — a coarse bucket (shape class / heaviness), not a rich code.
+- **Render never catches the continuous reference**, still 1.7× worse at 50
+  bits: appearance genuinely needs orders of magnitude more information than
+  behavior, exactly the asymmetry the authored appearance-noise predicts —
+  but far more extreme than registered.
+- **Coherence at k=1: learned +0.266 behavior / +0.289 essence** (per-k
+  untrained baselines re-measured; both clear) — nearly double the
+  continuous +0.146/+0.123, **with prediction intact** (gain 1.39, PR
+  healthy), so this is NOT the F10 degeneracy. Enforced sharing through a
+  tiny discrete code couples the heads more strongly than emergent sharing
+  in a 256-dim latent. As a design principle: a narrow discrete bottleneck
+  *manufactures* appearance↔behavior coherence at no cost to behavior
+  prediction (appearance fidelity pays the bill).
+- Cold-start: every FSQ run is born at the all-zeros code (PR 0 by
+  construction) and escapes by epoch 3–20 at lr 5e-4 — F12's dynamic,
+  not binding here.
+
+**The honest reframe this forces:** "the essence is 1.6 bits" is a statement
+about THIS benchmark's ceiling, not the world's richness — 20 held-out
+scenes, chaotic labels (F8), and a modest continuous-model gain (1.36) cap
+how much information any model can be *shown* to use. The instrument has
+measured its own resolution limit: to see a bigger essence, the benchmark
+needs more held-out scenes and harder prediction targets. That is the
+constructive successor to the F9→F13 line: the coupling is real, tiny, and
+now the eval — not the model — is the binding constraint.
+
+Artifacts: `runs/fsq/`, `runs/fsq_coherence_k{1,8}/` (gitignored).
+Reproduce: `train.py --latent-trits k`; coherence runner takes
+`--latent-trits` to match checkpoints.
 
 ---
 

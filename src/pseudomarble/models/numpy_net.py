@@ -90,6 +90,9 @@ class NumpyModel:
             cin = cout
 
         self.Wp, self.bp = _he((cin, cfg.latent_dim), rng), np.zeros((cfg.latent_dim,), "float32")
+        if cfg.latent_trits > 0:  # FSQ bottleneck (mirrors mlx_net)
+            self.Wd, self.bd = _he((cfg.latent_dim, cfg.latent_trits), rng), np.zeros((cfg.latent_trits,), "float32")
+            self.Wu, self.bu = _he((cfg.latent_trits, cfg.latent_dim), rng), np.zeros((cfg.latent_dim,), "float32")
         self.Wb1, self.bb1 = _he((cfg.latent_dim, cfg.behavior_head_width), rng), np.zeros((cfg.behavior_head_width,), "float32")
         self.Wb2, self.bb2 = _he((cfg.behavior_head_width, cfg.behavior_dim), rng), np.zeros((cfg.behavior_dim,), "float32")
         self.We1, self.be1 = _he((cfg.latent_dim, cfg.essence_head_width), rng), np.zeros((cfg.essence_head_width,), "float32")
@@ -131,7 +134,19 @@ class NumpyModel:
         np = _np()
         return np.maximum(z @ self.We1 + self.be1, 0.0) @ self.We2 + self.be2
 
+    def bottleneck(self, z):
+        """(code, expanded z); identity when off. Forward-only: no gradient
+        trick needed — code = round(tanh(.)) in {-1,0,1} (mirrors mlx_net)."""
+        np = _np()
+        if self.cfg.latent_trits <= 0:
+            return None, z
+        code = np.round(np.tanh(z @ self.Wd + self.bd))
+        return code, np.maximum(code @ self.Wu + self.bu, 0.0)
+
     def __call__(self, images) -> Dict:
-        z = self.encode(images)
-        return {"z": z, "behavior": self.behavior_from_z(z),
-                "essence": self.essence_from_z(z), "render": self.decode(z)}
+        code, z = self.bottleneck(self.encode(images))
+        out = {"z": z, "behavior": self.behavior_from_z(z),
+               "essence": self.essence_from_z(z), "render": self.decode(z)}
+        if code is not None:
+            out["code"] = code
+        return out

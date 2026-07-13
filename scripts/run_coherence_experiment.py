@@ -54,6 +54,8 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
     p.add_argument("--split", default="test", help="which split to measure on (held-out=test)")
     p.add_argument("--image-size", type=int, default=128, help="must match the checkpoint")
     p.add_argument("--latent-dim", type=int, default=None, help="override ModelConfig if needed")
+    p.add_argument("--latent-trits", type=int, default=None,
+                   help="FSQ bottleneck width of the checkpoints (must match training)")
     p.add_argument("--max-views", type=int, default=None, help="cap views/scene (match training)")
     p.add_argument("--n-dirs", type=int, default=48, help="latent perturbation directions")
     p.add_argument("--eps", type=float, default=1e-3, help="finite-difference step")
@@ -70,6 +72,8 @@ def make_config(args: argparse.Namespace):
         cfg = replace(cfg, image_size=args.image_size)
     if args.latent_dim is not None:
         cfg = replace(cfg, latent_dim=args.latent_dim)
+    if args.latent_trits is not None:
+        cfg = replace(cfg, latent_trits=args.latent_trits)
     return cfg
 
 

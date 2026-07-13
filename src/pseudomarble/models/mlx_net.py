@@ -81,6 +81,10 @@ if _HAVE_MLX:
             from pseudomarble.config import num_upsample_steps
             self.cfg = cfg
             self.encoder = Encoder(cfg)
+            if cfg.latent_trits > 0:
+                # FSQ bottleneck: latent_dim -> k ternary dims -> latent_dim.
+                self.bottleneck_down = nn.Linear(cfg.latent_dim, cfg.latent_trits)
+                self.bottleneck_up = nn.Linear(cfg.latent_trits, cfg.latent_dim)
             self.behavior = MLP(cfg.latent_dim, cfg.behavior_head_width, cfg.behavior_dim)
             self.essence = MLP(cfg.latent_dim, cfg.essence_head_width, cfg.essence_dim)
 
@@ -100,10 +104,25 @@ if _HAVE_MLX:
                 x = nn.relu(conv(x))
             return mx.sigmoid(self.dec_final(x))
 
+        def _fsq(self, h):
+            """3-level FSQ: round(tanh(h)) in {-1,0,1}, straight-through grad."""
+            c = mx.tanh(h)
+            return c + mx.stop_gradient(mx.round(c) - c)
+
+        def bottleneck(self, z):
+            """(code, expanded z). Identity (None, z) when the bottleneck is off."""
+            if self.cfg.latent_trits <= 0:
+                return None, z
+            code = self._fsq(self.bottleneck_down(z))
+            return code, nn.relu(self.bottleneck_up(code))
+
         def __call__(self, images) -> Dict:
-            z = self.encoder(images)
-            return {"z": z, "behavior": self.behavior(z),
-                    "essence": self.essence(z), "render": self.decode(z)}
+            code, z = self.bottleneck(self.encoder(images))
+            out = {"z": z, "behavior": self.behavior(z),
+                   "essence": self.essence(z), "render": self.decode(z)}
+            if code is not None:
+                out["code"] = code
+            return out
 
         # Convenience accessors used by the coherence harness (decode = render).
         def behavior_from_z(self, z):
