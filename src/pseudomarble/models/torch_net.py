@@ -61,6 +61,9 @@ if _HAVE_TORCH:
                 cin = cout
             self.convs = nn.ModuleList(convs)
             self.proj = nn.Linear(cin, cfg.latent_dim)
+            if cfg.latent_trits > 0:  # FSQ bottleneck (mirrors mlx_net)
+                self.bottleneck_down = nn.Linear(cfg.latent_dim, cfg.latent_trits)
+                self.bottleneck_up = nn.Linear(cfg.latent_trits, cfg.latent_dim)
             self.behavior = _MLP(cfg.latent_dim, cfg.behavior_head_width, cfg.behavior_dim)
             self.essence = _MLP(cfg.latent_dim, cfg.essence_head_width, cfg.essence_dim)
 
@@ -93,10 +96,22 @@ if _HAVE_TORCH:
             x = torch.sigmoid(self.dec_final(x))
             return x.permute(0, 2, 3, 1)
 
+        def bottleneck(self, z):
+            """(code, expanded z); identity when off. 3-level FSQ with a
+            straight-through gradient (mirrors mlx_net)."""
+            if self.cfg.latent_trits <= 0:
+                return None, z
+            c = torch.tanh(self.bottleneck_down(z))
+            code = c + (torch.round(c) - c).detach()   # STE
+            return code, torch.relu(self.bottleneck_up(code))
+
         def forward(self, images) -> Dict:
-            z = self.encode(images)
-            return {"z": z, "behavior": self.behavior(z),
-                    "essence": self.essence(z), "render": self.decode(z)}
+            code, z = self.bottleneck(self.encode(images))
+            out = {"z": z, "behavior": self.behavior(z),
+                   "essence": self.essence(z), "render": self.decode(z)}
+            if code is not None:
+                out["code"] = code
+            return out
 
         # Convenience accessors used by the coherence harness (decode = render).
         def behavior_from_z(self, z):
