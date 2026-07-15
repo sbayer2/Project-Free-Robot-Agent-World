@@ -23,8 +23,13 @@ coupling). **F16** falsifies the cheap F14 repair (within-category holdout: gain
 0.975) — the probes, not the split, are binding. **F17** measures the essence's
 size with an FSQ bottleneck: behavior saturates at ONE trit (~1.6 bits) while
 render starves at fifty, and a 1-trit code nearly doubles learned coherence with
-prediction intact — the benchmark's resolution, not the model, is now the
-binding constraint.
+prediction intact. **F18 corrects F17's closing claim** and is the one to quote
+on "what is the essence?": an oracle on the generator's own inputs shows the
+trained model's held-out gain is **statistically indistinguishable from a
+shape-only oracle** (1.41 vs 1.33, CI [1.01, 1.79]) while shape+appearance
+reaches 2.31 — the model extracts **~8% of the essence signal reachable from
+pixels**. The 1.6 bits was the *shape bucket*, not the world's richness, and the
+**model — not the benchmark — is the binding constraint.**
 
 ---
 
@@ -731,13 +736,119 @@ Reproduce: `train.py --latent-trits k`; coherence runner takes
 
 ---
 
+### F18 — ⭐ The oracle ceiling: the model's gain is shape, not essence — it extracts ~8% of what the pixels carry
+
+*(Run 2026-07-14. Registered in `docs/ORACLE_CEILING.md`, frozen at commit
+7f0cc10 before the numbers were read. Graded: **P1 correct** (shape-only
+1.331 ≥ 1.25), **P2 correct** (essence contribution +1.912 ≥ +0.30),
+**P3 wrong** (contribution was *larger* on the corner, +1.912 vs +1.751 —
+extrapolation is not what eats the essence), **P4 passed** (oracle fits train
+at gain 4.77 ≥ 2.0, so the regressor is adequate and the test is not void).)*
+
+**Why this ran instead of the benchmark upgrade.** F17 closed by prescribing
+"more held-out scenes and harder prediction targets." The first half does not
+survive scrutiny: **more test scenes shrink the error bar on the gain; they
+cannot move the gain.** If the continuous model's true gain is 1.36, then k=1
+matching it at 1.39 means three latent states genuinely capture what the
+benchmark rewards. The question F17 actually left open — is 1.6 bits the
+instrument or the world? — needs **zero training runs**, because `sample.json`
+ships `physics.raw` (the exact generator inputs) and
+`material_truth.appearance_params` (the exact visual channels). Fit those
+directly to the 21-dim behavior labels and you measure the benchmark's ceiling
+independent of any encoder. Method: numpy ridge (linear + quadratic) and k-NN,
+best-of per arm; same `gain = MSE(predict train-mean) / MSE(oracle)`, same
+normalizers, same extrapolation corner as F13/F17.
+
+| arm (corner split, 492 train / 20 test) | gain | bootstrap 95% CI (n=20) | vs the trained model's **1.413** |
+|---|---|---|---|
+| **shape only** (no essence at all) | **1.331** | [1.01, 1.79] | **INCLUDES it** |
+| essence only | 1.595 | — | — |
+| **shape + appearance** (the FAIR ceiling) | **2.311** | [1.74, 3.04] | **EXCLUDES it** |
+| shape + essence (unfair: true generator inputs) | 3.243 | [2.35, 4.70] | **EXCLUDES it** |
+
+- **The model's gain is shape.** The 20-seed trained model (`runs/basin_
+  coherence_lrlo`, lr 5e-4) scores behavior gain **1.413** (range 1.318–1.645).
+  A shape-only oracle — which never sees density, friction, or restitution —
+  scores **1.331**, and its bootstrap CI contains every trained seed. With 5
+  shapes = 2.3 bits, this **explains F17 exactly**: behavior saturating at 1
+  trit (~1.6 bits) is what you observe when all the model ever encoded was a
+  coarse shape class.
+- **The fair ceiling, and the honest one.** Comparing to `shape+essence` (3.24)
+  would overstate: `MaterialSampler(appearance_noise=0.07)` adds Gaussian noise
+  to the appearance channels *by design* so essence→appearance is
+  non-invertible, and hue is authored as a random cue. No encoder can reach the
+  true essence. The defensible ceiling is **shape+appearance = 2.311** — what a
+  model that read the visual channels perfectly could do. Against that:
+  reachable essence gain **+0.980**; the model captures **+0.083 ≈ 8%**.
+- **The aux essence head corroborates the mechanism.** It is trained
+  (`essence_weight = 0.3`, not off) and still scores held-out essence gain
+  **1.067** — barely above predict-mean. The behavior head rides on shape
+  because the essence head has nothing to hand it. This is not a switch left
+  off; it is a genuine failure to recover essence from renders.
+- **Extrapolation is not the culprit (P3 wrong).** The fair contribution is
+  **+0.980 on the corner and +0.981 on an iid split** — identical. Whatever
+  destroys the essence signal does so equally inside and outside the training
+  manifold, so the split is not what is binding. On the iid arm (99 test
+  scenes, less noise) the oracle's bit curve **rises monotonically and does not
+  saturate**: 1.68 (0 bits) → 2.02 → 2.35 → 2.43 (6.3 bits) → 3.44 (continuous).
+  F17's flat curve was a property of the model, not of the task.
+- Robustness: no single field carries the result. `drop.path_length` shows a
+  gain of ~600 but holds a negligible share of the aggregate baseline MSE;
+  removing it leaves the essence contribution at **+1.749** (vs +1.912). The
+  aggregate is carried by `tilt.n_bounces` (20.8%), `push.toppled` (18.3%),
+  `push.settle_time` (16.6%).
+
+**The correction this forces.** F17 closed with "the benchmark's resolution,
+not the model, is now the binding constraint." **That is wrong, and F18
+retracts it.** At n=20 the oracle already separates the fair ceiling from the
+model with non-overlapping CIs — the benchmark is sharp enough to see a signal
+2.3× larger than the one the model produces. Scaling `pm_big` to 4096 scenes
+would have bought a tighter CI on a number that was never the limit, at a cost
+of Mac hours. The essence information is **in the labels and reachable from the
+pixels**; the encoder does not extract it.
+
+**Honest limitation (bounds the claim).** The oracle reads
+`appearance_params` exactly; the model must infer them from 128px renders under
+fixed lighting. Some channels (`ior`, `transmission`) may be weakly recoverable
+or unrecoverable from those pixels, so the true encoder-reachable ceiling lies
+somewhere in **[1.33, 2.31]**, and "8% of reachable" is a lower bound on the
+model's efficiency, not a point estimate. The decisive follow-up is a linear
+probe from a trained `z` → `appearance_params`: if `z` carries the channels,
+the behavior head is failing to *use* them (a loss/architecture problem); if it
+does not, the encoder cannot *see* them (a render/capacity problem). That probe
+needs MLX + the existing checkpoints — one Mac evening, no regeneration.
+
+Artifacts: `runs/oracle/pm_big.json` (gitignored). Reproduce:
+`python scripts/oracle_ceiling.py --data data/pm_big`. Tests:
+`tests/test_oracle_ceiling.py` (suite 191).
+
+---
+
 ## 3. What is NOT yet known (honest gaps)
 
-- **The learned coupling is resolved: ≈ +0.15 / +0.12, unconditional (F13).**
-  Real, modest, statistically solid — and still the *generator's* authored
-  structure. F14 shows why the reality version is hard: public real-object
-  datasets ship no contact parameters, and without them the probe battery
-  cannot expose reality's mass↔appearance coupling.
+- **What the coupling is MADE OF is now the live question (F18).** F13's
+  +0.146 / +0.123 is real and unconditional, but F18 shows the *prediction gain*
+  that licenses it (per the F10 law) is indistinguishable from shape alone. So
+  the honest reading of F13 shifts: the latent couples appearance and behavior
+  through a channel that is at least mostly **shape** — visible in renders,
+  consequential in physics — rather than through the hidden material essence.
+  That is a much weaker claim than "the model holds a physical essence," and it
+  is one the F10 law does not catch (a shape-driven model is not collapsed; its
+  PR is healthy). **Whether any essence rides along is unresolved**; the z →
+  `appearance_params` probe is the next measurement.
+- **The encoder, not the benchmark, is the bottleneck (F18).** The pixels carry
+  ~+0.98 of reachable essence gain and the model extracts ~+0.08. Why is open:
+  loss balance (behavior_weight 1.0 vs essence_weight 0.3), latent capacity, or
+  128px render fidelity for `ior`/`transmission`. F17's prescribed benchmark
+  upgrade is **retracted as the next step** — it would tighten a CI on a number
+  that was never the limit.
+- **The reality test is unanswered (F14), and the cheap repair is dead
+  (F16).** Within-category holdout changes nothing (gain 0.975 ≈ 0.96), so
+  the sole open route on public data is a mass-sensitive probe family;
+  measured contact parameters remain the expensive real fix no dataset
+  provides. F18 sharpens the ABO diagnosis: if the model barely uses essence
+  even in `pm_big`, where friction and restitution *are* sampled, then ABO's
+  assumed-constant contact params were only ever the second problem.
 - **The reality test is unanswered (F14), and the cheap repair is dead
   (F16).** Within-category holdout changes nothing (gain 0.975 ≈ 0.96), so
   the sole open route on public data is a mass-sensitive probe family;
@@ -754,31 +865,40 @@ Reproduce: `train.py --latent-trits k`; coherence runner takes
 
 ---
 
-## 4. Next steps — the result is in; now harden it
+## 4. Next steps — find out why the encoder ignores the essence
 
-F8 (label stability), F9 (5-seed coherence), F10 (20-seed resolution + basin
-falsification test), and F11 (LLM world-model transfer, both text conditions)
-have all been run on the Mac (MLX/Metal). What remains:
+F8–F18 have all been run. F18 redirected the queue: the benchmark upgrade F17
+prescribed is retracted (it would tighten a CI on a number that was never the
+limit), and the open question is now *why* the model extracts ~8% of the
+essence signal the pixels carry.
 
-1. **Re-run the 20-seed coherence experiment at lr 5e-4** — F12 removed the
-   collapse artifact, so this yields the first *unconditional* learned-coherence
-   number (no escaped-only conditioning); then consider making 5e-4 the default.
-2. **Re-run with cleaner labels** — the soft-topple probability
-   (`--topple-jitter-reps`) and/or `push.toppled` excluded and the sphere dropped
-   (F8) — to see whether less label noise widens the escaped basin or tightens
-   its coherence spread.
-3. **GSO** — real measured objects, to test reality's coupling rather than the
-   generator's (`docs/GSO_EXPERIMENT.md`).
-4. **F11 vision condition — DONE** (see the F11 addendum): the VL36 graft
-   passed the vision sanity gate and the 20-scene run measured vision ≈
-   appearance-text (0.798 vs 0.789), resolving the graft confound and closing
-   the picture→physics loop for this world.
+1. **The z → `appearance_params` probe (the decisive next measurement).** A
+   linear probe from a trained latent to the 8 visual channels, on the existing
+   `runs/basin/lrlo_s*` checkpoints — no regeneration, one Mac evening. It
+   splits F18's gap in two:
+   - `z` carries the channels ⇒ the encoder *sees* them and the behavior head
+     fails to *use* them → a loss/architecture problem (try
+     `essence_weight` ↑, or predict essence→behavior compositionally).
+   - `z` lacks them ⇒ the encoder cannot see them at 128px under fixed
+     lighting → a render/capacity problem (raise resolution, vary lighting to
+     expose `roughness`/`metallic`, or add refraction cues for `ior`).
+2. **Bound the encoder-reachable ceiling honestly.** F18's fair ceiling (2.311)
+   assumes perfect appearance readout. Re-fit the oracle on the *renders*
+   (a small CNN, or the appearance channels a probe can actually recover) to
+   close the [1.33, 2.31] bracket.
+3. **Mass-sensitive probe family** (the F16-mandated F14 repair): multi-impulse
+   push + log-space displacement labels; re-run ABO object-holdout. F18 lowers
+   its priority — if the encoder ignores essence where friction and restitution
+   *are* sampled (`pm_big`), better ABO probes address the second problem, not
+   the first.
+4. **GSO Fuel geometry** — parked (`docs/GSO_EXPERIMENT.md`).
 
-Reproduce F10/F11/F12: see their entries.
+Reproduce F18: `python scripts/oracle_ceiling.py --data data/pm_big`.
+Reproduce F10/F11/F12/F17: see their entries.
 Reproduce F8: `python tests/batch_probe_stability.py`.
 
 ---
 
-*Tests: 176 across 24 suites, all passing; core imports with no
+*Tests: 191 across 26 suites, all passing; core imports with no
 mujoco/bpy/trimesh/numpy/mlx/torch. Personal research; not affiliated with World
 Labs.*

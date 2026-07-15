@@ -92,7 +92,10 @@ python scripts/eval_llm_transfer.py --condition essence --max-tokens 32768
 - Keep this file minimal. New findings go in `docs/FINDINGS.md`; update the
   one-line status below and nothing else here.
 
-**Status (2026-07-14):** F1–F17 merged (PR #31). Next: F18 (oracle ceiling —
-does the true essence predict held-out behavior at all, or is the gain shape?)
-on branch `claude/oracle-ceiling`; it gates whether the F17-mandated benchmark
-upgrade or the F16-mandated mass-sensitive probes come first.
+**Status (2026-07-14):** F1–F17 merged; F18 (oracle ceiling) on branch
+`claude/oracle-ceiling`. F18 corrects F17: the model's held-out gain is
+indistinguishable from a shape-only oracle and it extracts ~8% of the essence
+signal the pixels carry — the encoder, not the benchmark, is binding, and the
+prescribed benchmark upgrade is retracted. Next: the z → `appearance_params`
+probe on existing checkpoints (does the encoder *see* the essence or merely
+fail to *use* it?).
