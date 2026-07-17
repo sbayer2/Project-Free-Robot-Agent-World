@@ -93,6 +93,36 @@ P5 refines the top row: if the probe recovers essence from `z` far better than
 the trained head does, the very next experiment is just re-training with a
 higher `essence_weight` — the cheapest possible fix for the F18 gap.
 
+## Amendment 2026-07-16 (caught at smoke-test, before the full multi-seed run)
+
+The registered **preservation-fraction** metric is mis-specified and is
+replaced by **retention**. Reason, found on the first (s0 + 1 untrained) smoke
+run: the untrained encoder decodes appearance *better* than the trained one
+(e.g. color_r R² 0.920 untrained vs 0.874 trained). This is not noise — a
+random linear projection is near-**lossless** for linear structure
+(Johnson–Lindenstrauss), so a random encoder's `z` is close to the pixel
+ceiling for any linearly-present channel, while training deliberately warps `z`
+toward its heads and mildly *discards* linear appearance it does not need. The
+F6/B4 "subtract the untrained baseline" logic therefore inverts here: training
+can only reduce linear appearance-decodability, so `(trained − untrained)` is
+≤ 0 and `(pixels − untrained)` ≈ 0, and the fraction explodes.
+
+**Corrected metric (used for grading):**
+- **Absolute `z_trained` R²** — is the channel present in the trained latent?
+  P1's "R² ≥ 0.5 absolute" clause is graded directly on this and is unaffected.
+- **Retention = `z_trained` R² / `z_untrained` R²**, only where `z_untrained`
+  R² > 0.1 (else nothing linear is there to keep). This is the fraction of the
+  random-encoder near-ceiling that survives training. **Retention ≈ 1 ⇒ the
+  appearance is kept in `z` ⇒ the behavior head's failure to USE it is binding
+  (loss/architecture). Retention ≪ 1 ⇒ training discarded it.** P4's diagnosis
+  is re-expressed on retention: ≥ 50% retained ⇒ loss/architecture; < 20% ⇒ the
+  discarding happens in the encoder itself.
+
+The registered *directional* predictions (P1 color strong, P2 specular partial,
+P3 refraction weak, P5 essence head-vs-latent) are graded as written on
+absolute R²; only the aggregation metric changed, and only because it was
+provably broken. Recorded here before the 20-seed run so the change is auditable.
+
 ## This is a Mac/MLX step
 
 Encoding needs MLX (the checkpoints are `.safetensors` MLX weights); it runs on
