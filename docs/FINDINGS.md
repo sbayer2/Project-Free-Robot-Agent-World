@@ -29,7 +29,12 @@ trained model's held-out gain is **statistically indistinguishable from a
 shape-only oracle** (1.41 vs 1.33, CI [1.01, 1.79]) while shape+appearance
 reaches 2.31 — the model extracts **~8% of the essence signal reachable from
 pixels**. The 1.6 bits was the *shape bucket*, not the world's richness, and the
-**model — not the benchmark — is the binding constraint.**
+**model — not the benchmark — is the binding constraint.** **F19** locates that
+constraint with a `z → appearance_params` probe: the visible appearance IS in
+the latent (color retention 84–89%) but the behavior head converts none of it to
+held-out gain (loss/architecture, cheap to fix), while friction and restitution
+were authored nearly out of the pixels entirely (render-bound, expensive) — "the
+head is binding for what's visible; the renderer for the contact physics."
 
 ---
 
@@ -824,6 +829,87 @@ Artifacts: `runs/oracle/pm_big.json` (gitignored). Reproduce:
 
 ---
 
+### F19 — ⭐ The latent SEES the appearance; the behavior head fails to USE it — F18's gap is loss/architecture, not encoder capacity
+
+*(Run 2026-07-16, 20 trained `runs/basin/lrlo_s*` + 10 untrained inits.
+Registered in `docs/PROBE_APPEARANCE.md` at commit 70b0227, with a dated
+same-day amendment — caught at smoke-test — replacing a broken aggregation
+metric. Graded: **P1 correct**, **P2 partial**, **P3 correct-direction**,
+**P4 correct** (the diagnosis), **P5 correct-direction** with a unit caveat.)*
+
+F18 proved the encoder is binding but left two mechanisms open: the encoder
+cannot **see** the appearance (render/capacity) vs it sees it but the behavior
+head does not **use** it (loss/architecture). A ridge probe `z → target`
+(5-fold CV over all 512 scenes) on the frozen checkpoints settles it — no
+retraining, no regeneration.
+
+**The metric had to be corrected mid-flight (recorded honestly).** The
+preregistered "preservation fraction" `(trained − untrained)/(pixels − untrained)`
+assumed training *adds* linear decodability. The first smoke run refuted that:
+the **untrained** encoder decodes appearance slightly *better* than the trained
+one (color_r R² 0.914 vs 0.768). A random projection is near-**lossless** for
+linear structure (Johnson–Lindenstrauss), so a fresh `z` sits near the pixel
+ceiling, while training mildly *discards* linear appearance it doesn't need.
+The F6/B4 subtract-the-baseline logic inverts here. Replaced (amendment logged
+before the full run) with **retention = z_trained R² / z_untrained R²** — the
+fraction of the random-encoder near-ceiling that survives training — plus
+absolute R².
+
+| target | channel | pixels R² | z_untrained R² | z_trained R² | retention |
+|---|---|---|---|---|---|
+| appearance | color R/G/B | 0.90–0.91 | 0.91 | **0.77–0.81** | **84–89%** |
+| appearance | metallic | 0.30 | 0.53 | 0.27 | 51% |
+| appearance | transmission/ior | ~0.10 | 0.22 | 0.09 | 39–41% |
+| appearance | roughness | 0.035 | 0.22 | 0.05 | 24% (not in pixels) |
+| essence | density | 0.25 | 0.26 | **0.22** | **85%** |
+| essence | friction, restitution | < 0 | < 0 | < 0 | **absent — not linear in z at all** |
+
+- **P4, the diagnosis (correct).** Aggregate appearance retention **65%**
+  (color 84–89%), well above the 50% threshold. **The appearance the pixels
+  carry is present in the trained latent** — color almost fully (R² ~0.8),
+  density 85% of its weak pixel ceiling. Yet F18 measured the behavior head's
+  held-out gain at shape-only (1.33) while shape+appearance reaches 2.31. So the
+  appearance is 65% in `z` and the behavior head converts **~none** of it to
+  held-out gain. **The binding constraint is the head's use of the latent
+  (loss/architecture), not encoder capacity** — the actionable branch, no
+  regeneration.
+- **But friction and restitution are a second, deeper story.** The two contact
+  parameters that most drive topple/slide/settle are **not linearly present in
+  `z` at all** (R² < 0), and they are not in the *pixels* either (pixels R² < 0)
+  — the authored `appearance_noise` (0.07) plus weak essence→appearance coupling
+  render them nearly invisible by design. Density is the one physics channel
+  weakly visible (pixel ceiling 0.25), and `z` keeps 85% of it. This is why
+  F18's shape-only oracle matched the model: **shape is the only strongly
+  behavior-relevant signal that is actually visible**; the contact physics that
+  would beat shape was authored out of the appearance.
+- **P1 correct:** color reaches absolute R² 0.77–0.81 (≥ 0.5) and 84–89%
+  retention. **P2 partial:** metallic is partial (51%, < color) as predicted,
+  but roughness is untestable (pixel ceiling 0.035 — the renders barely vary it).
+  **P3 correct-direction:** transmission/ior are weak (39–41% retention, pixel
+  ceiling ~0.1). **P5 correct-direction:** a probe recovers density from `z` but
+  not restitution — matching "beats the essence head on density, not
+  restitution," though the registered comparison mixed units (probe R² vs the
+  head's 1.067 *gain*); the directional claim holds, the numeric one is not
+  apples-to-apples and is not counted.
+
+**What this decides.** The F18 gap splits by signal. For the **visible**
+behavior-relevant signal (shape, color, weakly density), the information is in
+`z` and the **behavior head under-uses it** → the cheap next experiments are
+loss/architecture, no data regeneration: (a) raise `essence_weight` and re-run
+the F13 coherence measurement; (b) a compositional head that predicts
+essence→behavior instead of z→behavior directly. For the **contact physics**
+(friction, restitution), the signal was authored nearly out of the appearance,
+so no head can recover it from these renders — the reality-probe question
+(F14/F16) and a render/lighting upgrade are the only routes there, and they are
+genuinely expensive. F18 said "the encoder is binding"; F19 sharpens it to
+**"the head is binding for what's visible; the renderer is binding for the
+contact physics."**
+
+Artifacts: `runs/probe_appearance/report.json` (gitignored). Reproduce:
+`python scripts/probe_appearance.py`. Tests: `tests/test_probe_appearance.py`.
+
+---
+
 ## 3. What is NOT yet known (honest gaps)
 
 - **What the coupling is MADE OF is now the live question (F18).** F13's
@@ -865,40 +951,40 @@ Artifacts: `runs/oracle/pm_big.json` (gitignored). Reproduce:
 
 ---
 
-## 4. Next steps — find out why the encoder ignores the essence
+## 4. Next steps — fix the head for what's visible; the renderer for what isn't
 
-F8–F18 have all been run. F18 redirected the queue: the benchmark upgrade F17
-prescribed is retracted (it would tighten a CI on a number that was never the
-limit), and the open question is now *why* the model extracts ~8% of the
-essence signal the pixels carry.
+F8–F19 have all been run. F19 split F18's gap by signal, and the two halves have
+different fixes:
 
-1. **The z → `appearance_params` probe (the decisive next measurement).** A
-   linear probe from a trained latent to the 8 visual channels, on the existing
-   `runs/basin/lrlo_s*` checkpoints — no regeneration, one Mac evening. It
-   splits F18's gap in two:
-   - `z` carries the channels ⇒ the encoder *sees* them and the behavior head
-     fails to *use* them → a loss/architecture problem (try
-     `essence_weight` ↑, or predict essence→behavior compositionally).
-   - `z` lacks them ⇒ the encoder cannot see them at 128px under fixed
-     lighting → a render/capacity problem (raise resolution, vary lighting to
-     expose `roughness`/`metallic`, or add refraction cues for `ior`).
+1. **Reweight/recompose the behavior head (the cheap branch F19 unlocked).** The
+   visible appearance is 65% present in `z` but the behavior head extracts ~none
+   of the appearance→behavior gain. Two experiments on the *existing* data, no
+   regeneration:
+   - raise `essence_weight` (and/or add an appearance-reconstruction auxiliary
+     that forces the visible channels into a head-readable subspace) and re-run
+     the F13 coherence + F18 oracle-gap measurement;
+   - a **compositional head** that predicts essence→behavior rather than
+     z→behavior directly, so the shape-bypass is closed structurally.
+   Success metric: does the behavior gain move off shape-only (1.33) toward the
+   appearance ceiling (2.31)?
 2. **Bound the encoder-reachable ceiling honestly.** F18's fair ceiling (2.311)
-   assumes perfect appearance readout. Re-fit the oracle on the *renders*
-   (a small CNN, or the appearance channels a probe can actually recover) to
-   close the [1.33, 2.31] bracket.
-3. **Mass-sensitive probe family** (the F16-mandated F14 repair): multi-impulse
-   push + log-space displacement labels; re-run ABO object-holdout. F18 lowers
-   its priority — if the encoder ignores essence where friction and restitution
-   *are* sampled (`pm_big`), better ABO probes address the second problem, not
-   the first.
+   assumes perfect appearance readout; F19 shows the linearly-reachable readout
+   is lower (color ~0.8, metallic ~0.27, contact physics ~0). Re-fit the oracle
+   on the probe-recoverable channels to close the [1.33, 2.31] bracket.
+3. **Render/lighting upgrade for the contact physics (the expensive branch).**
+   Friction and restitution are authored nearly out of the 128px renders. Only a
+   render change (resolution, varied lighting, motion cues) or a mass-sensitive
+   probe family (the F16-mandated F14 repair) can expose them — genuinely costly,
+   correctly deprioritized until branch 1 is exhausted.
 4. **GSO Fuel geometry** — parked (`docs/GSO_EXPERIMENT.md`).
 
+Reproduce F19: `python scripts/probe_appearance.py`.
 Reproduce F18: `python scripts/oracle_ceiling.py --data data/pm_big`.
 Reproduce F10/F11/F12/F17: see their entries.
 Reproduce F8: `python tests/batch_probe_stability.py`.
 
 ---
 
-*Tests: 191 across 26 suites, all passing; core imports with no
+*Tests: 197 across 27 suites, all passing; core imports with no
 mujoco/bpy/trimesh/numpy/mlx/torch. Personal research; not affiliated with World
 Labs.*
