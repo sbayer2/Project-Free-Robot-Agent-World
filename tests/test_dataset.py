@@ -75,7 +75,28 @@ def test_target_shapes():
         assert len(scene.behavior_target()) == P.BEHAVIOR_DIM == 21
         assert len(scene.essence_target()) == 3
         assert len(scene.factors_target()) == 4
+        assert len(scene.appearance_target()) == 8  # F20 aux target
         assert len(scene.view_files()) == 1
+
+
+def test_appearance_vector_normalizes_ior_and_orders_channels():
+    from pseudomarble.data.dataset import APPEARANCE_FIELDS, appearance_vector
+
+    v = appearance_vector({"base_color": [0.1, 0.2, 0.3, 1.0], "roughness": 0.4,
+                           "metallic": 0.5, "transmission": 0.6, "ior": 1.45})
+    assert len(v) == len(APPEARANCE_FIELDS) == 8
+    assert v[:4] == [0.1, 0.2, 0.3, 1.0]          # base_color RGBA, in order
+    assert v[4:7] == [0.4, 0.5, 0.6]              # roughness, metallic, transmission
+    assert abs(v[7] - 0.45) < 1e-6                # ior shifted to ~[0,1]
+
+
+def test_appearance_target_present_in_batch():
+    with tempfile.TemporaryDirectory() as root:
+        _write_dataset(root, [("train", "box", ["drop", "tilt", "push"])])
+        ds = PseudoMarbleDataset(root)
+        batch = next(ds.iter_batches(batch_size=1, shuffle=False))
+        assert "appearance" in batch
+        assert len(batch["appearance"][0]) == 8
 
 
 def test_probe_order_is_stable_regardless_of_disk_order():

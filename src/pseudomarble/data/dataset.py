@@ -31,6 +31,22 @@ from pseudomarble import probes as P
 
 ESSENCE_FIELDS = ("density", "friction", "restitution")
 FACTOR_FIELDS = ("heaviness", "grip", "hardness", "clarity")
+# The 8 clean appearance_params the renderer used (F20 aux target). color RGBA,
+# roughness, metallic, transmission are already in [0,1]; ior sits in ~[1,2], so
+# it is shifted to ~[0,1] (ior-1) to keep the per-channel MSE balanced.
+APPEARANCE_FIELDS = ("color_r", "color_g", "color_b", "color_a",
+                     "roughness", "metallic", "transmission", "ior")
+
+
+def appearance_vector(appearance_params: Dict) -> List[float]:
+    """Normalized 8-dim appearance target from material_truth.appearance_params."""
+    c = list(appearance_params.get("base_color", [0.0, 0.0, 0.0, 1.0]))
+    return c[:4] + [
+        float(appearance_params.get("roughness", 0.0)),
+        float(appearance_params.get("metallic", 0.0)),
+        float(appearance_params.get("transmission", 0.0)),
+        float(appearance_params.get("ior", 1.0)) - 1.0,
+    ]
 
 
 def _read_json(path: str) -> Dict:
@@ -56,6 +72,10 @@ class Scene:
     def essence_target(self) -> List[float]:
         norm = self.record.get("physics", {}).get("normalized", {})
         return [float(norm.get(k, 0.0)) for k in ESSENCE_FIELDS]
+
+    def appearance_target(self) -> List[float]:
+        ap = self.record.get("material_truth", {}).get("appearance_params", {})
+        return appearance_vector(ap)
 
     def factors_target(self) -> Optional[List[float]]:
         factors = self.record.get("material_truth", {}).get("factors")
@@ -162,6 +182,7 @@ class PseudoMarbleDataset:
                 "scene_ids": [s.scene_id for s in scenes],
                 "behavior": [s.behavior_target(self.normalize_targets) for s in scenes],
                 "essence": [s.essence_target() for s in scenes],
+                "appearance": [s.appearance_target() for s in scenes],
             }
             if with_images:
                 import numpy as np  # type: ignore
@@ -196,6 +217,8 @@ def _to_mlx(batch: Dict) -> Dict:
     out = dict(batch)
     out["behavior"] = mx.array(batch["behavior"])
     out["essence"] = mx.array(batch["essence"])
+    if "appearance" in batch:
+        out["appearance"] = mx.array(batch["appearance"])
     if "images" in batch:
         out["images"] = mx.array(batch["images"])
     return out

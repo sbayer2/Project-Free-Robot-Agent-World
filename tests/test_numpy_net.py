@@ -54,6 +54,48 @@ def test_forward_shapes():
     assert out["render"].shape == (2, SMALL.image_size, SMALL.image_size, 3)
 
 
+def test_appearance_head_gated_off_by_default():
+    """F20: with appearance_weight=0 (default) the head does not exist and the
+    output has no 'appearance' key — the architecture is byte-identical, so old
+    checkpoints still load."""
+    if _skip_if_no_numpy():
+        return
+    from pseudomarble.models.numpy_net import NumpyModel
+
+    out = NumpyModel(SMALL, seed=0)(np.random.default_rng(1).random((2, 3, 16, 16, 3)))
+    assert "appearance" not in out
+    assert not hasattr(NumpyModel(SMALL, seed=0), "Wa1")
+
+
+def test_appearance_head_on_when_weighted():
+    """F20: appearance_weight>0 adds the z->appearance_params head, output (B, 8)."""
+    if _skip_if_no_numpy():
+        return
+    from pseudomarble.models.numpy_net import NumpyModel
+
+    cfg = replace(SMALL, appearance_weight=1.0)
+    out = NumpyModel(cfg, seed=0)(np.random.default_rng(1).random((2, 3, 16, 16, 3)))
+    assert out["appearance"].shape == (2, cfg.appearance_dim)
+    assert cfg.appearance_dim == 8
+
+
+def test_appearance_loss_term_added_only_when_weighted():
+    """The pure-Python loss reference gains the appearance term iff weight>0."""
+    if _skip_if_no_numpy():
+        return
+    pred = [[0.0] * 8, [0.0] * 8]
+    tgt = [[1.0] * 8, [1.0] * 8]
+    common = dict(behavior_pred=[[0.0]], behavior_target=[[0.0]],
+                  essence_pred=[[0.0]], essence_target=[[0.0]])
+    off = losses.combined_loss(**common, appearance_pred=pred, appearance_target=tgt,
+                               appearance_weight=0.0)
+    on = losses.combined_loss(**common, appearance_pred=pred, appearance_target=tgt,
+                              appearance_weight=2.0)
+    assert "appearance" not in off
+    assert on["appearance"] == 1.0            # MSE of 0 vs 1
+    assert on["total"] == off["total"] + 2.0  # weight * appearance MSE
+
+
 def test_forward_is_deterministic():
     if _skip_if_no_numpy():
         return

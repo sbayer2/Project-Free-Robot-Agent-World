@@ -44,6 +44,11 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
                         "render-only model)")
     p.add_argument("--essence-weight", type=float, default=None,
                    help="loss weight on the auxiliary essence head (default 0.3)")
+    p.add_argument("--appearance-weight", type=float, default=None,
+                   help="loss weight on the F20 auxiliary appearance head (z -> the "
+                        "8 clean appearance_params; default 0/off). >0 forces the "
+                        "encoder to retain the physics-material channels the render "
+                        "loss otherwise discards")
     p.add_argument("--render-weight", type=float, default=None,
                    help="loss weight on the render head (default 1.0; set 0 for a "
                         "behavior-only model)")
@@ -81,6 +86,8 @@ def make_config(args: argparse.Namespace) -> ModelConfig:
         cfg = replace(cfg, essence_weight=args.essence_weight)
     if args.render_weight is not None:
         cfg = replace(cfg, render_weight=args.render_weight)
+    if args.appearance_weight is not None:
+        cfg = replace(cfg, appearance_weight=args.appearance_weight)
     return cfg
 
 

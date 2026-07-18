@@ -87,6 +87,9 @@ if _HAVE_MLX:
                 self.bottleneck_up = nn.Linear(cfg.latent_trits, cfg.latent_dim)
             self.behavior = MLP(cfg.latent_dim, cfg.behavior_head_width, cfg.behavior_dim)
             self.essence = MLP(cfg.latent_dim, cfg.essence_head_width, cfg.essence_dim)
+            if cfg.appearance_weight > 0:  # F20 aux; gated to keep default identical
+                self.appearance = MLP(cfg.latent_dim, cfg.appearance_head_width,
+                                      cfg.appearance_dim)
 
             # Render decoder: z -> seed map -> (upsample + conv)*k -> RGB (NHWC).
             ch, s = cfg.render_channels, cfg.render_seed
@@ -120,6 +123,8 @@ if _HAVE_MLX:
             code, z = self.bottleneck(self.encoder(images))
             out = {"z": z, "behavior": self.behavior(z),
                    "essence": self.essence(z), "render": self.decode(z)}
+            if self.cfg.appearance_weight > 0:
+                out["appearance"] = self.appearance(z)
             if code is not None:
                 out["code"] = code
             return out
@@ -130,6 +135,9 @@ if _HAVE_MLX:
 
         def essence_from_z(self, z):
             return self.essence(z)
+
+        def appearance_from_z(self, z):
+            return self.appearance(z)
 
         def render_from_z(self, z):
             return self.decode(z)
@@ -158,4 +166,8 @@ def loss_fn(model, batch: Dict, cfg: ModelConfig):
     e = mx.mean((out["essence"] - batch["essence"]) ** 2)
     render_target = mx.mean(batch["images"], axis=1)  # (B, H, W, C)
     r = mx.mean((out["render"] - render_target) ** 2)
-    return cfg.behavior_weight * b + cfg.essence_weight * e + cfg.render_weight * r
+    total = cfg.behavior_weight * b + cfg.essence_weight * e + cfg.render_weight * r
+    if cfg.appearance_weight > 0:  # F20 aux: force z to retain the material channels
+        a = mx.mean((out["appearance"] - batch["appearance"]) ** 2)
+        total = total + cfg.appearance_weight * a
+    return total
