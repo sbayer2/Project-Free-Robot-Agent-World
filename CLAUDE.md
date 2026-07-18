@@ -92,10 +92,10 @@ python scripts/eval_llm_transfer.py --condition essence --max-tokens 32768
 - Keep this file minimal. New findings go in `docs/FINDINGS.md`; update the
   one-line status below and nothing else here.
 
-**Status (2026-07-16):** F1–F18 merged (PR #32); suite 191/26; repo main-only
-(all feature branches deleted). F18 corrects F17: the model's held-out gain is
-indistinguishable from a shape-only oracle and it extracts ~8% of the essence
-signal the pixels carry — the encoder, not the benchmark, is binding, and the
-prescribed benchmark upgrade is retracted. Next: the z → `appearance_params`
-probe on existing checkpoints (does the encoder *see* the essence or merely
-fail to *use* it?).
+**Status (2026-07-16):** F1–F18 merged; F19 (z→appearance_params probe) on
+branch `claude/probe-appearance`; suite 197/27. F19 answers F18: the visible
+appearance IS in the latent (color retention 84–89%) but the behavior head
+converts none of it to held-out gain (loss/architecture — the cheap fix), while
+friction/restitution were authored nearly out of the pixels (render-bound — the
+expensive fix). Next: raise `essence_weight` / compositional essence→behavior
+head and re-measure the F13 coherence + F18 oracle gap.
