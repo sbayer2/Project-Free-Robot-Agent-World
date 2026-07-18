@@ -35,6 +35,12 @@ the latent (color retention 84–89%) but the behavior head converts none of it 
 held-out gain (loss/architecture, cheap to fix), while friction and restitution
 were authored nearly out of the pixels entirely (render-bound, expensive) — "the
 head is binding for what's visible; the renderer for the contact physics."
+**F20** tests and corrects F19: an appearance-reconstruction auxiliary *does*
+force the essence-bearing channels (roughness/metallic/transmission) back into
+`z`, but behavior gain moves only 1.37 → 1.46 (ceiling 1.57), not toward 2.26 —
+the channels sit in `z` too noisily at 128px to use. The 1.33→2.26 gap is
+~+0.1 head + ~+0.1 encoder-retention + **~+0.7 render-fidelity-bound**; the
+last dominates. F19's "loss/architecture, cheap fix" is retracted.
 
 ---
 
@@ -892,21 +898,86 @@ absolute R².
   head's 1.067 *gain*); the directional claim holds, the numeric one is not
   apples-to-apples and is not counted.
 
-**What this decides.** The F18 gap splits by signal. For the **visible**
-behavior-relevant signal (shape, color, weakly density), the information is in
-`z` and the **behavior head under-uses it** → the cheap next experiments are
-loss/architecture, no data regeneration: (a) raise `essence_weight` and re-run
-the F13 coherence measurement; (b) a compositional head that predicts
-essence→behavior instead of z→behavior directly. For the **contact physics**
-(friction, restitution), the signal was authored nearly out of the appearance,
-so no head can recover it from these renders — the reality-probe question
-(F14/F16) and a render/lighting upgrade are the only routes there, and they are
-genuinely expensive. F18 said "the encoder is binding"; F19 sharpens it to
-**"the head is binding for what's visible; the renderer is binding for the
-contact physics."**
+**What this decides.** The F18 gap splits by signal. F18 said "the encoder is
+binding"; F19 sharpens it to "the head is binding for what's visible; the
+renderer for the contact physics." **⚠ F19's cheap-fix claim was tested and
+retracted by F20 — see below.** The three cheap follow-up measurements
+(decomposition, per-channel retention, frozen-z head ceiling) showed the
+"65% retention" headline was dominated by behaviorally-inert color, and F20
+then showed that forcing the essence-bearing channels into `z` does *not*
+recover behavior. Read F20 for the corrected reading; the paragraph above
+stands only as the question F20 answers.
 
 Artifacts: `runs/probe_appearance/report.json` (gitignored). Reproduce:
 `python scripts/probe_appearance.py`. Tests: `tests/test_probe_appearance.py`.
+
+---
+
+### F20 — ⭐ The appearance aux forces the channels into z, but behavior stays put — the F18 gap is render-bound, and F19's headline is corrected
+
+*(Run 2026-07-18. Registered in `docs/APPEARANCE_AUX.md` at commit 70b0227.
+Graded: **P1 correct**, **P2 falsified**, **P3 partial** (corroborates the
+falsifier's mechanism), **P4 correct**. This entry corrects F19.)*
+
+**First, the F19 correction (three cheap measurements, logged in the prereg).**
+F19's merged headline — "the appearance is in `z`; the behavior head fails to
+USE it (loss/architecture, cheap fix)" — overclaimed. (a) Decomposing F18's
+2.31 ceiling: color adds only +0.27, while `{roughness, metallic, transmission}`
+*jointly* carry the +0.93 (no single one moves gain off 1.33 — the three
+localize the material identity together). (b) `z` retains color (85%) but
+discards exactly those three (roughness 0.22→0.05, transmission 0.23→0.09). So
+the "65% appearance retention" was behaviorally-inert color. (c) A perfect
+ridge/kNN head on the frozen `z` caps at **1.46**, not 2.26 — the head is not
+the bottleneck; what `z` holds is. F19's "loss/architecture" was backwards: the
+encoder is binding.
+
+**F20's test.** Add an auxiliary head `z → appearance_params` (8 clean channels,
+gated on `appearance_weight`, mirrored in all three backends) to *force* the
+encoder to retain the physics-material channels the render loss discards. Sweep
+`appearance_weight ∈ {0, 0.3, 1, 3}`, 3 seeds, `pm_big`, 50 epochs, lr 5e-4.
+
+| appearance_weight | behavior gain | z-R² roughness/metallic/transmission | fresh-head ceiling on z |
+|---|---|---|---|
+| 0.0 (control) | 1.373 ± 0.015 | 0.03 / 0.30 / −0.01 | 1.46 |
+| **0.3** | **1.456 ± 0.013** | **0.21 / 0.48 / 0.12** | **1.57** |
+| 1.0 | 1.353 ± 0.018 | 0.29 / 0.49 / 0.14 | 1.37 |
+| 3.0 | 1.413 ± 0.108 | 0.13 / 0.40 / 0.19 | — |
+
+- **P1 correct — the aux did its job.** It drove the three discarded channels
+  back into `z` toward their CNN-reachable ceilings (roughness 0.03→0.29,
+  metallic 0.30→0.49, transmission −0.01→0.19). The representation-level
+  intervention worked.
+- **P2 falsified — behavior did not follow.** Best behavior gain is **1.456**
+  (aw 0.3), +0.08 over control and nowhere near the ≥1.60 target or the 2.26
+  ceiling. Even a *perfect* fresh head on the enriched `z` reaches only **1.57**.
+  Forcing the channels in raised the achievable gain by ~+0.11 and then stopped.
+- **P3 partial — retention rose but gain did not track it.** aw 1.0 has the
+  *highest* metallic/roughness retention yet the *lowest* behavior gain — the
+  link breaks. Retention is necessary, not sufficient. This is exactly the
+  P2-falsifier mechanism: **the channels are in `z`, but at 128px fidelity
+  (R² 0.2–0.5, not the oracle's 1.0) they are too noisy to jointly localize the
+  material** that behavior needs.
+- **P4 correct — non-monotone in weight.** Behavior peaks at aw 0.3 and dips at
+  aw 1.0 (capacity spent reconstructing color); render MSE and essence gain stay
+  flat, so it is competition, not collapse.
+
+**The synthesis — the 1.33 → 2.26 gap has three barriers, and F20 sizes all
+three.** (1) the behavior head under-uses `z`: fresh head 1.57 vs trained 1.46
+on the same `z` → ~+0.11 is a head/loss problem; (2) `z` discards the
+physics-material channels: aw 0 ceiling 1.46 → aw 0.3 ceiling 1.57 → ~+0.11 is
+an encoder-retention problem, which F20's aux fixes; (3) **the remaining ~+0.7
+is render-fidelity-bound** — even with perfect retention and a perfect head, the
+channels recovered from 128px renders under fixed lighting are too degraded
+(authored `appearance_noise` 0.07 + resolution) to reach the clean-param ceiling.
+Barriers 1 and 2 are cheap and each buys ~0.1; barrier 3 dominates and is
+expensive. **The honest close of the F18/F19 arc: the encoder *can* be made to
+hold the essence-bearing appearance, but this world's renders don't carry it
+sharply enough to use — the reality-probe question (F14/F16) and a render
+upgrade are the same wall from two sides.**
+
+Artifacts: `runs/appearance_aux/` (gitignored). Reproduce: sweep
+`train.py --appearance-weight {0,0.3,1,3}` then `scripts/appearance_aux_eval.py`.
+Tests: `tests/test_numpy_net.py`, `tests/test_dataset.py` (aux head + target).
 
 ---
 
@@ -951,33 +1022,31 @@ Artifacts: `runs/probe_appearance/report.json` (gitignored). Reproduce:
 
 ---
 
-## 4. Next steps — fix the head for what's visible; the renderer for what isn't
+## 4. Next steps — the cheap branches are spent; what's left is render fidelity
 
-F8–F19 have all been run. F19 split F18's gap by signal, and the two halves have
-different fixes:
+F8–F20 have all been run. F20 closed the cheap branches: the behavior head
+under-use (~+0.1) and the encoder's channel discard (~+0.1) are both real but
+small, and together they leave ~+0.7 of the 1.33→2.26 gap on the table because
+128px renders don't carry the physics-material channels sharply enough to use.
+What remains is genuinely expensive, and should be chosen deliberately:
 
-1. **Reweight/recompose the behavior head (the cheap branch F19 unlocked).** The
-   visible appearance is 65% present in `z` but the behavior head extracts ~none
-   of the appearance→behavior gain. Two experiments on the *existing* data, no
-   regeneration:
-   - raise `essence_weight` (and/or add an appearance-reconstruction auxiliary
-     that forces the visible channels into a head-readable subspace) and re-run
-     the F13 coherence + F18 oracle-gap measurement;
-   - a **compositional head** that predicts essence→behavior rather than
-     z→behavior directly, so the shape-bypass is closed structurally.
-   Success metric: does the behavior gain move off shape-only (1.33) toward the
-   appearance ceiling (2.31)?
-2. **Bound the encoder-reachable ceiling honestly.** F18's fair ceiling (2.311)
-   assumes perfect appearance readout; F19 shows the linearly-reachable readout
-   is lower (color ~0.8, metallic ~0.27, contact physics ~0). Re-fit the oracle
-   on the probe-recoverable channels to close the [1.33, 2.31] bracket.
-3. **Render/lighting upgrade for the contact physics (the expensive branch).**
-   Friction and restitution are authored nearly out of the 128px renders. Only a
-   render change (resolution, varied lighting, motion cues) or a mass-sensitive
-   probe family (the F16-mandated F14 repair) can expose them — genuinely costly,
-   correctly deprioritized until branch 1 is exhausted.
+1. **Render-fidelity upgrade (the dominant barrier, F20).** Higher resolution,
+   varied lighting to expose roughness/metallic specular cues, and/or lower
+   authored `appearance_noise` — then re-run the F18 oracle gap and the F20 aux.
+   Test: does the fresh-head ceiling on `z` rise past 1.57 toward 2.26 when the
+   channels are rendered more sharply? This is a data-regeneration cost.
+2. **Grab the two cheap tenths anyway.** Ship `appearance_weight = 0.3` as a mild
+   default (it raised the achievable ceiling 1.46 → 1.57 at no render cost, P4
+   non-monotone so don't go higher) and re-run the F13 coherence measurement at
+   that setting — does forcing the material channels into `z` also strengthen the
+   render↔behavior coherence?
+3. **Mass-sensitive probe family** (the F16-mandated F14 repair) — now clearly
+   the *same wall* as branch 1 from the reality side: the probe battery and the
+   renderer both fail to expose contact physics. Pursue with branch 1, not before.
 4. **GSO Fuel geometry** — parked (`docs/GSO_EXPERIMENT.md`).
 
+Reproduce F20: sweep `train.py --appearance-weight {0,0.3,1,3}` then
+`scripts/appearance_aux_eval.py`.
 Reproduce F19: `python scripts/probe_appearance.py`.
 Reproduce F18: `python scripts/oracle_ceiling.py --data data/pm_big`.
 Reproduce F10/F11/F12/F17: see their entries.
@@ -985,6 +1054,6 @@ Reproduce F8: `python tests/batch_probe_stability.py`.
 
 ---
 
-*Tests: 197 across 27 suites, all passing; core imports with no
+*Tests: 202 across 27 suites, all passing; core imports with no
 mujoco/bpy/trimesh/numpy/mlx/torch. Personal research; not affiliated with World
 Labs.*
