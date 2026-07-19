@@ -25,7 +25,15 @@ from oracle_ceiling import best_oracle, knn_fit_predict, ridge_fit_predict  # no
 from oracle_ceiling import gain as gain_ratio  # noqa: E402
 from probe_appearance import APPEARANCE_CHANNELS, encode_z, kfold_r2  # noqa: E402
 
-NOISE = [("0.07", "n07"), ("0.03", "n03"), ("0.0", "n00")]
+# (label, data dir, checkpoint tag, image_size). Arm 1 = noise sweep at 128px;
+# Arm 2 = oblique lighting at 256px (F21). Entries with missing data/checkpoints
+# are skipped, so one eval covers whatever has been run.
+ENTRIES = [
+    ("noise0.07", "data/pm_n07", "n07", 128),
+    ("noise0.03", "data/pm_n03", "n03", 128),
+    ("noise0.0", "data/pm_n00", "n00", 128),
+    ("obl256", "data/pm_obl256", "obl256", 256),
+]
 MAT = ("roughness", "metallic", "transmission")
 
 
@@ -37,6 +45,15 @@ def load_arrays(data: str):
     split = np.array([s.record.get("split") for s in ds.scenes])
     return (b["images"], np.array(b["behavior"], np.float32),
             np.array(b["appearance"], np.float32), split == "train", split == "test", ds)
+
+
+def behavior_from_z(model, z: np.ndarray) -> np.ndarray:
+    """Run the behavior head over a numpy z (B,256) -> (B,21). Head-only, so no
+    render decoder is built -- safe at 256px where m(imgs) would overflow memory."""
+    import mlx.core as mx  # type: ignore
+    out = model.behavior_from_z(mx.array(z))
+    mx.eval(out)
+    return np.array(out.tolist(), np.float32)
 
 
 def shape_onehot(ds) -> np.ndarray:
@@ -54,14 +71,12 @@ def main() -> None:
     root = sys.argv[1] if len(sys.argv) > 1 else "runs/render_fidelity"
     mi = {c: APPEARANCE_CHANNELS.index(c) for c in MAT}
     report = {"by_noise": {}}
-    print(f"{'noise':>6s} {'oracle_ceil':>11s} {'reach r/m/t':>18s} "
+    print(f"{'label':>10s} {'oracle_ceil':>11s} {'reach r/m/t':>18s} "
           f"{'freshhead_ceil':>14s} {'trained_gain':>12s}")
 
-    for noise, tag in NOISE:
-        data = f"data/pm_{tag}"
+    for label, data, tag, img in ENTRIES:
         cks = sorted(glob.glob(f"{root}/{tag}_s*/model.safetensors"))
         if not os.path.exists(f"{data}/manifest.json") or not cks:
-            print(f"{noise:>6s}  (missing data or checkpoints; skipped)")
             continue
         imgs, Yb, Ya, tr, te, ds = load_arrays(data)
         S = shape_onehot(ds)
@@ -70,12 +85,17 @@ def main() -> None:
         SA = np.concatenate([S, Ya], 1)
         oracle_ceil = best_oracle(SA[tr], Yb[tr], SA[te], Yb[te])[0]
 
+        def cfg(image_size=img):
+            return ModelConfig(appearance_weight=0.3, image_size=image_size)
+
         fresh, tgain, reach, aret = [], [], [], []
         for ck in cks:
-            m = build_model(ModelConfig(appearance_weight=0.3))
+            m = build_model(cfg())
             m.load_weights(ck)
-            z = encode_z(m, imgs)
-            beh = np.array(m(imgs)["behavior"].tolist(), np.float32)
+            z = encode_z(m, imgs)  # chunked; avoids the full-batch render decoder
+            # behavior from the frozen z in one shot (cheap: 256-dim -> 21), NOT
+            # m(imgs), whose 256px render decoder overflows unified memory at B=512.
+            beh = np.array(behavior_from_z(m, z), np.float32)
             tgain.append(gain_ratio(Yb[tr], Yb[te], beh[te]))
             # fresh head ceiling: best of ridge/knn z->behavior on corner split
             gr = gain_ratio(Yb[tr], Yb[te], ridge_fit_predict(z[tr], Yb[tr], z[te]))
@@ -84,26 +104,26 @@ def main() -> None:
             aret.append(kfold_r2(z, Ya))
         # P2: untrained-z reachability of the material channels (arch-only ceiling)
         for _ in range(3):
-            um = build_model(ModelConfig(appearance_weight=0.3))
-            reach.append(kfold_r2(encode_z(um, imgs), Ya))
+            reach.append(kfold_r2(encode_z(build_model(cfg()), imgs), Ya))
         reach_m = np.stack(reach).mean(0)
         aret_m = np.stack(aret).mean(0)
 
         rec = {
-            "n": len(cks), "oracle_ceiling": float(oracle_ceil),
+            "n": len(cks), "data": data, "image_size": img,
+            "oracle_ceiling": float(oracle_ceil),
             "fresh_head_ceiling_mean": float(np.mean(fresh)),
             "fresh_head_ceiling_std": float(np.std(fresh)),
             "trained_gain_mean": float(np.mean(tgain)),
             "reach_material_r2": {c: float(reach_m[mi[c]]) for c in MAT},
             "retained_material_r2": {c: float(aret_m[mi[c]]) for c in MAT},
         }
-        report["by_noise"][noise] = rec
+        report["by_noise"][label] = rec
         rmt = "/".join(f"{reach_m[mi[c]]:.2f}" for c in MAT)
-        print(f"{noise:>6s} {oracle_ceil:11.3f} {rmt:>18s} "
+        print(f"{label:>10s} {oracle_ceil:11.3f} {rmt:>18s} "
               f"{np.mean(fresh):8.3f}+/-{np.std(fresh):.3f} {np.mean(tgain):12.3f}")
 
     # P3 gate on the noise=0.0 fresh-head ceiling.
-    n0 = report["by_noise"].get("0.0")
+    n0 = report["by_noise"].get("noise0.0")
     if n0:
         c = n0["fresh_head_ceiling_mean"]
         verdict = ("Link 1 (decoupling) DOMINATED -> cheap; STOP the ladder" if c >= 1.90
