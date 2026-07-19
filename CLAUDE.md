@@ -92,11 +92,11 @@ python scripts/eval_llm_transfer.py --condition essence --max-tokens 32768
 - Keep this file minimal. New findings go in `docs/FINDINGS.md`; update the
   one-line status below and nothing else here.
 
-**Status (2026-07-18):** F1–F19 merged; F20 (appearance-recon auxiliary) on
-branch `claude/appearance-aux`; suite 202/27. F20 tests and **corrects F19**:
-an aux head *does* force the essence-bearing channels (roughness/metallic/
-transmission) back into `z`, but behavior gain moves only 1.37→1.46 (ceiling
-1.57), not toward 2.26 — at 128px the channels sit in `z` too noisily to use.
-The 1.33→2.26 gap is ~+0.1 head + ~+0.1 encoder-retention + ~+0.7
-render-fidelity-bound; the last dominates. Next: render-fidelity upgrade
-(resolution/lighting/lower appearance_noise), the one expensive branch left.
+**Status (2026-07-19):** F1–F20 merged; F21 (render-fidelity ladder) on branch
+`claude/render-fidelity`; suite 203/27. F21 Arm 1 (cheap `--appearance-noise`
+sweep) spent the cheap knob and proved it is NOT the barrier: removing the
+authored noise entirely *widened* the oracle−model gap (0.80→1.01) — more
+essence information becomes available that the model extracts less of. Render
+legibility (128px, one top-down light), not authored noise, binds. The gate
+fires → Arm 2 (resolution 256 + oblique lighting) is warranted; that's the one
+genuinely costly branch (MJCF change + 4×-pixel retrain).

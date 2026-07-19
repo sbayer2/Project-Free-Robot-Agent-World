@@ -41,6 +41,12 @@ force the essence-bearing channels (roughness/metallic/transmission) back into
 the channels sit in `z` too noisily at 128px to use. The 1.33→2.26 gap is
 ~+0.1 head + ~+0.1 encoder-retention + **~+0.7 render-fidelity-bound**; the
 last dominates. F19's "loss/architecture, cheap fix" is retracted.
+**F21 (Arm 1)** confirms it from the other side: removing the authored
+`appearance_noise` entirely *widens* the oracle−model gap (0.80 → 1.01) —
+more essence information becomes available that the model extracts less of —
+so render legibility (128px, one top-down light), not authored noise, is the
+binding barrier. The cost-tiered ladder proved the expensive resolution+lighting
+arm is necessary before paying for it.
 
 ---
 
@@ -981,6 +987,64 @@ Tests: `tests/test_numpy_net.py`, `tests/test_dataset.py` (aux head + target).
 
 ---
 
+### F21 (Arm 1) — ⭐ Removing the authored appearance noise widens the gap, not closes it — the barrier is render legibility, confirmed
+
+*(Run 2026-07-19. Registered in `docs/RENDER_FIDELITY.md` at commit 46d6fbd,
+cost-tiered. Graded: **P1 correct**, **P2 falsified**, **P3 falsified (and
+backwards)**, P4 not reached. The gate fires → Arm 2 warranted.)*
+
+F20 concluded "render-fidelity-bound" but never isolated it from a second
+authored degradation. The generative chain has two: `essence
+—[appearance_noise 0.07, Link 1]→ appearance_params —[128px + one top-down
+light, Link 2]→ pixels → z → behavior`. Arm 1 relieves the *cheap* Link 1 — a
+new `--appearance-noise` generator flag — holding the 128px render fixed, and
+regenerates `pm_big` at noise ∈ {0.07, 0.03, 0.0} (byte-identical scenes and
+split per seed, since `gauss` consumes RNG state even at σ=0), retraining 3
+seeds each at `appearance_weight = 0.3`.
+
+| noise | oracle ceiling | reach r/m/t (untrained-z R²) | trained behavior gain | oracle−model gap |
+|---|---|---|---|---|
+| 0.07 | 2.280 | 0.18 / 0.50 / 0.20 | 1.480 | 0.80 |
+| 0.03 | 2.519 | 0.29 / 0.65 / 0.35 | 1.569 | 0.95 |
+| 0.0 | 2.566 | 0.33 / 0.62 / 0.41 | 1.562 | **1.01** |
+
+- **P1 correct — the knob works.** The oracle ceiling (shape+appearance→behavior
+  on the *clean* recorded params) rises monotonically 2.28 → 2.57 as noise
+  falls, exceeding 2.26 at noise 0: with less noise, appearance is a cleaner
+  essence proxy, so more behavior information is available in principle.
+- **P2 falsified — the two links are entangled, not separable.** CNN-reachability
+  of the material channels *rises* as noise falls (roughness 0.18 → 0.33,
+  transmission 0.20 → 0.41), where the two-degradation model predicted it would
+  hold constant. `appearance_noise` doesn't only decouple essence↔appearance; it
+  also injects a component that degrades what the 128px render exposes.
+- **P3 falsified, and in the opposite direction — the crux.** Lowering noise did
+  **not** lift the achievable behavior gain toward 2.26. The trained model
+  improved only 1.48 → 1.57 (and *plateaus* at noise 0.03), while the ceiling it
+  chases grew to 2.57. **The model captured a smaller fraction of a larger
+  ceiling: the oracle−model gap widened from 0.80 to 1.01.** (The registered
+  fresh-head ridge/kNN proxy actually *fell* to 1.32 at noise 0 — it stopped
+  upper-bounding once the z→behavior map turned more nonlinear than a linear/kNN
+  head can read, so trained gain is the sounder number; both sit far below the
+  ceiling.)
+
+**What this decides (the gate).** Even on the more favorable trained-gain metric
+(1.56 at noise 0), the achievable behavior sits below the 1.70 gate threshold
+while the available ceiling is 2.57 — so **`appearance_noise` is not the binding
+barrier.** Removing it entirely makes *more* essence information available that
+the model extracts *less* of, which is the signature of a downstream bottleneck:
+the 128px render under one top-down light does not expose the roughness/metallic/
+transmission cues sharply enough for the encoder to use, exactly F20's
+render-legibility diagnosis. **The cheap knob is spent; Arm 2 (resolution 256 +
+oblique lighting) is the warranted next step**, and the F21 ladder is doing its
+job — it proved the expensive arm is necessary before paying for it.
+
+Artifacts: `runs/render_fidelity/`, `data/pm_n{07,03,00}` (gitignored).
+Reproduce: sweep `generate_mujoco --appearance-noise {0.07,0.03,0.0}` +
+`train.py --appearance-weight 0.3`, then `scripts/render_fidelity_eval.py`.
+Test: `tests/test_material_sampler.py` (the flag is appearance-only).
+
+---
+
 ## 3. What is NOT yet known (honest gaps)
 
 - **What the coupling is MADE OF is now the live question (F18).** F13's
@@ -1022,27 +1086,28 @@ Tests: `tests/test_numpy_net.py`, `tests/test_dataset.py` (aux head + target).
 
 ---
 
-## 4. Next steps — the cheap branches are spent; what's left is render fidelity
+## 4. Next steps — F21 Arm 2 (resolution + lighting), gated in by Arm 1
 
-F8–F20 have all been run. F20 closed the cheap branches: the behavior head
-under-use (~+0.1) and the encoder's channel discard (~+0.1) are both real but
-small, and together they leave ~+0.7 of the 1.33→2.26 gap on the table because
-128px renders don't carry the physics-material channels sharply enough to use.
-What remains is genuinely expensive, and should be chosen deliberately:
+F8–F21(Arm 1) have all been run. F21 Arm 1 spent the cheap `appearance_noise`
+knob and proved it is not the barrier (removing it *widened* the oracle−model
+gap), gating in the expensive arm:
 
-1. **Render-fidelity upgrade (the dominant barrier, F20).** Higher resolution,
-   varied lighting to expose roughness/metallic specular cues, and/or lower
-   authored `appearance_noise` — then re-run the F18 oracle gap and the F20 aux.
-   Test: does the fresh-head ceiling on `z` rise past 1.57 toward 2.26 when the
-   channels are rendered more sharply? This is a data-regeneration cost.
-2. **Grab the two cheap tenths anyway.** Ship `appearance_weight = 0.3` as a mild
-   default (it raised the achievable ceiling 1.46 → 1.57 at no render cost, P4
-   non-monotone so don't go higher) and re-run the F13 coherence measurement at
-   that setting — does forcing the material channels into `z` also strengthen the
-   render↔behavior coherence?
-3. **Mass-sensitive probe family** (the F16-mandated F14 repair) — now clearly
-   the *same wall* as branch 1 from the reality side: the probe battery and the
-   renderer both fail to expose contact physics. Pursue with branch 1, not before.
+1. **F21 Arm 2 — render 256px + oblique/varied lighting (gated in).** The single
+   top-down light + flat ambient (`generate_mujoco.py:192`) washes out the
+   specular cues roughness/metallic produce; 128px undersamples them. Add a
+   varied light + `--resolution 256` (the flag exists; the decoder auto-grows two
+   blocks since image_size must be render_seed·2^k), regenerate, retrain at
+   `appearance_weight = 0.3`, re-run `scripts/render_fidelity_eval.py`.
+   Registered test (P4): does untrained-`z` reachability of roughness/metallic
+   rise above 0.33/0.62 and the trained gain climb past ~1.57 toward the
+   (now ~2.5) ceiling? Cost: an MJCF lighting change + a 4×-pixel retrain — a Mac
+   hour or two, the one genuinely costly branch.
+2. **The cheap tenth is banked.** `appearance_weight = 0.3` raised the achievable
+   gain and is already the F21 training default; consider shipping it as the
+   `ModelConfig` default once Arm 2 settles, and re-run F13 coherence at it.
+3. **Mass-sensitive probe family** (the F16-mandated F14 repair) — the *same
+   wall* as Arm 2 from the reality side (renderer and probe battery both fail to
+   expose contact physics). Pursue with Arm 2, not before.
 4. **GSO Fuel geometry** — parked (`docs/GSO_EXPERIMENT.md`).
 
 Reproduce F20: sweep `train.py --appearance-weight {0,0.3,1,3}` then
@@ -1054,6 +1119,6 @@ Reproduce F8: `python tests/batch_probe_stability.py`.
 
 ---
 
-*Tests: 202 across 27 suites, all passing; core imports with no
+*Tests: 203 across 27 suites, all passing; core imports with no
 mujoco/bpy/trimesh/numpy/mlx/torch. Personal research; not affiliated with World
 Labs.*
