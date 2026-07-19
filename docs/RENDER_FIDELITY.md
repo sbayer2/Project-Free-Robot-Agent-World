@@ -51,6 +51,19 @@ Runs only if Arm 1's P3 falsifier fires (noise=0 does not lift the ceiling).
 Regenerate at 256px with a varied/oblique light (an MJCF change so roughness and
 metallic cast legible specular highlights), retrain, re-measure.
 
+**Arm 2 GATED IN and run parameters (added 2026-07-19, after Arm 1).** Arm 1's
+P3 falsified backwards — removing `appearance_noise` *widened* the oracle−model
+gap (0.80 → 1.01), so legibility (Link 2), not authored noise, binds. Arm 2 runs.
+Concrete recipe, frozen here before the runs: regenerate at `--resolution 256
+--lighting oblique --appearance-noise 0.07` (three fixed oblique specular lights
++ low ambient, `RenderConfig.lighting`; noise held at the pm_big value so only
+the render changes), same 512 scenes / seed 1234 / extrapolation split; retrain 3
+seeds at `appearance_weight = 0.3 --image-size 256`, lr 5e-4, 50 epochs; evaluate
+with `render_fidelity_eval.py` against the **256px oracle ceiling** (recomputed
+on the new render, not the 128px 2.28). The single-arm comparison is oblique-256
+vs the Arm-1 flat-128 noise-0.07 baseline (oracle 2.28, trained gain 1.48,
+reach 0.18/0.50/0.20).
+
 ## Registered predictions
 
 - **P1 (manipulation check — the knob works):** the F18 oracle ceiling

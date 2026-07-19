@@ -136,6 +136,30 @@ class MeshAsset:
     texture_path: Optional[str] = None
 
 
+def _lighting_block(lighting: str) -> Tuple[str, str]:
+    """(headlight, lights) MJCF fragments. 'flat' = the historical single
+    top-down light + high ambient; 'oblique' = low ambient + three fixed oblique
+    specular lights so shininess/specular (roughness/metallic) cast legible
+    highlights as the cameras orbit (F21 Arm 2)."""
+    if lighting == "oblique":
+        head = '<headlight diffuse="0.35 0.35 0.35" ambient="0.18 0.18 0.18" ' \
+               'specular="0.3 0.3 0.3"/>'
+        lights = (
+            '<light pos="3 3 4" dir="-3 -3 -4" diffuse="0.5 0.5 0.5" '
+            'specular="0.6 0.6 0.6"/>\n'
+            '    <light pos="-4 2 3" dir="4 -2 -3" diffuse="0.4 0.4 0.4" '
+            'specular="0.5 0.5 0.5"/>\n'
+            '    <light pos="1 -4 3" dir="-1 4 -3" diffuse="0.4 0.4 0.4" '
+            'specular="0.5 0.5 0.5"/>'
+        )
+        return head, lights
+    if lighting != "flat":
+        raise ValueError(f"lighting must be 'flat' or 'oblique', got {lighting!r}")
+    head = '<headlight diffuse="0.6 0.6 0.6" ambient="0.4 0.4 0.4"/>'
+    lights = '<light pos="0 0 3" dir="0 0 -1" diffuse="0.8 0.8 0.8"/>'
+    return head, lights
+
+
 def build_mjcf(
     shape: Optional[str] = None,
     material: Optional[M.Material] = None,
@@ -144,6 +168,7 @@ def build_mjcf(
     gravity: float = -9.81,
     *,
     mesh: Optional[MeshAsset] = None,
+    lighting: str = "flat",
 ) -> str:
     """Build a single-scene MJCF string. Pure-Python: unit-testable, no runtime.
 
@@ -176,12 +201,13 @@ def build_mjcf(
     reflectance = 0.6 * v.metallic
     solref = _restitution_to_solref(p.restitution)
     gx, gy, gz = ground_euler
+    headlight, lights = _lighting_block(lighting)
 
     return f"""<mujoco model="pseudo_marble">
   <option gravity="0 0 {gravity}" timestep="0.002"/>
   <visual>
     <global offwidth="1280" offheight="1280"/>
-    <headlight diffuse="0.6 0.6 0.6" ambient="0.4 0.4 0.4"/>
+    {headlight}
   </visual>
   <asset>
     <material name="m_obj" rgba="{r} {g} {b} {a}"
@@ -189,7 +215,7 @@ def build_mjcf(
               reflectance="{reflectance:.3f}"/>
   </asset>
   <worldbody>
-    <light pos="0 0 3" dir="0 0 -1" diffuse="0.8 0.8 0.8"/>
+    {lights}
     <geom name="ground" type="plane" size="5 5 0.1" rgba="0.8 0.8 0.8 1"
           euler="{gx} {gy} {gz}" friction="{p.friction} 0.005 0.0001"/>
     <body name="object" pos="0 0 {object_z}">
@@ -304,7 +330,8 @@ def render_views(shape: str, material: M.Material, renders_dir: str,
     """Static multi-view renders of the object resting on the ground."""
     _require_mujoco()
     os.makedirs(renders_dir, exist_ok=True)
-    model = mujoco.MjModel.from_xml_string(build_mjcf(shape, material))
+    model = mujoco.MjModel.from_xml_string(
+        build_mjcf(shape, material, lighting=render_cfg.lighting))
     data = mujoco.MjData(model)
     mujoco.mj_forward(model, data)
 
@@ -559,6 +586,11 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
                    help="Gaussian stddev on the essence->appearance map (F21 Link-1 "
                         "lever; 0.07 = historical pm_big; lower = appearance is a "
                         "cleaner essence proxy, 0 = deterministic)")
+    p.add_argument("--lighting", default="flat", choices=["flat", "oblique"],
+                   help="render lighting (F21 Arm-2 Link-2 lever): 'flat' = one "
+                        "top-down light + high ambient (historical pm_big, washes "
+                        "out specular); 'oblique' = three oblique specular lights + "
+                        "low ambient, so roughness/metallic cast legible highlights")
     p.add_argument("--keep-trajectory", action="store_true",
                    help="store full per-probe trajectories (larger files)")
     p.add_argument("--topple-jitter-reps", type=int, default=0,
@@ -589,7 +621,8 @@ def main(argv: List[str]) -> None:
     _require_mujoco()
     args = parse_args(argv)
     shapes = [s.strip() for s in args.shapes.split(",") if s.strip()]
-    render_cfg = RenderConfig(resolution=args.resolution, num_views=args.views)
+    render_cfg = RenderConfig(resolution=args.resolution, num_views=args.views,
+                              lighting=args.lighting)
     physics_cfg = PhysicsConfig(
         topple_jitter_reps=args.topple_jitter_reps,
         topple_jitter_impulse_rel=args.topple_jitter_impulse,

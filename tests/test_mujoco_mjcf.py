@@ -34,6 +34,30 @@ def test_mjcf_is_well_formed_for_every_default_shape():
         ET.fromstring(xml)  # raises if malformed
 
 
+def test_lighting_modes_are_well_formed_and_distinct():
+    """F21 Arm 2: 'oblique' adds specular lights + low ambient; 'flat' is the
+    historical single top-down light. Both must parse; default is 'flat'."""
+    steel = M.get("steel")
+    flat = build_mjcf("box", steel)  # default
+    oblique = build_mjcf("box", steel, lighting="oblique")
+    ET.fromstring(flat)
+    ET.fromstring(oblique)
+    assert flat.count("<light ") == 1 and oblique.count("<light ") == 3
+    assert 'ambient="0.4 0.4 0.4"' in flat        # historical high ambient
+    assert 'ambient="0.18 0.18 0.18"' in oblique  # low ambient so highlights pop
+    assert 'specular="0.6 0.6 0.6"' in oblique    # lights emit specular
+    # default is byte-identical to explicit flat (old checkpoints/data reproducible)
+    assert build_mjcf("box", steel, lighting="flat") == flat
+
+
+def test_lighting_rejects_unknown_mode():
+    try:
+        build_mjcf("box", M.get("steel"), lighting="spooky")
+        raise AssertionError("expected ValueError for unknown lighting mode")
+    except ValueError:
+        pass
+
+
 def test_coupling_lives_in_one_geom():
     # density (-> mass), friction (physics), and material/rgba (appearance) must
     # all hang off the same object geom: the Marble idea in one element.
