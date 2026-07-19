@@ -515,13 +515,16 @@ def _sim_task(task: Tuple) -> List[Dict]:
 
 
 def assign_scenes(shapes: List[str], holdout: RegionHoldout, num_scenes: int,
-                  seed: int) -> List[Dict]:
-    """Sample (shape, continuous material) scenes and label train/test by region."""
+                  seed: int, appearance_noise: float = 0.07) -> List[Dict]:
+    """Sample (shape, continuous material) scenes and label train/test by region.
+
+    ``appearance_noise`` is the Gaussian stddev on the essence->appearance map
+    (F21 Link-1 lever; default 0.07 = the historical pm_big value)."""
     import random
 
     from pseudomarble.config import PHYSICS_NORMALIZERS as N
 
-    sampler = MaterialSampler(seed=seed)
+    sampler = MaterialSampler(seed=seed, appearance_noise=appearance_noise)
     rng = random.Random(seed)
     out: List[Dict] = []
     for i in range(num_scenes):
@@ -552,6 +555,10 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
                         "or interpolation (interior box, weak)")
     p.add_argument("--shapes", default=",".join(DEFAULT_SHAPES),
                    help="comma-separated MuJoCo primitive shape ids")
+    p.add_argument("--appearance-noise", type=float, default=0.07,
+                   help="Gaussian stddev on the essence->appearance map (F21 Link-1 "
+                        "lever; 0.07 = historical pm_big; lower = appearance is a "
+                        "cleaner essence proxy, 0 = deterministic)")
     p.add_argument("--keep-trajectory", action="store_true",
                    help="store full per-probe trajectories (larger files)")
     p.add_argument("--topple-jitter-reps", type=int, default=0,
@@ -591,7 +598,8 @@ def main(argv: List[str]) -> None:
 
     holdout = (EXTRAPOLATION_REGION_HOLDOUT if args.holdout_kind == "extrapolation"
                else DEFAULT_REGION_HOLDOUT)
-    assignments = assign_scenes(shapes, holdout, args.num_scenes, args.seed)
+    assignments = assign_scenes(shapes, holdout, args.num_scenes, args.seed,
+                                appearance_noise=args.appearance_noise)
     os.makedirs(args.output, exist_ok=True)
     n = len(assignments)
 
