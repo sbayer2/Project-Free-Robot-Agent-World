@@ -65,6 +65,9 @@ def combined_loss(
     render_target=None,
     render_weight: float = 1.0,
     behavior_weight: float = 1.0,
+    appearance_pred=None,
+    appearance_target=None,
+    appearance_weight: float = 0.0,
 ) -> Dict[str, float]:
     """Total + component losses; mirrors the MLX training objective.
 
@@ -72,7 +75,9 @@ def combined_loss(
     + essence_weight * essence MSE + render_weight * reconstruction MSE (the render
     target is the mean view). ``behavior_weight``/``render_weight`` default to 1.0
     so the default is the full shared objective; zero one to build the coherence
-    experiment's independent render-only / behavior-only models.
+    experiment's independent render-only / behavior-only models. The F20
+    appearance term (+ appearance_weight * appearance MSE) is added only when a
+    prediction is supplied and its weight is > 0.
     """
     b = mse(behavior_pred, behavior_target)
     e = mse(essence_pred, essence_target)
@@ -82,6 +87,10 @@ def combined_loss(
         r = mse(flatten_batch(render_pred), flatten_batch(render_target))
         out["render"] = r
         total += render_weight * r
+    if appearance_pred is not None and appearance_weight > 0:
+        a = mse(appearance_pred, appearance_target)
+        out["appearance"] = a
+        total += appearance_weight * a
     out["total"] = total
     return out
 

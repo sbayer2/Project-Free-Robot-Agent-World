@@ -105,6 +105,15 @@ class ModelConfig:
     essence_head_width: int = 128
     essence_weight: float = 0.3
 
+    # Auxiliary appearance head (z -> the 8 clean appearance_params the renderer
+    # used: base_color RGBA, roughness, metallic, transmission, ior; normalized).
+    # F20: forces the encoder to RETAIN the physics-material channels the render
+    # loss otherwise discards. Gated on appearance_weight > 0 so the default model
+    # is byte-identical (old checkpoints load; the suite is unchanged).
+    appearance_dim: int = 8
+    appearance_head_width: int = 128
+    appearance_weight: float = 0.0
+
     # Render head (z -> reconstructed canonical appearance). A lightweight conv
     # decoder (nearest-upsample + conv), NOT a Gaussian splat decoder: simpler,
     # CPU/Metal-portable, and sufficient because the coherence experiment measures

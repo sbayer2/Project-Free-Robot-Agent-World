@@ -66,6 +66,9 @@ if _HAVE_TORCH:
                 self.bottleneck_up = nn.Linear(cfg.latent_trits, cfg.latent_dim)
             self.behavior = _MLP(cfg.latent_dim, cfg.behavior_head_width, cfg.behavior_dim)
             self.essence = _MLP(cfg.latent_dim, cfg.essence_head_width, cfg.essence_dim)
+            if cfg.appearance_weight > 0:  # F20 aux head (mirrors mlx_net; gated)
+                self.appearance = _MLP(cfg.latent_dim, cfg.appearance_head_width,
+                                       cfg.appearance_dim)
 
             # Render decoder: z -> seed map -> (upsample + conv)*k -> RGB.
             from pseudomarble.config import num_upsample_steps
@@ -109,6 +112,8 @@ if _HAVE_TORCH:
             code, z = self.bottleneck(self.encode(images))
             out = {"z": z, "behavior": self.behavior(z),
                    "essence": self.essence(z), "render": self.decode(z)}
+            if self.cfg.appearance_weight > 0:
+                out["appearance"] = self.appearance(z)
             if code is not None:
                 out["code"] = code
             return out
@@ -120,6 +125,9 @@ if _HAVE_TORCH:
         def essence_from_z(self, z):
             return self.essence(z)
 
+        def appearance_from_z(self, z):
+            return self.appearance(z)
+
         def render_from_z(self, z):
             return self.decode(z)
 
@@ -129,19 +137,25 @@ def build_model(cfg: ModelConfig = ModelConfig()):
     return TorchModel(cfg)
 
 
-def loss_fn(out: Dict, behavior_t, essence_t, cfg: ModelConfig, render_t=None):
+def loss_fn(out: Dict, behavior_t, essence_t, cfg: ModelConfig, render_t=None,
+            appearance_t=None):
     """behavior_weight*behavior MSE + essence_weight*essence MSE
-    (+ render_weight*recon MSE).
+    (+ render_weight*recon MSE) (+ appearance_weight*appearance MSE).
 
     ``render_t`` is the mean-view target (B, image_size, image_size, 3); when
-    omitted the render term is skipped (e.g. behavior-only checks). Per-head weights
-    mirror cfg so this matches the MLX objective exactly."""
+    omitted the render term is skipped (e.g. behavior-only checks). ``appearance_t``
+    is the 8-dim material-channel target (F20); added only when appearance_weight>0
+    and the target is supplied. Per-head weights mirror cfg so this matches the MLX
+    objective exactly."""
     _require_torch()
     b = torch.mean((out["behavior"] - behavior_t) ** 2)
     e = torch.mean((out["essence"] - essence_t) ** 2)
     loss = cfg.behavior_weight * b + cfg.essence_weight * e
     if render_t is not None:
         loss = loss + cfg.render_weight * torch.mean((out["render"] - render_t) ** 2)
+    if cfg.appearance_weight > 0 and appearance_t is not None:
+        loss = loss + cfg.appearance_weight * torch.mean(
+            (out["appearance"] - appearance_t) ** 2)
     return loss
 
 

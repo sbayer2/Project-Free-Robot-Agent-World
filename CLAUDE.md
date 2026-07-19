@@ -92,10 +92,11 @@ python scripts/eval_llm_transfer.py --condition essence --max-tokens 32768
 - Keep this file minimal. New findings go in `docs/FINDINGS.md`; update the
   one-line status below and nothing else here.
 
-**Status (2026-07-16):** F1–F18 merged; F19 (z→appearance_params probe) on
-branch `claude/probe-appearance`; suite 197/27. F19 answers F18: the visible
-appearance IS in the latent (color retention 84–89%) but the behavior head
-converts none of it to held-out gain (loss/architecture — the cheap fix), while
-friction/restitution were authored nearly out of the pixels (render-bound — the
-expensive fix). Next: raise `essence_weight` / compositional essence→behavior
-head and re-measure the F13 coherence + F18 oracle gap.
+**Status (2026-07-18):** F1–F19 merged; F20 (appearance-recon auxiliary) on
+branch `claude/appearance-aux`; suite 202/27. F20 tests and **corrects F19**:
+an aux head *does* force the essence-bearing channels (roughness/metallic/
+transmission) back into `z`, but behavior gain moves only 1.37→1.46 (ceiling
+1.57), not toward 2.26 — at 128px the channels sit in `z` too noisily to use.
+The 1.33→2.26 gap is ~+0.1 head + ~+0.1 encoder-retention + ~+0.7
+render-fidelity-bound; the last dominates. Next: render-fidelity upgrade
+(resolution/lighting/lower appearance_noise), the one expensive branch left.
