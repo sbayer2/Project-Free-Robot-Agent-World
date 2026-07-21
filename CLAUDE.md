@@ -92,13 +92,12 @@ python scripts/eval_llm_transfer.py --condition essence --max-tokens 32768
 - Keep this file minimal. New findings go in `docs/FINDINGS.md`; update the
   one-line status below and nothing else here.
 
-**Status (2026-07-19):** F1–F20 merged; F21 (render-fidelity ladder, both arms)
-on branch `claude/render-fidelity`; suite 205/27. **F21 refutes F20's
-"render-bound" conclusion.** Arm 1 (`--appearance-noise` sweep) made the essence
-more *available* (noise→0 widened the oracle−model gap 0.80→1.01); Arm 2
-(`--lighting oblique` at 256px) made it more *legible* (roughness reachability
-0.16→0.37); **neither moved behavior gain off ~1.5.** Render fidelity is not the
-barrier — the essence→behavior coupling is intrinsically too subtle to learn from
-pixels at any fidelity. Terminus of the F18→F21 arc: the coupling is real (F13)
-but small, shape not essence (F18), and no lever recovers it. Next: a
-stronger-coupling world, or report the negative as the headline.
+**Status (2026-07-21):** F1–F21 merged to `main`; suite 199/27. The F18→F21
+fidelity arc is **closed**. **Headline:** a shared latent learns a small, real
+coupling (+0.146 behavior coherence) on real renders, but the prediction gain
+behind it is shape-driven, not essence-driven. Improving render fidelity (noise
+sweep + oblique 256 px lighting) makes the essence more available and more
+legible yet does **not** move behavior gain off ~1.5 — the authored
+physics↔appearance link is too subtle to exploit. The negative is now reported at
+equal prominence. Next strategic fork: build a stronger-coupled synthetic world,
+or accept this as the natural stopping point.
