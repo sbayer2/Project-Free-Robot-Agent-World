@@ -92,7 +92,9 @@ python scripts/eval_llm_transfer.py --condition essence --max-tokens 32768
 - Keep this file minimal. New findings go in `docs/FINDINGS.md`; update the
   one-line status below and nothing else here.
 
-**Status (2026-07-21):** F1–F21 merged to `main`; suite 199/27. The F18→F21
+**Status (2026-07-21):** F1–F21 merged to `main`; suite 205/27 (run with
+`.venv/bin/python -m pytest` — system `python3` lacks hypothesis and silently
+collects 6 fewer). The F18→F21
 fidelity arc is **closed**. **Headline:** a shared latent learns a small, real
 coupling (+0.146 behavior coherence) on real renders, but the prediction gain
 behind it is shape-driven, not essence-driven. Improving render fidelity (noise

@@ -72,7 +72,7 @@ Path 2 is a new research phase, not a tweak. It needs a new preregistration and 
 | Item | State |
 |---|---|
 | Branch | `main` with `claude/render-fidelity` merged |
-| Tests | 199 passed, 1 skipped, 4.5 s |
+| Tests | 205 passed, 1 skipped, ~2.5 s (`.venv/bin/python -m pytest`) |
 | Local feature branches | cleaned (`appearance-aux`, `probe-appearance`, `render-fidelity` deleted) |
 | Remote feature branches | still exist on origin; deletion pending user authorization to push |
 | Docs | `docs/FINDINGS.md` contains the full empirical record; `README.md` and `CLAUDE.md` status updated |
