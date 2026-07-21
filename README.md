@@ -145,8 +145,13 @@ Full setup (including the optional Blender path and Apple-silicon/MLX) is in
 | Training verified in-sandbox (PyTorch CPU stand-in; loss drops) | ✅ done + tested |
 | Render head (appearance): conv decoder → mean-view reconstruction | ✅ done + tested (128px/~1M trains) |
 | Coherence benchmark harness (shared vs. glued, with controls) | ✅ done + tested |
-| Run the experiment on real renders (the result) | ✅ run on the Mac — a **weak, seed-unstable positive** ([FINDINGS F9](docs/FINDINGS.md)); hardening (more seeds) next |
+| Real-render coherence: learned +0.146 behavior / +0.123 essence | ✅ 20 seeds, lr 5e-4 ([FINDINGS F13](docs/FINDINGS.md)) |
+| Encoder-collapse mechanism identified and fixed | ✅ F10→F12: collapse is early-LR overshoot; 5e-4 trains 20/20 healthy |
+| Oracle ceiling: the gain is shape, not essence | ✅ F18: model 1.41× vs shape-only 1.33×, shape+appearance 2.31× |
+| z-appearance probe + appearance auxiliary head | ✅ F19/F20: latent retains color; forcing material channels in does not lift behavior |
+| Render-fidelity ladder (noise + oblique 256 px lighting) | ✅ F21: neither lever moves behavior gain off ~1.5; render is not the barrier |
 | Real scanned objects (GSO): measured mass + concave mesh physics | ✅ data layer done; **physics path sandbox-verified** ([GSO_EXPERIMENT.md](docs/GSO_EXPERIMENT.md)) |
+| Real-product reality test (ABO) | ⚠️ VOID by preregistered gates ([FINDINGS F14/F16](docs/FINDINGS.md)); probe battery mass-blind under assumed contact params |
 
 ## Repository layout
 

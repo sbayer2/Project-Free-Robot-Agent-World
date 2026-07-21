@@ -92,11 +92,12 @@ python scripts/eval_llm_transfer.py --condition essence --max-tokens 32768
 - Keep this file minimal. New findings go in `docs/FINDINGS.md`; update the
   one-line status below and nothing else here.
 
-**Status (2026-07-18):** F1–F19 merged; F20 (appearance-recon auxiliary) on
-branch `claude/appearance-aux`; suite 202/27. F20 tests and **corrects F19**:
-an aux head *does* force the essence-bearing channels (roughness/metallic/
-transmission) back into `z`, but behavior gain moves only 1.37→1.46 (ceiling
-1.57), not toward 2.26 — at 128px the channels sit in `z` too noisily to use.
-The 1.33→2.26 gap is ~+0.1 head + ~+0.1 encoder-retention + ~+0.7
-render-fidelity-bound; the last dominates. Next: render-fidelity upgrade
-(resolution/lighting/lower appearance_noise), the one expensive branch left.
+**Status (2026-07-21):** F1–F21 merged to `main`; suite 199/27. The F18→F21
+fidelity arc is **closed**. **Headline:** a shared latent learns a small, real
+coupling (+0.146 behavior coherence) on real renders, but the prediction gain
+behind it is shape-driven, not essence-driven. Improving render fidelity (noise
+sweep + oblique 256 px lighting) makes the essence more available and more
+legible yet does **not** move behavior gain off ~1.5 — the authored
+physics↔appearance link is too subtle to exploit. The negative is now reported at
+equal prominence. Next strategic fork: build a stronger-coupled synthetic world,
+or accept this as the natural stopping point.

@@ -101,6 +101,26 @@ def test_materials_actually_vary():
     assert len(densities) > 40  # continuous, not a handful of buckets
 
 
+def test_generator_appearance_noise_flag_is_appearance_only():
+    """F21 Link-1 lever: assign_scenes(--appearance-noise) changes appearance but
+    NOT physics or the train/test split (gauss consumes RNG state even at sigma=0,
+    so the essence factors and holdout labels are identical across noise levels)."""
+    from pseudomarble.data.generate_mujoco import assign_scenes
+    from pseudomarble.splits import EXTRAPOLATION_REGION_HOLDOUT as H
+
+    a0 = assign_scenes(["box", "sphere"], H, 8, seed=0, appearance_noise=0.0)
+    a7 = assign_scenes(["box", "sphere"], H, 8, seed=0, appearance_noise=0.07)
+    # physics + split invariant across the noise knob
+    for r0, r7 in zip(a0, a7):
+        p0, p7 = r0["sample"].material.physics, r7["sample"].material.physics
+        assert (p0.density, p0.friction, p0.restitution) == \
+               (p7.density, p7.friction, p7.restitution)
+        assert r0["split"] == r7["split"]
+    # appearance actually moved
+    v0, v7 = a0[0]["sample"].material.visual, a7[0]["sample"].material.visual
+    assert (v0.roughness, v0.metallic) != (v7.roughness, v7.metallic)
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

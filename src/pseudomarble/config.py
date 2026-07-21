@@ -33,6 +33,11 @@ class RenderConfig:
     engine: str = "CYCLES"  # "CYCLES" (photoreal) or "BLENDER_EEVEE_NEXT"
     samples: int = 64  # Cycles samples; low to keep generation fast
     seed: int = 0
+    # F21 Arm 2: "flat" = one top-down light + high ambient (the historical
+    # pm_big render, which washes out specular cues); "oblique" = several fixed
+    # oblique specular lights + low ambient, so roughness (shininess) and metallic
+    # (specular/reflectance) cast legible highlights across the orbiting views.
+    lighting: str = "flat"
 
 
 @dataclass(frozen=True)
