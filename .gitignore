@@ -40,3 +40,9 @@ htmlcov/
 
 # MuJoCo instability warning logs (dropped in cwd by mj_step)
 MUJOCO_LOG.TXT
+
+# Claude Code machine-local settings (project settings.json IS tracked)
+.claude/settings.local.json
+
+# graphify knowledge graph — regenerable from the corpus
+graphify-out/

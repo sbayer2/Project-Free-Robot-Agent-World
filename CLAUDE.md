@@ -91,6 +91,13 @@ python scripts/eval_llm_transfer.py --condition essence --max-tokens 32768
   Mac. Do not retarget away from MLX.
 - Keep this file minimal. New findings go in `docs/FINDINGS.md`; update the
   one-line status below and nothing else here.
+- **graphify extraction always runs on in-session Claude subagents** (Agent tool,
+  `subagent_type="general-purpose"`). Ignore the skill's "if `GEMINI_API_KEY` or
+  `GOOGLE_API_KEY` is set, use the Gemini backend" branch — those keys live in
+  `~/.zshrc` for other tools, not for this repo. Never route extraction through
+  Gemini, OpenAI, or any metered API; `.claude/settings.json` blanks both keys
+  here so a headless `graphify` run fails loudly rather than picking one
+  silently.
 
 **Status (2026-07-21):** F1–F21 merged to `main`; suite 205/27 (run with
 `.venv/bin/python -m pytest` — system `python3` lacks hypothesis and silently
