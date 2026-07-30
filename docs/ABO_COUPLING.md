@@ -281,3 +281,108 @@ no arm clears it, the coherence arm is **VOID**, not negative.
 To be filled in on execution, following the F21 pattern: exact generator
 invocations per arm, checkpoint paths, and the eval script. Nothing in §8 may be
 edited after the first run — amendments are dated additions.
+
+---
+
+## Appendix A. The same thing in plain English
+
+*Added 2026-07-30. This is a companion to §1–§2, not a replacement — §1 is the
+technical statement, this is the intuition. Both are kept deliberately: the
+technical framing is what the predictions are written against, and this one is
+what makes the question legible to someone reading cold.*
+
+### The setup
+
+This project built a world where **how something looks is connected to how it
+acts**. Dark things are heavier. Rough-looking things grip more. Shiny things
+bounce differently. Those rules were written by hand, so the true answer is known
+exactly for every object.
+
+Then it built a model that sees pictures of an object and predicts what happens
+when you drop it, tilt it, or push it.
+
+**It mostly failed.** It learned one thing well: *tall things tip over, squat
+things slide.* That is **shape** — visible in the outline, no knowledge of the
+material required. What it never learned was *"that looks like metal, so it is
+heavy and it will thud instead of bounce."* That second thing — the hidden
+material facts readable only from the surface — is what this project calls
+**essence**.
+
+So the model reads the silhouette and ignores the material.
+
+### The question, as an eye chart
+
+Someone stands in front of an eye chart and cannot read the bottom line. Two
+completely different explanations:
+
+1. **The letters are too small.** Their eyes are fine. Print it bigger and they
+   will read it.
+2. **They cannot see.** Letter size is irrelevant. Print it in six-foot type and
+   they still cannot read it.
+
+You cannot tell these apart by watching one failure. This project has now failed
+at the same line four times (F18–F21).
+
+What F21 actually did, in that picture:
+
+- It **wiped the smudges off the sign** — removing `appearance_noise`. The
+  letters were always there; now nothing obscures them. (*availability*)
+- It **turned on the lights and moved the reader closer** — 256 px with oblique
+  specular lighting. Sharper, brighter, easier to perceive. (*legibility*)
+
+Both worked *as interventions*: the sign genuinely got cleaner and clearer. The
+reader still could not read it.
+
+**But F21 never made the letters bigger.**
+
+That is the whole gap. Cleaning and lighting a sign is not the same as enlarging
+the text. So after F21 we still cannot distinguish "the print is too small" from
+"this reader cannot see." F21 is commonly read as proof of small print — it is
+not. It is proof that dirt and darkness were not the problem.
+
+**F22 makes the letters bigger.** That is the entire idea: put a dial on how
+strongly appearance determines physics, and turn it all the way up.
+
+### Why the answer changes what happens next
+
+| If it turns out to be… | In the analogy | What we do |
+|---|---|---|
+| **The world** (print too small) | They read it at 40-point type | Build a stronger-coupled world — and we now know *how* strong to make it, instead of guessing |
+| **The architecture** (they cannot see) | Six-foot letters, still nothing | Stop. A better sign is pointless. And the published result gets *stronger*: not "our world was too subtle" but "this design cannot do this, period" |
+
+The second outcome is the good one, counter-intuitively. It is cheaper — it ends
+the project rather than starting a dataset-building phase — and it is a bigger
+claim.
+
+### How the experiment reads the answer
+
+**The dial (α).** How much does appearance determine physics? At 0 they are
+unrelated — a pure control, and if the model "learns" anything there, the
+measurement itself is broken (that is P1, the hard gate). At 1.0 appearance
+completely determines physics: look at the object and the answer is fully there.
+
+**Two kinds of letters (Arm R vs Arm U).** F19/F20 already measured which visual
+features the model actually notices. Brightness: noticed well (R² ≈ 0.8). Fine
+surface texture: barely noticed (0.16–0.37). So run the coupling through each.
+Writing the answer in a feature it *does* see and still getting nothing is far
+more damning than failing on one it never sees.
+
+**The squeeze (FSQ k=1).** F17 found something odd: shrink the model's internal
+memory to almost nothing and the connection between its two outputs gets
+*stronger*, not weaker. Starved of room, it is forced to share one representation
+instead of keeping two. So the experiment also runs the squeezed version — the
+model should get its best possible shot before being declared blind.
+
+**The decisive cell** is all three at once: strongest coupling, written in the
+feature it definitely notices, with the architecture squeezed to force sharing.
+Nothing happening *there* means every advantage was given and it still failed.
+
+### The honest part
+
+Most of this does not need the real ABO objects. The eye-chart question — small
+print or blindness — is answered better on synthetic data, where appearance is
+fully controlled. The real objects add shape variety, which matters for a
+*separate* criticism (five primitives is a thin basis for any claim about shape).
+
+Hence the two stages: the cheap synthetic pilot first, about an hour. If it
+already says "blind," stop and never build stage 2.
