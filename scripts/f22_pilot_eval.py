@@ -75,11 +75,16 @@ def main() -> None:
             z = encode_z(m, imgs)
             beh = behavior_from_z(m, z)
             gains.append(gain_ratio(Yb[tr], Yb[te], beh[te]))
-            # participation ratio: guards the F10 trap where a COLLAPSED encoder
-            # scores higher coherence. A gain claim from a collapsed z is void.
-            zc = z - z.mean(0)
-            ev = np.linalg.svd(zc, compute_uv=False) ** 2
-            prs.append(float(ev.sum() ** 2 / (ev ** 2).sum()) if ev.sum() > 0 else 0.0)
+            # Participation ratio guards the F10 trap: a COLLAPSED encoder scores
+            # HIGHER on coupling metrics, so a Delta claim from a collapsed z is
+            # void. Must use train.py:94's definition -- (sum var)^2 / sum(var^2)
+            # over per-dimension variance across scenes -- because F10/F12's
+            # healthy band (PR ~ 8-84) is stated in those units. The eigenvalue
+            # spectrum of the covariance is a different quantity and reads far
+            # lower on a correlated latent, which would look like collapse.
+            var = z.var(axis=0)
+            s1, s2 = float(var.sum()), float((var ** 2).sum())
+            prs.append(s1 * s1 / s2 if s2 > 0 else 0.0)
 
         gm, gs = float(np.mean(gains)), float(np.std(gains))
         delta = gm - shape_gain
