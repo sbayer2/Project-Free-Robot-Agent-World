@@ -1212,13 +1212,30 @@ independent evidence that the dial moved appearance and nothing else.
   destroying the information needed to predict behavior at all. Its latent PR is
   76.6 — the **highest** of any arm — confirming that participation ratio measures
   spread, not information.
-- **PROVISIONAL — the curve appears non-monotonic.** Δ peaks at r ≈ 0.64 and
-  *falls* to ~+0.5–0.6 above r ≈ 0.81 (Welch t ≈ 2.2–2.9 vs the high-r arms,
-  non-overlapping seed ranges, but n = 3). If it survives more seeds, maximum
-  coupling is **worse** than intermediate and Option B should *target* r ≈ 0.6
-  rather than maximise legibility. A confirmation sweep (8 seeds/point) with its
-  decision rule fixed in advance is registered in `scripts/f22_peak_test.py`.
-  **Do not cite the peak as established until that reports.**
+- **The apparent non-monotonicity did NOT survive — resolved, not claimed.** At
+  n = 3 the curve looked like it peaked at r ≈ 0.64 (+0.925) and fell above
+  r ≈ 0.81 (Welch t ≈ 2.2–2.9, non-overlapping seed ranges). A confirmation sweep
+  to 8 seeds/point, with its decision rule fixed *before* the seeds were read
+  (`scripts/f22_peak_test.py`: CONFIRMED needs t ≥ 2.5 **and** diff ≥ 0.20),
+  returns **INCONCLUSIVE**:
+
+  | r | n | Δ | sd | range |
+  |---|---|---|---|---|
+  | 0.636 | 8 | +0.918 | 0.416 | [+0.05, +1.46] |
+  | 0.809 | 8 | +0.650 | 0.232 | [+0.23, +0.97] |
+  | 0.992 | 8 | +0.717 | 0.178 | [+0.44, +1.06] |
+
+  peak vs max: diff +0.201, **Welch t 1.25** (was 2.86 at n = 3). The mean barely
+  moved (+0.925 → +0.918); the **variance nearly tripled** (sd 0.170 → 0.416).
+  The added seeds ran +0.79/+1.15/+1.46/**+0.05**/+1.11 — a near-total failure at
+  the same coupling that elsewhere produced the best result in the study. So
+  r ≈ 0.64 is not reliably *higher*, it is markedly **less stable**; the n = 3
+  signal was three seeds clustering by chance. Recorded as a caution: at n = 3
+  this arc's own seed noise can manufacture a t ≈ 2.9.
+- **Consequent guidance:** *exceed* r ≈ 0.6; do not tune to an optimum, since no
+  evidence supports one and the variance near 0.64 argues against sitting there
+  deliberately. All three high-coupling points (8 seeds each) land at Δ +0.65 to
+  +0.92 versus the historical +0.152, so the headline does not rest on the peak.
 
 **What this decides.** The strategic fork at §4 below is resolved: **Option B is
 worth building, and it now has a calibrated target** — r ≈ 0.6, roughly
@@ -1292,9 +1309,10 @@ of the architecture or the pipeline. What's left:
    the calibration the earlier version of this list could only guess at: the
    essence becomes substantially learnable at **r ≈ 0.6** (roughly
    `--coupling-gain 1.5`), where gain reaches 2.257 against a 2.311 ceiling. The
-   historical coupling sits at **r = 0.263**, about half what is needed. Whether
-   to target r ≈ 0.6 exactly or merely exceed it depends on the provisional
-   non-monotonicity (see F22a); `scripts/f22_peak_test.py` decides it.
+   historical coupling sits at **r = 0.263**, about half what is needed. Build to
+   *exceed* r ≈ 0.6 rather than tuning to an optimum: the apparent peak at
+   r ≈ 0.64 did not survive 8 seeds (`scripts/f22_peak_test.py`, INCONCLUSIVE),
+   and that point is the least stable in the study (sd 0.416, one seed at +0.05).
 2. **Narrow the published negative rather than retract it.** The F18→F21 result
    stands as stated *for a world coupled at r ≈ 0.26* — it is not a general claim
    about shared latents, and should no longer be written as one. The honest
