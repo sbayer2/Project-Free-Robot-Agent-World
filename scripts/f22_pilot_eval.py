@@ -41,6 +41,12 @@ ARMS = [
     # stage 1.5 gain sweep: locates WHERE learnability switches on between the
     # pilot's two endpoints (g=1 -> Delta +0.152, g=8 -> +0.577). Option B needs
     # the threshold, not the endpoints -- a target it can be built against.
+    # fine sweep: the coarse points all sat above r=0.81 where Delta is already
+    # saturated, so these bracket the untested r=0.26 -> 0.81 gap where the
+    # transition must lie. Chosen in r-space (0.36/0.52/0.64), not g-space.
+    ("swp   a=1 g=1.1", "data/pm_f22_g11", "g11_cont", 0),
+    ("swp   a=1 g=1.3", "data/pm_f22_g13", "g13_cont", 0),
+    ("swp   a=1 g=1.5", "data/pm_f22_g15", "g15_cont", 0),
     ("swp   a=1 g=2", "data/pm_f22_g2", "g2_cont", 0),
     ("swp   a=1 g=3", "data/pm_f22_g3", "g3_cont", 0),
     ("swp   a=1 g=5", "data/pm_f22_g5", "g5_cont", 0),
