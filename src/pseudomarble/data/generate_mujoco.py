@@ -542,16 +542,23 @@ def _sim_task(task: Tuple) -> List[Dict]:
 
 
 def assign_scenes(shapes: List[str], holdout: RegionHoldout, num_scenes: int,
-                  seed: int, appearance_noise: float = 0.07) -> List[Dict]:
+                  seed: int, appearance_noise: float = 0.07,
+                  coupling_alpha: float = 1.0, coupling_gain: float = 1.0) -> List[Dict]:
     """Sample (shape, continuous material) scenes and label train/test by region.
 
     ``appearance_noise`` is the Gaussian stddev on the essence->appearance map
-    (F21 Link-1 lever; default 0.07 = the historical pm_big value)."""
+    (F21 Link-1 lever; default 0.07 = the historical pm_big value).
+
+    ``coupling_alpha`` / ``coupling_gain`` are the F22 dials — how *much* the
+    appearance knows about the physics, and how *legibly* it says so. Defaults
+    reproduce pm_big exactly. See MaterialSampler and docs/ABO_COUPLING.md."""
     import random
 
     from pseudomarble.config import PHYSICS_NORMALIZERS as N
 
-    sampler = MaterialSampler(seed=seed, appearance_noise=appearance_noise)
+    sampler = MaterialSampler(seed=seed, appearance_noise=appearance_noise,
+                              coupling_alpha=coupling_alpha,
+                              coupling_gain=coupling_gain)
     rng = random.Random(seed)
     out: List[Dict] = []
     for i in range(num_scenes):
@@ -586,6 +593,16 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
                    help="Gaussian stddev on the essence->appearance map (F21 Link-1 "
                         "lever; 0.07 = historical pm_big; lower = appearance is a "
                         "cleaner essence proxy, 0 = deterministic)")
+    p.add_argument("--coupling-alpha", type=float, default=1.0,
+                   help="F22 dial: HOW MUCH appearance knows about physics. "
+                        "1.0 = historical coupling; 0.0 = zero-coupling CONTROL "
+                        "(appearance carries no physics information, so any "
+                        "measured gain there is an instrument leak)")
+    p.add_argument("--coupling-gain", type=float, default=1.0,
+                   help="F22 dial: HOW LEGIBLY physics is written into "
+                        "appearance ('letter size'). 1.0 = historical confounded "
+                        "map; >1 blends toward a dedicated full-range channel per "
+                        "physics factor. This is the axis F21 never touched")
     p.add_argument("--lighting", default="flat", choices=["flat", "oblique"],
                    help="render lighting (F21 Arm-2 Link-2 lever): 'flat' = one "
                         "top-down light + high ambient (historical pm_big, washes "
@@ -632,7 +649,9 @@ def main(argv: List[str]) -> None:
     holdout = (EXTRAPOLATION_REGION_HOLDOUT if args.holdout_kind == "extrapolation"
                else DEFAULT_REGION_HOLDOUT)
     assignments = assign_scenes(shapes, holdout, args.num_scenes, args.seed,
-                                appearance_noise=args.appearance_noise)
+                                appearance_noise=args.appearance_noise,
+                                coupling_alpha=args.coupling_alpha,
+                                coupling_gain=args.coupling_gain)
     os.makedirs(args.output, exist_ok=True)
     n = len(assignments)
 

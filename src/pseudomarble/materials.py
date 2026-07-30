@@ -242,13 +242,57 @@ class MaterialSampler:
     the essence must be inferred, not read off.
     """
 
-    def __init__(self, seed: int = 0, appearance_noise: float = 0.07) -> None:
+    def __init__(self, seed: int = 0, appearance_noise: float = 0.07,
+                 coupling_alpha: float = 1.0, coupling_gain: float = 1.0) -> None:
+        """``coupling_alpha`` and ``coupling_gain`` are the F22 dials
+        (docs/ABO_COUPLING.md). Both default to the historical behaviour, and
+        neither consumes RNG at its default, so F1-F21 datasets regenerate
+        byte-identically.
+
+        * ``coupling_alpha`` (α) — **how much** the appearance knows about the
+          physics. The appearance is built from
+          ``α * true_factor + (1 - α) * decoy_factor``, where the decoy is drawn
+          from the same distribution, so the *marginal* appearance statistics do
+          not shift with α (only its relationship to physics does). α = 1 is the
+          historical coupling; **α = 0 is the zero-coupling control** — appearance
+          carries no information about physics, so any measured signal there is a
+          leak in the instrument (P1, the hard gate).
+        * ``coupling_gain`` (g ≥ 1) — **how legibly** the physics factors are
+          written into appearance: the "letter size" of the eye chart. At g = 1
+          the historical map applies, in which ``grip`` reaches appearance only
+          through a 0.25 coefficient on ``roughness`` that is also driven by
+          ``hardness`` (-0.55) and ``clarity`` (-0.70). As g grows, each channel
+          is blended (weight ``1 - 1/g``) toward a *dedicated* full-range map
+          giving every physics factor its own unconfounded channel.
+
+        α and g are orthogonal on purpose. F21 established that cleaning
+        (``appearance_noise``) and lighting the signal does not move behavior; g
+        is the axis F21 never touched — making the signal *stronger* rather than
+        clearer. Keeping them separate is what lets F22 distinguish "the coupling
+        was too faint" from "the architecture cannot route it at any strength".
+        """
+        if not 0.0 <= coupling_alpha <= 1.0:
+            raise ValueError(f"coupling_alpha must be in [0, 1], got {coupling_alpha}")
+        if coupling_gain < 1.0:
+            raise ValueError(f"coupling_gain must be >= 1, got {coupling_gain}")
         self.rng = random.Random(seed)
+        # Decoys draw from their OWN stream so that changing alpha never shifts
+        # the main factor stream. Without this, arms at different alpha sample
+        # *different scenes* — different answer keys — and their gains are not
+        # comparable. Matched arms are the entire point of the ladder.
+        self._decoy_rng = random.Random((seed + 1) * 2654435761 & 0xFFFFFFFF)
         self.noise = appearance_noise
+        self.coupling_alpha = coupling_alpha
+        self.coupling_gain = coupling_gain
 
     # -- internals -------------------------------------------------------- #
     def _n(self) -> float:
         return self.rng.gauss(0.0, self.noise)
+
+    @property
+    def _gain_weight(self) -> float:
+        """Blend weight toward the dedicated map: 0 at g=1, ->1 as g->inf."""
+        return 1.0 - 1.0 / self.coupling_gain
 
     def _appearance_from_factors(
         self, heaviness: float, grip: float, hardness: float, clarity: float
@@ -264,6 +308,19 @@ class MaterialSampler:
         hue = self.rng.random()
         sat = _clip01(0.15 + 0.45 * self.rng.random() - 0.3 * transmission)
         val = _clip01(0.85 - 0.35 * heaviness + self._n())
+
+        # F22 legibility dial. Blend each channel toward a DEDICATED full-range
+        # map: one physics factor per channel, no confounds, unit coefficient.
+        # Computed from the factors alone — no RNG — so g=1 leaves the historical
+        # stream untouched. The assignment is a legibility device, not a physical
+        # claim; it keeps the plausible directions (dense->metallic,
+        # grippy->rough) and gives restitution the one free channel left.
+        w = self._gain_weight
+        if w > 0.0:
+            metallic = _clip01((1.0 - w) * metallic + w * heaviness)
+            roughness = _clip01((1.0 - w) * roughness + w * grip)
+            val = _clip01((1.0 - w) * val + w * (1.0 - hardness))
+
         r, g, b = colorsys.hsv_to_rgb(hue, sat, val)
         return VisualProps(
             base_color=(r, g, b, 1.0),
@@ -303,8 +360,24 @@ class MaterialSampler:
     def _jit(self, jitter: float) -> float:
         return self.rng.uniform(-jitter, jitter)
 
+    def _decoupled(self, factor: float) -> float:
+        """Blend a true factor toward an independent decoy from the same
+        distribution (F22 α dial). Decoys come from ``_decoy_rng``, so the main
+        factor stream — and therefore the sampled scenes and their physics answer
+        key — is bit-identical at every α. Only the appearance moves."""
+        if self.coupling_alpha >= 1.0:
+            return factor
+        decoy = self._decoy_rng.random()
+        return self.coupling_alpha * factor + (1.0 - self.coupling_alpha) * decoy
+
     def _assemble(self, heaviness, grip, hardness, clarity, material_id) -> MaterialSample:
-        visual = self._appearance_from_factors(heaviness, grip, hardness, clarity)
+        # Appearance may be decoupled from the truth; PHYSICS always uses the
+        # true factors, so the answer key is unchanged and only the readability
+        # of the essence from pixels varies with α.
+        visual = self._appearance_from_factors(
+            self._decoupled(heaviness), self._decoupled(grip),
+            self._decoupled(hardness), clarity,
+        )
         physics = self._physics_from_factors(heaviness, grip, hardness)
         mat = Material(name=material_id or "sampled", visual=visual, physics=physics)
         factors = {
