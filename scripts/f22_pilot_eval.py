@@ -116,7 +116,15 @@ def main() -> None:
     dec = arms.get("loud  a=1 g=8 FSQ")
     base = arms.get("base  a=1 g=1")
     loud = arms.get("loud  a=1 g=8")
-    if dec and base:
+    # P1 is a HARD gate (docs/ABO_COUPLING.md section 5): if the control does not
+    # pass, no downstream arm is interpretable and no verdict may be printed.
+    # Printing one anyway is how a gated design quietly becomes an ungated one.
+    if ctrl and report["P1"]["verdict"] != "PASS":
+        verdicts.append(
+            "decisive cell SUPPRESSED -- P1 did not pass, so no downstream arm "
+            "is interpretable. Resolve the control before reading any verdict.")
+        report["decisive"] = {"suppressed_by": "P1 " + report["P1"]["verdict"]}
+    elif dec and base:
         dd = dec["delta"]
         # sign-consistency across seeds is required by the anchor in section 5.
         pos = sum(1 for x in dec["delta_per_seed"] if x > 0.15)
