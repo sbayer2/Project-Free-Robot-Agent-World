@@ -1315,6 +1315,102 @@ Reproduce F22b: `python scripts/abo_shape_oracle.py`.
 
 ---
 
+### F23 — ⭐ More available signal buys NEITHER unification NOR proportionate extraction: coherence flat (H1 NULL), efficiency falling (H2 CONFIRMED)
+
+*(Run 2026-07-30. Preregistered in `docs/COHERENCE_STRENGTH.md` with both decision
+rules committed as executable scripts before any run —
+`scripts/f23_coherence_test.py`, `scripts/f23_extraction_test.py`. 25 runs.
+The two hypotheses are independent by §6 of that document: **neither result may
+be cited as support for the other**, and both are reported here at equal
+prominence.)*
+
+F22a answered "world or architecture" with prediction **gain**. It never touched
+the metric the project was founded on. Coherence — nudge `z`, do the render and
+behavior decoders respond *together*? — is what directly tests *one latent, two
+projections*. Gain only asks whether behavior is predictable, which a model can
+satisfy through two internally separate pathways while refuting the thesis. And
+coherence had never been measured above r = 0.263, so F13's signature +0.146 was
+measured in the one condition F22a showed to be degenerate.
+
+#### H1 — coherence does NOT rise with coupling strength (NULL)
+
+All three gates passed, so the verdict is readable:
+
+| gate | value | |
+|---|---|---|
+| validity | r=0.263 learned = **+0.1517**, band [0.08, 0.22] | PASS — reproduces F13's **+0.146** |
+| control | independent baseline −0.00034 / −0.00369 | PASS — the disjoint-latent floor is ≈0 |
+| collapse | latent PR 28.1 / 22.5 | PASS (F12 healthy band) |
+
+| arm | trained | untrained | learned |
+|---|---|---|---|
+| r = 0.263 | 0.2602 ± 0.0674 | 0.1086 | **+0.1517** |
+| r = 0.636 | 0.2295 ± 0.0742 | 0.1086 | **+0.1208** |
+
+**PRIMARY = −0.0308, Welch t = −0.87** → NULL, and the sign is negative.
+
+In a world where the model extracts **86 %** of reachable signal versus ~16 %
+historically, the two heads are **no more unified than before**. Prediction
+improves through pathways that do not converge. That is a direct negative on
+"one latent, two projections", and sharper than anything F18–F21 produced,
+because it holds in a world *proven* to contain the signal rather than one that
+may merely have been too faint. The validity gate is what makes it trustworthy:
+the harness reproduces the historical number on the historical coupling.
+
+#### H2 — extraction efficiency FALLS as the world gets richer (CONFIRMED, fresh seeds)
+
+Tested on **seeds 8–15 only**; seeds 0–7 generated the hypothesis and were
+excluded by design (`--allow-stale` reproduces the biased number and suppresses
+the verdict).
+
+| r | n | fair ceiling | reachable | gain | fraction extracted |
+|---|---|---|---|---|---|
+| 0.636 | 8 | 2.476 | 1.145 | 2.317 | **86.1 %** ± 23.2 |
+| 0.992 | 8 | 3.083 | 1.752 | 1.988 | **37.5 %** ± 10.2 |
+
+**Difference +0.487, Welch t 5.43** against a prefixed bar of ≥ 0.20 and t ≥ 2.5.
+
+Δ alone could not see this (the F22a peak test was INCONCLUSIVE at t = 1.25):
+Δ is roughly flat (+0.92 vs +0.72) while the reachable signal grows by half
+(1.145 → 1.752). **The model does not get worse; the world gets richer and the
+model does not follow.** Note the fresh-seed effect is *larger* than the
+hypothesis-generating estimate (0.487 vs 0.385) — post-hoc hypotheses usually
+shrink on replication; this one grew, so the original was conservative rather
+than inflated. Caveat: the r = 0.636 arm has sd 23.2 with one seed at 113 %, a
+model beating the ridge/kNN oracle — the "ceiling" is a lower bound on what is
+achievable, not a hard limit.
+
+**Taken together (and not as mutual support):** more available signal buys
+neither unification nor proportionate extraction. Build a stronger world at
+r ≈ 0.64 and expect strong extraction; do not expect the latent to become more
+Marble-like as the world gets richer.
+
+#### Two disclosures about the rules themselves
+
+1. **H1's frozen rule specified statistics the driver cannot emit.**
+   `run_coherence_experiment.py`'s `agg()` returns mean/std/min/max/n and no
+   per-seed values, so "Welch t ≥ 2.5" and "≥75 % of seeds above reference"
+   evaluated to `nan` and `0/0`. The NULL branch (|PRIMARY| < 0.05) never
+   depended on them, so the verdict stands. Welch is now derived from summary
+   statistics (valid: `learned` shifts every seed by the same per-arm constant,
+   so its variance equals `trained_shared`'s) and the seed-consistency condition
+   was **dropped rather than approximated** — dropping a condition only makes
+   RISES *easier*, so the repair cannot have manufactured the NULL. Verified by
+   re-grading: identical result.
+2. **The per-arm normalization the preregistration insisted on was a no-op.**
+   The untrained baselines are 0.108558 and 0.108617 — differing by 6 × 10⁻⁵. An
+   untrained encoder's coherence is essentially image-independent, so the
+   cross-world concern that is real for the *gain* ceiling (2.311 → 3.107) does
+   **not** apply to coherence; comparing against F13's stored +0.146 would have
+   given the same answer. Checking rather than assuming was still correct — we
+   had no way to know in advance — but the honest record is that the precaution
+   was unnecessary here.
+
+Reproduce: `python scripts/f23_coherence_test.py` (H1),
+`python scripts/f23_extraction_test.py` (H2, fresh seeds only).
+
+---
+
 ## 4. Next steps — the gap is NOT intrinsic; the fork is resolved
 
 *(Rewritten 2026-07-30 after F22a. The previous version concluded the

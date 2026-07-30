@@ -191,3 +191,51 @@ been checked against the filesystem is a guess.)*
 - H2's fresh-seed design tests the *hypothesis*, not the *effect size* — the
   point estimate from seeds 0–7 remains biased upward by selection and must not
   be quoted as the magnitude.
+
+---
+
+## AMENDMENT (2026-07-30) — after both hypotheses ran
+
+Dated addition, not an edit. Results are in `docs/FINDINGS.md` F23.
+
+**B1 — H1 returns NULL; all three gates passed.** learned coherence +0.1517 at
+r = 0.263 versus +0.1208 at r = 0.636; PRIMARY −0.0308, Welch t −0.87. The
+validity gate passed convincingly (+0.1517 against F13's +0.146), which is what
+licenses reading the rest.
+
+**B2 — H2 returns DECLINE CONFIRMED on fresh seeds.** 86.1 % versus 37.5 %
+extraction, difference +0.487, Welch t 5.43, on seeds 8–15 only. The fresh-seed
+effect is *larger* than the hypothesis-generating estimate (0.487 vs 0.385).
+
+**B3 — H1's decision rule contained uncomputable conditions.** §4 required
+"Welch t ≥ 2.5 AND ≥ 6/8 seeds above the reference mean", but
+`run_coherence_experiment.py`'s `agg()` emits only mean/std/min/max/n. Both
+conditions returned `nan`/`0/0`. The NULL branch never used them, so the verdict
+stands unaffected. Welch is now computed from summary statistics; the
+seed-consistency condition is **dropped, not approximated**. Dropping a condition
+can only make RISES easier, so the repair cannot have produced the NULL — checked
+by re-grading (PRIMARY −0.0308, t −0.87, RISES False either way).
+
+*Lesson for successor preregistrations: a decision rule must be checked against
+what the tooling can actually emit, not only against what would be ideal to
+measure. `f23_extraction_test.py` computes its own per-seed values and had no
+such problem — the difference is that it owns its measurement and H1 delegates.*
+
+**B4 — the §3 normalization decision was correct in method and unnecessary in
+fact.** Untrained baselines came out 0.108558 (r = 0.263) and 0.108617
+(r = 0.636), a difference of 6 × 10⁻⁵: an untrained encoder's coherence is
+essentially image-independent. The cross-world hazard that motivated re-measuring
+the reference arm — real for the gain ceiling, which moves 2.311 → 3.107 — does
+not apply to coherence. The rejected framing ("exceeds +0.146 raw") would have
+returned the same verdict. Recorded because a precaution that turns out
+unnecessary is still worth distinguishing from one that was never needed: we had
+no way to know in advance, and the ceiling case proves the hazard is real
+elsewhere.
+
+**B5 — a knob the successor experiment will need is INERT.**
+`ModelConfig.coherence_weight` (`config.py:130`, "reserved for the coherence
+experiment") is referenced only in a docstring; `coherence_loss` is never applied
+in any training path. Any experiment that tries to *impose* unity via a
+cross-projection consistency loss must wire it first. This is the same inert-knob
+failure `tests/test_physics_config_wiring.py` guards against for `PhysicsConfig`
+— that test does not cover `ModelConfig`, which is why this survived.
