@@ -1195,11 +1195,34 @@ independent evidence that the dial moved appearance and nothing else.
   merely means a from-pixels model underperforms an oracle handed shape directly.
   The gate passed **as written** — no amendment was needed or made.
 - **The world reading wins, decisively.** Raising r from 0.263 to 0.636 lifts Δ
-  from +0.152 to **+0.925**, and gain from 1.484 to **2.257 against F18's fair
-  ceiling of 2.311** — i.e. at sufficient coupling the model extracts
-  *substantially all* the reachable essence signal, versus ~8% at F18. The
-  F18–F21 gap is **not intrinsic**; it was a coupling roughly **half** the
-  strength required.
+  from +0.152 to **+0.918** (8 seeds) and gain from 1.484 to 2.249. The F18–F21
+  gap is **not intrinsic**; it was a coupling roughly **half** the strength
+  required.
+- **But the ceiling rises with the coupling too — normalise before claiming.**
+  *(Corrected 2026-07-30: an earlier version of this entry compared the new
+  world's model gain to F18's 2.311 ceiling, which was computed on `pm_big` at
+  r = 0.263. That compares across worlds.)* Recomputing `shape+appearance` per
+  arm:
+
+  | r | fair ceiling | reachable | Δ | fraction extracted |
+  |---|---|---|---|---|
+  | 0.263 | 2.311 | 0.980 | +0.152 | **15.6 %** |
+  | 0.636 | 2.494 | 1.163 | +0.918 | **78.9 %** ±35.8 |
+  | 0.809 | 2.789 | 1.458 | +0.650 | **44.6 %** ±15.9 |
+  | 0.992 | 3.107 | 1.776 | +0.717 | **40.4 %** ±10.0 |
+
+  `shape` (1.331), `essence` (1.595) and `shape+essence` (3.243) are identical on
+  every arm — physics is untouched, so only `shape+appearance` moves. That is an
+  internal consistency check that the dial did what it claims.
+
+  So the honest statement is **78.9 % of reachable signal at r ≈ 0.64**, against
+  ~15.6 % historically — not "substantially all". And **extraction FALLS above
+  r ≈ 0.64** (44.6 %, 40.4 %) as the ceiling outruns the model: F21 Arm 1's
+  "smaller fraction of a larger ceiling" signature, reappearing at high coupling.
+  **NOT a claim** — the pre-registered rule was written for Δ, and switching to
+  fraction-extracted after Δ returned inconclusive is post-hoc metric selection
+  (it reaches Welch t 2.93 vs max, which *would* clear the bar). Registered as a
+  new hypothesis needing its own confirmation, not as a rescue of the old one.
 - **The transition is a smooth ramp, not a threshold.** Δ climbs monotonically
   −0.046 → +0.152 → +0.264 → +0.530 → +0.925 across r ∈ [0, 0.64]. (An earlier
   read of the coarse points as "saturates by g=2, a step not a ramp" was wrong:
