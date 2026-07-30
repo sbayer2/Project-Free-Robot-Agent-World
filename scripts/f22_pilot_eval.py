@@ -38,6 +38,12 @@ from render_fidelity_eval import behavior_from_z, load_arrays, shape_onehot  # n
 ARMS = [
     ("ctrl  a=0 g=1", "data/pm_f22_ctrl", "ctrl_cont", 0),
     ("base  a=1 g=1", "data/pm_f22_base", "base_cont", 0),
+    # stage 1.5 gain sweep: locates WHERE learnability switches on between the
+    # pilot's two endpoints (g=1 -> Delta +0.152, g=8 -> +0.577). Option B needs
+    # the threshold, not the endpoints -- a target it can be built against.
+    ("swp   a=1 g=2", "data/pm_f22_g2", "g2_cont", 0),
+    ("swp   a=1 g=3", "data/pm_f22_g3", "g3_cont", 0),
+    ("swp   a=1 g=5", "data/pm_f22_g5", "g5_cont", 0),
     ("loud  a=1 g=8", "data/pm_f22_loud", "loud_cont", 0),
     ("loud  a=1 g=8 FSQ", "data/pm_f22_loud", "loud_fsq1", 1),
 ]
