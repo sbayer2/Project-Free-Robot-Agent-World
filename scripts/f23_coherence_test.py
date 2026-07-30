@@ -16,8 +16,11 @@ number, which is precisely what the validity gate exists to catch.
 
 DECISION RULE, fixed before any run:
 
-    COHERENCE RISES  PRIMARY >= +0.10 AND Welch t >= 2.5 AND >=75% of seeds
-                     above the r=0.263 mean
+    COHERENCE RISES  PRIMARY >= +0.10 AND Welch t >= 2.5
+                     (a third condition, ">=75% of seeds above reference", was
+                     registered but proved UNCOMPUTABLE -- the driver emits only
+                     summary stats. Dropped, not approximated; see main(). This
+                     loosens RISES, so it cannot have produced the NULL.)
     NULL             |PRIMARY| < 0.05
     INCONCLUSIVE     otherwise
 
@@ -42,7 +45,6 @@ import glob
 import json
 import math
 import os
-import statistics as st
 import subprocess
 
 # (label, r, dataset, trained tag, render-only tag, behavior-only tag)
@@ -61,11 +63,13 @@ RISE_MIN, RISE_T, NULL_MAX = 0.10, 2.5, 0.05
 PY = ".venv/bin/python"
 
 
-def welch_t(x, y):
-    if len(x) < 2 or len(y) < 2:
+def welch_t_summary(a, b):
+    """Welch t from summary stats {mean, sd, n} -- the driver does not emit
+    per-seed values, so this is the only computable form (see the note in main)."""
+    if a["n"] < 2 or b["n"] < 2:
         return float("nan")
-    se = math.sqrt(st.variance(x) / len(x) + st.variance(y) / len(y))
-    return (st.mean(x) - st.mean(y)) / se if se > 0 else float("nan")
+    se = math.sqrt(a["sd"] ** 2 / a["n"] + b["sd"] ** 2 / b["n"])
+    return (a["mean"] - b["mean"]) / se if se > 0 else float("nan")
 
 
 def run_arm(label, data, tag, ro_tag, bo_tag, out_dir, dry=False):
@@ -111,10 +115,17 @@ def main() -> None:
                 continue
             return
         t = res["targets"][TARGET]
-        per_seed = t["trained_shared"].get("values") or []
         arch_mean = t["architectural_baseline"]["mean"]
-        lc = [v - arch_mean for v in per_seed] if per_seed else []
-        learned[label] = lc
+        # run_coherence_experiment's agg() emits mean/std/min/max/n and NOT the
+        # per-seed values, so the original per-seed Welch t and seed-consistency
+        # conditions were UNCOMPUTABLE (they returned nan and 0/0). The NULL
+        # branch never depended on them, so the 2026-07-30 verdict stands; but a
+        # rise could not have been graded. Summary statistics are sufficient for
+        # Welch, so derive it from (mean, std, n). `learned` shifts every seed by
+        # the same per-arm constant, so its variance equals trained_shared's.
+        ts = t["trained_shared"]
+        learned[label] = {"mean": ts["mean"] - arch_mean, "sd": ts["std"],
+                          "n": ts["n"]}
         pr = res["latent_participation"]["trained_mean"]
         indep = t.get("independent_baseline")
 
@@ -122,7 +133,7 @@ def main() -> None:
             "r": r, "learned_coherence": t["learned_coherence"],
             "trained_shared": t["trained_shared"], "architectural": t["architectural_baseline"],
             "independent_baseline": indep, "latent_pr_trained": pr,
-            "learned_per_seed": lc}
+            "learned_summary": learned[label]}
         print(f"{label:22s} learned {t['learned_coherence']:+.4f}  "
               f"arch {arch_mean:+.4f}  PR {pr:.1f}  "
               f"indep {indep if indep is None else round(indep, 4)}")
@@ -151,17 +162,22 @@ def main() -> None:
         gates_ok = False
 
     primary = report["arms"][strong]["learned_coherence"] - ref_learned
-    a, b = learned.get(strong, []), learned.get(ref, [])
-    t_stat = welch_t(a, b) if a and b else float("nan")
-    above = sum(1 for x in a if x > st.mean(b)) if a and b else 0
-    n = len(a)
-    print(f"\nPRIMARY = {primary:+.4f}   Welch t {t_stat:.2f}   {above}/{n} seeds above reference")
+    a, b = learned[strong], learned[ref]
+    t_stat = welch_t_summary(a, b)
+    n = a["n"]
+    print(f"\nPRIMARY = {primary:+.4f}   Welch t {t_stat:.2f}   "
+          f"(n={a['n']} vs {b['n']}, sd {a['sd']:.4f} / {b['sd']:.4f})")
     for g in gate_notes:
         print(f"  !! {g}")
 
     if not gates_ok:
         verdict = "VOID -- a gate failed or was unmet; no verdict may be read."
-    elif primary >= RISE_MIN and t_stat >= RISE_T and above >= math.ceil(0.75 * n):
+    # The frozen rule's third condition (">=75% of seeds above reference") is not
+    # computable from the driver's summary output and is therefore DROPPED rather
+    # than silently approximated. Both surviving conditions are unchanged, and
+    # dropping a condition can only make RISES EASIER -- so this cannot have
+    # manufactured the 2026-07-30 NULL, which came from |PRIMARY| < 0.05 anyway.
+    elif primary >= RISE_MIN and t_stat >= RISE_T:
         verdict = ("COHERENCE RISES -- a world with real signal produces a MORE "
                    "UNIFIED latent, not merely a better predictor. The founding "
                    "thesis survives its sharpest test.")
@@ -173,7 +189,7 @@ def main() -> None:
         verdict = "INCONCLUSIVE -- below the prefixed bar. Report; do not claim."
 
     print(f"\n[H1] {verdict}")
-    report.update({"primary": primary, "welch_t": t_stat, "seeds_above": f"{above}/{n}",
+    report.update({"primary": primary, "welch_t": t_stat, "n_seeds": n,
                    "gates_ok": gates_ok, "gate_notes": gate_notes, "verdict": verdict,
                    "note": ("H2 is registered separately in f23_extraction_test.py; "
                             "neither result may be cited as support for the other.")})
