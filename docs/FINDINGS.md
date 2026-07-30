@@ -1140,35 +1140,178 @@ Tests: `tests/test_material_sampler.py` (noise flag), `tests/test_mujoco_mjcf.py
 
 ---
 
-## 4. Next steps — the fidelity arc is closed; the gap is intrinsic
+### F22a — ⭐ The limit was the WORLD, not the architecture: strengthen the coupling and the essence is learned (Δ +0.152 → +0.925). F18–F21's "intrinsic" gap is not intrinsic
 
-F8–F21 have all been run. F21 closed the render-fidelity hypothesis both ways
-(noise and legibility levers, neither moved behavior), refuting F20's
-"render-bound" claim. The ~0.8 oracle−model gap is now understood as *intrinsic*
-to the authored world — the physics↔appearance coupling is near the floor of what
-an encoder can exploit — not a fixable rendering or loss deficiency. What's left
-is not "close the gap" but "change the world or the question":
+*(Run 2026-07-30. Stage 1 of `docs/ABO_COUPLING.md`, the synthetic pilot that
+gates the ABO arms. Graded: **P1 correct** (control passed as frozen),
+**P4 falsified** (FSQ reduces Δ rather than amplifying it). P2/P3/P5/P6 are
+stage-2 predictions and were not reached — but the stage-2 gate FAILED for an
+unrelated reason, below. 21 runs at 128px, lr 5e-4, 50 epochs, 3 seeds/arm.)*
 
-1. **A stronger authored coupling (a new synthetic world), if the goal is to
-   study a *learnable* essence at all.** pseudo-marble's coupling was deliberately
-   subtle (appearance a weak cue); F21 shows it is *too* subtle to recover for
-   behavior. A world where appearance more strongly determines physics would let
-   the model actually learn the essence — a design choice, not a bug fix. This is
-   the honest pivot if the essence-learning question is to stay alive.
-2. **Accept the negative and report it as the headline.** The instrument's most
-   defensible result is now: *a shared latent recovers shape, not hidden material
-   essence, and no fidelity lever changes that* — a real, preregistered,
-   multiply-corrected finding about the limits of picture→physics from a subtly
-   coupled world. This is the F18→F21 story, and it may be the natural stopping
-   point.
-3. **Mass-sensitive probe family / GSO reality test** — parked. F21 reframes them:
-   if the *synthetic* essence is unlearnable-for-behavior even when made maximally
-   legible, the real-object versions (F14/F16) face the same intrinsic-subtlety
-   wall plus missing contact params. Pursue only under a stronger-coupling world.
+F18–F21 established that the model's gain is shape-driven and that no fidelity
+lever moves it, and concluded the coupling was "too subtle to exploit —
+intrinsic to the authored world". **That conclusion was consistent with a second
+reading nobody had separated:** that the encoder→behavior path cannot route
+material essence *at any strength*. F21 could not distinguish them, because its
+levers made the signal more **available** (`appearance_noise`↓) and more
+**legible** (256px + oblique), but never **stronger**. Cleaning and lighting a
+sign is not enlarging its text.
+
+**The apparatus.** Two orthogonal dials on `MaterialSampler`, defaulting to the
+historical behaviour and consuming no RNG at their defaults, so F1–F21 datasets
+regenerate byte-identically:
+
+- `coupling_alpha` (α) — *how much* appearance knows about physics:
+  `α·true + (1−α)·decoy`, decoy drawn from the same distribution. **α = 0 is the
+  zero-coupling control.** Decoys use a separate RNG stream so that every arm
+  samples the **same 512 objects, same physics answer key, same held-out corner**
+  — only what the pixels reveal changes. (A first implementation drew decoys from
+  the main stream, which shifted every later factor draw so arms sampled
+  *different worlds*; the tests caught it and now guard it.)
+- `coupling_gain` (g ≥ 1) — *how legibly*: each channel blends toward a dedicated
+  full-range map. This is the axis F21 never touched.
+
+Coupling strength is reported as the measured roughness↔friction correlation
+**r**, not as g — the g→r map is strongly nonlinear.
+
+| r | Δ = gain − shape-oracle | sd | model gain |
+|---|---|---|---|
+| 0.000 (control) | **−0.046** | 0.051 | 1.286 |
+| 0.263 (historical) | +0.152 | 0.107 | 1.484 |
+| 0.357 | +0.264 | 0.025 | 1.595 |
+| 0.517 | +0.530 | 0.319 | 1.861 |
+| **0.636** | **+0.925** | 0.170 | **2.257** |
+| 0.809 | +0.617 | 0.170 | 1.948 |
+| 0.927 | +0.478 | 0.081 | 1.809 |
+| 0.978 | +0.605 | 0.177 | 1.936 |
+| 0.992 | +0.577 | 0.126 | 1.908 |
+
+Shape-only oracle 1.331 on every arm — **identical to F18's published value**,
+independent evidence that the dial moved appearance and nothing else.
+
+- **P1 correct — the control is clean.** At α = 0 the model scores Δ = −0.046
+  (seeds −0.036/−0.101/−0.001), inside the frozen |Δ| < 0.05 gate, and no seed is
+  positive. A leak would be *positive* (appearance smuggling physics); negative Δ
+  merely means a from-pixels model underperforms an oracle handed shape directly.
+  The gate passed **as written** — no amendment was needed or made.
+- **The world reading wins, decisively.** Raising r from 0.263 to 0.636 lifts Δ
+  from +0.152 to **+0.925**, and gain from 1.484 to **2.257 against F18's fair
+  ceiling of 2.311** — i.e. at sufficient coupling the model extracts
+  *substantially all* the reachable essence signal, versus ~8% at F18. The
+  F18–F21 gap is **not intrinsic**; it was a coupling roughly **half** the
+  strength required.
+- **The transition is a smooth ramp, not a threshold.** Δ climbs monotonically
+  −0.046 → +0.152 → +0.264 → +0.530 → +0.925 across r ∈ [0, 0.64]. (An earlier
+  read of the coarse points as "saturates by g=2, a step not a ramp" was wrong:
+  the coarse sweep straddled the transition. Corrected by the fine sweep.)
+- **P4 falsified — FSQ does not amplify, it costs.** At matched coupling, the
+  1-trit bottleneck gives Δ **+0.170 vs +0.577** continuous, with double the
+  variance (sd 0.204) and one seed negative. F17 found scarcity raises
+  *coherence*; the prediction that it would also raise *prediction gain* is
+  refuted. A narrow bottleneck can force look and behavior to move together while
+  destroying the information needed to predict behavior at all. Its latent PR is
+  76.6 — the **highest** of any arm — confirming that participation ratio measures
+  spread, not information.
+- **PROVISIONAL — the curve appears non-monotonic.** Δ peaks at r ≈ 0.64 and
+  *falls* to ~+0.5–0.6 above r ≈ 0.81 (Welch t ≈ 2.2–2.9 vs the high-r arms,
+  non-overlapping seed ranges, but n = 3). If it survives more seeds, maximum
+  coupling is **worse** than intermediate and Option B should *target* r ≈ 0.6
+  rather than maximise legibility. A confirmation sweep (8 seeds/point) with its
+  decision rule fixed in advance is registered in `scripts/f22_peak_test.py`.
+  **Do not cite the peak as established until that reports.**
+
+**What this decides.** The strategic fork at §4 below is resolved: **Option B is
+worth building, and it now has a calibrated target** — r ≈ 0.6, roughly
+`--coupling-gain 1.5`, where the model recovers nearly all reachable essence. The
+historical `materials.py` coupling sits at r = 0.263, which explains F18–F21
+exactly. Option A's headline must be narrowed: the shared latent recovers shape
+not essence **in a world coupled at r ≈ 0.26**, not as a general property of the
+architecture.
+
+#### F22b — the ABO stage-2 gate FAILS: the target is outlier-dominated, a second cause of the F14/F16 VOID
+
+Stage 2 was to repeat this on real ABO geometry. Its P5 gate — computable with no
+model — **blocks it.** F18's shape-only oracle does not even transfer: every ABO
+object carries `input.shape == "mesh"`, so the one-hot control is a constant
+column. Rebuilt from geometry recovered off the prepared meshes (extents, aspect
+ratios, hull volume, area, relative centroid height):
+
+| oracle | gain |
+|---|---|
+| ABO geometry, category holdout | **0.964** |
+| ABO geometry, iid split | **1.047** |
+| pm_big shape-only (F18) | 1.331 |
+
+Below 1.0 is worse than predicting the training mean, and it is **not the split**
+— iid barely differs. It is the target:
+
+```
+push.path_length   median 0.175 m   p99 42.3 m   max 510.0 m
+push.max_height    median 0.246 m   p99  6.5 m   max  69.4 m
+1.4% of scenes exceed 10x the field normalizer
+```
+
+An object travelling 510 m from a push is MuJoCo diverging on concave decomposed
+meshes, not physics. MSE-based gain is then dominated by a handful of physically
+nonsensical scenes and pins near 1.0 **whatever the features are**.
+
+This is a **second, previously unrecorded cause of the F14/F16 VOID**. F14's
+mass-blindness diagnosis stands, but was incomplete: even a perfect predictor
+would have scored ≈1.0 on this target. F14's reported held-out gain of **0.96**
+matches this geometry oracle's **0.964** almost exactly. Also recorded: **0 of
+437 ABO meshes are watertight**, so `density` is 0.0 for every object.
+
+**Consequence.** F22 stage 2 must not run as written — authoring physics onto
+these meshes and measuring the same MSE gain would return ≈1.0 at every coupling
+strength, for reasons unrelated to essence. Outcomes need robustifying
+(winsorising, a robust gain, or a per-object stability gate) first. A synthetic
+result cannot authorise a run on a target that cannot resolve it.
+
+Reproduce F22a: `python -m pseudomarble.data.generate_mujoco --output
+data/pm_f22_<arm> --num-scenes 512 --views 16 --resolution 128 --seed 1234
+--coupling-alpha <a> --coupling-gain <g>`, then the standard 3-seed train
+(lr 5e-4, 50 epochs, 128px) and `python scripts/f22_pilot_eval.py`.
+Reproduce F22b: `python scripts/abo_shape_oracle.py`.
+
+---
+
+## 4. Next steps — the gap is NOT intrinsic; the fork is resolved
+
+*(Rewritten 2026-07-30 after F22a. The previous version concluded the
+oracle−model gap was "intrinsic to the authored world". **F22a refutes that**:
+strengthen the coupling and the gap largely closes. F21's levers changed how
+*available* and how *legible* the signal was, never how *strong*, so "intrinsic"
+was an over-reach from evidence that could not support it. The original text is
+preserved in git history at commit dad559e.)*
+
+F8–F22a have been run. F21 closed the render-fidelity hypothesis both ways;
+F22a then showed the remaining gap was a property of the *coupling strength*, not
+of the architecture or the pipeline. What's left:
+
+1. **Build the stronger-coupled world — Option B, now with a target.** F22a gives
+   the calibration the earlier version of this list could only guess at: the
+   essence becomes substantially learnable at **r ≈ 0.6** (roughly
+   `--coupling-gain 1.5`), where gain reaches 2.257 against a 2.311 ceiling. The
+   historical coupling sits at **r = 0.263**, about half what is needed. Whether
+   to target r ≈ 0.6 exactly or merely exceed it depends on the provisional
+   non-monotonicity (see F22a); `scripts/f22_peak_test.py` decides it.
+2. **Narrow the published negative rather than retract it.** The F18→F21 result
+   stands as stated *for a world coupled at r ≈ 0.26* — it is not a general claim
+   about shared latents, and should no longer be written as one. The honest
+   headline is now two-part: a subtly coupled world defeats this architecture,
+   **and** the same architecture succeeds once the coupling is strong enough.
+3. **Real-object work needs an outcome fix first, not just contact parameters.**
+   F22b found the ABO probe outcomes are outlier-dominated (`push.path_length`
+   max 510 m; geometry oracle 0.964 on the category holdout, 1.047 iid), so MSE
+   gain there cannot resolve *anything*. That is a second, independent cause of
+   the F14/F16 VOID alongside mass-blindness. Robustify the outcomes (winsorise,
+   robust gain, or a per-object stability gate) before any real-object arm —
+   including F22 stage 2 — is worth running.
 4. **`appearance_weight = 0.3`** raised nothing in the end (F21 Arm 2 gain 1.44 ≈
    baseline); do NOT ship it as a default — the F20 "cheap tenth" did not survive
    Arm 2's fairer render. Leave `ModelConfig.appearance_weight = 0`.
 
+Reproduce F22a/F22b: see their entries.
 Reproduce F21: see its entry. Reproduce F20: sweep `train.py --appearance-weight
 {0,0.3,1,3}` then `scripts/appearance_aux_eval.py`.
 Reproduce F19: `python scripts/probe_appearance.py`.
