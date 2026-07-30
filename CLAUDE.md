@@ -99,7 +99,7 @@ python scripts/eval_llm_transfer.py --condition essence --max-tokens 32768
   here so a headless `graphify` run fails loudly rather than picking one
   silently.
 
-**Status (2026-07-21):** F1–F21 merged to `main`; suite 205/27 (run with
+**Status (2026-07-30):** F1–F21 merged to `main`; suite 209/28 (run with
 `.venv/bin/python -m pytest` — system `python3` lacks hypothesis and silently
 collects 6 fewer). The F18→F21
 fidelity arc is **closed**. **Headline:** a shared latent learns a small, real
@@ -108,5 +108,8 @@ behind it is shape-driven, not essence-driven. Improving render fidelity (noise
 sweep + oblique 256 px lighting) makes the essence more available and more
 legible yet does **not** move behavior gain off ~1.5 — the authored
 physics↔appearance link is too subtle to exploit. The negative is now reported at
-equal prominence. Next strategic fork: build a stronger-coupled synthetic world,
-or accept this as the natural stopping point.
+equal prominence. **F22 is preregistered but NOT run** (`docs/ABO_COUPLING.md`):
+the arc's evidence cannot separate "coupling too faint" from "architecture cannot
+route essence at any strength" — the fidelity levers changed availability and
+legibility, never *strength*. Staged: a cheap synthetic pilot gates whether the
+ABO arms are built at all.

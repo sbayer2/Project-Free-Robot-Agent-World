@@ -102,8 +102,10 @@ using free tools (MuJoCo, optionally Blender) — no industrial GPU cluster.
 - **A small model might just memorize.** So we test it on shape+material
   combinations it *never saw together* — if it gets those right, it learned the
   rule, not the examples. (`splits.py`)
-- **Maybe "glued together" works just as well** as one shared understanding. If
-  so, that's a real (if deflating) finding, and we're willing to report it.
+- **Maybe "glued together" works just as well** as one shared understanding. We
+  said up front we'd report that if it happened, and largely it did — see the
+  headline below. The shared latent does learn a small, real coupling, but what
+  it actually uses is the object's *shape*, not its hidden material.
 
 The deeper background argument — Li's taxonomy, what Marble is and isn't, and how
 this project relates to it — lives in
@@ -133,6 +135,26 @@ Full setup (including the optional Blender path and Apple-silicon/MLX) is in
 
 ## Status
 
+> **Headline (the F18→F21 arc is closed).** A shared latent *does* learn a small,
+> real coupling between looks and behavior (+0.146, 20 seeds). But the prediction
+> gain behind it is **shape-driven, not essence-driven**: a model shown only the
+> object's silhouette — no density, friction or restitution — scores 1.33×, and
+> the trained model scores 1.41×, against a fair ceiling of 2.31×. It extracts
+> roughly **8% of the reachable material signal**. Making the material more
+> available (less noise) and more legible (256 px, oblique lighting) moves that
+> number by ~0. **Render fidelity is not the barrier.** The negative is reported
+> at equal prominence with the positive — see
+> [`docs/FINDINGS.md`](docs/FINDINGS.md) and
+> [`artifacts/RETROSPECTIVE.md`](artifacts/RETROSPECTIVE.md).
+>
+> **Open question (preregistered, not yet run):** that evidence is consistent
+> with two readings — the authored coupling was too *faint* to exploit, or the
+> architecture cannot route material essence to behavior at *any* strength.
+> Nothing so far separates them: the fidelity levers cleaned and lit the signal
+> without ever making it stronger. [`docs/ABO_COUPLING.md`](docs/ABO_COUPLING.md)
+> (F22) preregisters the experiment that does, with a plain-English explanation
+> in its Appendix A.
+
 | Part | State |
 |---|---|
 | Continuous materials (no memorizable 10-item menu) | ✅ done + tested |
@@ -152,6 +174,7 @@ Full setup (including the optional Blender path and Apple-silicon/MLX) is in
 | Render-fidelity ladder (noise + oblique 256 px lighting) | ✅ F21: neither lever moves behavior gain off ~1.5; render is not the barrier |
 | Real scanned objects (GSO): measured mass + concave mesh physics | ✅ data layer done; **physics path sandbox-verified** ([GSO_EXPERIMENT.md](docs/GSO_EXPERIMENT.md)) |
 | Real-product reality test (ABO) | ⚠️ VOID by preregistered gates ([FINDINGS F14/F16](docs/FINDINGS.md)); probe battery mass-blind under assumed contact params |
+| Coupling-strength ladder: is the limit the world or the architecture? | 📋 preregistered, not run ([ABO_COUPLING.md](docs/ABO_COUPLING.md)); staged — cheap synthetic pilot gates the rest |
 
 ## Repository layout
 
@@ -166,9 +189,11 @@ src/pseudomarble/
     dataset.py            # loads a dataset: images + behavior targets, batched
     generate_mujoco.py    # primary: renders + drop/tilt/push behavior (synthetic)
     generate_gso.py       # real scanned objects: measured mass + concave mesh physics
+    generate_abo.py       # real products (Amazon Berkeley Objects): listed weights
     generate_blender.py   # optional: photorealistic renders, same format
     mesh_validate.py      # checks a 3D mesh is solid enough to have a real mass
     collision.py          # keeps an object's real shape (e.g. a cup's cavity)
+    parallel.py           # unified-memory-aware render/sim phase split
   models/
     mlx_net.py            # the trainable encoder + behavior/essence heads (MLX, on Mac)
     numpy_net.py          # same architecture in numpy: forward-only, runs in any session
@@ -176,12 +201,22 @@ src/pseudomarble/
     losses.py             # framework-agnostic loss reference (tested anywhere)
     train.py              # training loop (MLX); eval on the held-out essence region
     coherence.py          # the "do look and behavior move together?" measurement
+    coherence_bench.py    # the shared-vs-glued comparison harness
 docs/
+  FINDINGS.md             # THE EMPIRICAL RECORD (F1-F21) — read this first
   TAXONOMY_NOTES.md       # background: Li's taxonomy, what Marble is and isn't
   BEHAVIOR_TASK.md        # the continuous + act-on-it task design (v2)
   ARCHITECTURE.md         # design decisions + honest limitations
+  HARDWARE.md             # why unified memory shapes the code
   HOWTO.md                # setup & usage
   GSO_EXPERIMENT.md       # real scanned objects: data layer built + sandbox-verified
+  ORACLE_CEILING.md       # F18 prereg: the shape-only oracle that reframed everything
+  PROBE_APPEARANCE.md     # F19 prereg: what the latent retains, per channel
+  APPEARANCE_AUX.md       # F20 prereg: forcing material channels back into z
+  RENDER_FIDELITY.md      # F21 prereg: the fidelity ladder (render is not the barrier)
+  ABO_COUPLING.md         # F22 prereg: world or architecture? (open; Appendix A = plain English)
+  PREDICTIVE_CODING.md    # the Rao & Ballard framing
+artifacts/                # RETROSPECTIVE.{md,html} — the public summary of the arc
 tests/                    # runnable anywhere, no special hardware
 ```
 
