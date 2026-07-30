@@ -386,3 +386,61 @@ fully controlled. The real objects add shape variety, which matters for a
 
 Hence the two stages: the cheap synthetic pilot first, about an hour. If it
 already says "blind," stop and never build stage 2.
+
+---
+
+## AMENDMENT (2026-07-30) — after stage 1 ran
+
+Dated addition, not an edit. Nothing in §8 was changed; the predictions below are
+graded exactly as frozen. Results are in `docs/FINDINGS.md` F22a/F22b.
+
+**A1 — P1 passed as frozen; no threshold was amended.** Control Δ = −0.046
+(seeds −0.036/−0.101/−0.001), inside the two-sided |Δ| < 0.05 gate, and no seed
+is positive. Mid-run, at n = 2, the control read −0.068 (MARGINAL) and a
+one-sided reformulation was *proposed* — leakage is directional, so a negative Δ
+is not a leak. The third seed made the strict form pass and the proposal was
+**dropped rather than adopted**: loosening a gate that already passes is
+spec-shopping, and it would have weakened the result it was meant to save.
+
+**A2 — P4 is FALSIFIED.** At matched coupling the 1-trit FSQ bottleneck gives
+Δ **+0.170 vs +0.577** continuous, doubles the variance (sd 0.204) and sends one
+seed negative. F17's "scarcity manufactures unity" raises *coherence*; the
+prediction registered here — that it would also raise *prediction gain* — does
+not hold. F17's generality is bounded accordingly.
+
+**A3 — the decisive cell MOVES to the continuous arm.** §7.2 named
+`Arm R, α = 1.0, FSQ k=1` decisive *because* P4 assumed FSQ stacks another lever.
+P4 is false, so that cell is not the maximum-advantage configuration; the
+continuous arm is. The stage-1 conclusion is unaffected (both cleared the
+threshold, the continuous arm far more decisively), but the verdict must be read
+off the continuous arm, and `scripts/f22_pilot_eval.py` was corrected to stop
+printing a stage-2 authorization it had no standing to give.
+
+**A4 — STAGE 2 IS BLOCKED, and not by anything §8 anticipated.** Its P5 gate,
+computable with no model, fails outright: F18's shape-only oracle does not
+transfer (every ABO object is `input.shape == "mesh"`, so the control is a
+constant column), and rebuilt from mesh geometry it scores **0.964** on the
+category holdout and **1.047** iid — both below predict-the-mean. The cause is
+the *target*: `push.path_length` has median 0.175 m and **max 510 m**, MuJoCo
+diverging on concave decomposed meshes, 1.4 % of scenes beyond 10× the field
+normalizer. MSE gain pins near 1.0 whatever the features are. This is a second,
+previously unrecorded cause of the F14/F16 VOID; F14's reported 0.96 matches the
+geometry oracle's 0.964 almost exactly. **Stage 2 must not run until the outcomes
+are robustified.** Also recorded: 0 of 437 ABO meshes are watertight, so
+`density` is 0.0 for every object, and P5 as written is not computable.
+
+**A5 — a normalization error this document did not guard against, now a standing
+rule.** Stage 1's first write-up compared the new world's model gain to F18's
+2.311 ceiling, which was computed on `pm_big` at r = 0.263 — a cross-world
+comparison. Strengthening the coupling raises the ceiling too (2.311 → 3.107), so
+the corrected quantity is *fraction of reachable signal*: 78.9 % at r ≈ 0.64
+versus 15.6 % historically. **Rule for all successor experiments: any comparison
+against a historical reference must recompute that reference on the world being
+measured, or state explicitly that it is a cross-world comparison.** This is the
+error the F23 preregistration (`docs/COHERENCE_STRENGTH.md`) is built to avoid.
+
+**A6 — stage 1's own method caution.** At n = 3 this arc's seed noise produced a
+Welch t ≈ 2.9 for a peak that dissolved to t = 1.25 at n = 8 (mean unchanged,
+sd 0.170 → 0.416). Three seeds is a smoke test here, not evidence. Successor
+preregistrations should fix decision rules in an executable script before any
+run, as `scripts/f22_peak_test.py` did.
