@@ -134,12 +134,20 @@ def main() -> None:
         dd = dec["delta"]
         # sign-consistency across seeds is required by the anchor in section 5.
         pos = sum(1 for x in dec["delta_per_seed"] if x > 0.15)
+        # Stage 2 authorization is NOT this gate's to give. scripts/abo_shape_oracle.py
+        # showed the ABO target is outlier-dominated (geometry oracle 0.964 on the
+        # category holdout, 1.047 iid; push.path_length max 510 m), so MSE gain there
+        # pins near 1.0 whatever the coupling is. A synthetic result cannot authorize
+        # a run on a target that cannot resolve it -- report the world/architecture
+        # verdict, and leave stage 2 to its own gate.
+        stage2 = (" Stage 2 remains BLOCKED by the ABO P5 gate (outlier-dominated "
+                  "outcomes); robustify before it can resolve anything.")
         if dd > 0.15 and pos >= 2:
             v = ("WORLD limit: stronger coupling IS learned -> Option B is worth "
-                 "building, with a calibrated target. Stage 2 (ABO) authorized.")
+                 "building, with a calibrated target." + stage2)
         elif loud and loud["delta"] > 0.15:
             v = ("WORLD limit (continuous only): gain appears without the "
-                 "bottleneck -> re-check the FSQ arm before authorizing stage 2.")
+                 "bottleneck -> re-check the FSQ arm." + stage2)
         else:
             v = ("ARCHITECTURE limit: every lever at maximum -- full coupling, "
                  "legible channel, forced unity -- and delta is flat. F18-F21 "
