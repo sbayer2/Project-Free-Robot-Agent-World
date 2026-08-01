@@ -281,3 +281,53 @@ distance matrices are 512² numpy ops, seconds. The permutation null is
 - **The alignment thresholds (0.05/0.03/0.02) are conventions**, set a priori
   by analogy to F23's bands and the chance floor, not derived from pilot data
   (there is none — that is the point of freezing them here).
+
+---
+
+## AMENDMENT (2026-08-01) — after the run
+
+*Everything above this line is unchanged from the freeze commit. This appendix
+records outcomes and grades; the full entry is `docs/FINDINGS.md` F24.*
+
+**Gates:** all passed. Self = 1.0 at every arm; shuffle 0.018–0.029 vs
+3×chance 0.059; PR 9.8–70.3, zero checkpoints dropped.
+
+**Verdicts (from `scripts/f24_verdicts.py`, unedited):**
+
+- **H1 → NULL.** PRIMARY = −0.0172 (t = −1.62). Secondary: learned(0) =
+  −0.154, learned(0.992) = +0.053.
+- **H2 → WORLD-SPECIFIC** by the frozen loud-side rule (d = +0.098,
+  t = 12.0, n = 16) — with the base-side mirror at −0.033 (t = −3.85), so the
+  honest scope is "world-specific only from the loud side"; §5's frozen
+  scope note applies.
+- **H3 → CONVERGENT at both couplings** (agreements 0.87–0.955, nulls
+  0.375–0.445, every pair above its p95). Content: shape-coded at both by the
+  1.2× rule; at r = 0.992 hardness MI rose 0.001 → 0.231 while shape fell
+  0.879 → 0.564.
+
+**Predictions graded:**
+
+- **P1 FALSIFIED at 3 of 4 arms** — the sign inverted: trained pairs align
+  *below* untrained pairs at r ≤ 0.636 (t −4.3 to −5.8). Training
+  individuates; only r = 0.992 shows positive learned alignment (+0.053,
+  t = 3.08). The confident prediction was wrong in the most informative way
+  available.
+- **P2 FALSIFIED** — NULL, not RISES. The fallback reading frozen in §9
+  applies verbatim: richer worlds change *what* is extracted (F23 H2), not
+  how unified (F23 H1) nor how convergent (this) the representation is.
+- **P3 CORRECT, under-called seven-fold** — the untrained floor is
+  0.67–0.72, not the predicted ≥ 0.10. 35× chance.
+- **P4 CORRECT by the frozen rule**, narrowed by the base-side mirror as
+  above.
+- **P5 CORRECT** at both couplings.
+- **P6 CORRECT by rule**; the registered-visible shift inside it (hardness
+  entering the trit at loud coupling) is recorded in F24 as an observation,
+  not a verdict.
+
+**Unregistered observation, labeled as such:** mutual kNN and linear CKA
+anti-correlate across arms (CKA learned positive at ctrl/base/g15, negative
+at loud — the mirror image of kNN), and the test-only secondary inverts the
+full-set sign at every arm. Both were computed under the preregistered plan
+(§2 required reporting them); the *interpretation* — individuation lives in
+the training region and in local neighborhoods, while global axes converge —
+is post-hoc and marked accordingly.
