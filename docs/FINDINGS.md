@@ -1411,6 +1411,106 @@ Reproduce: `python scripts/f23_coherence_test.py` (H1),
 
 ---
 
+### F24 — ⭐ Consensus is not free either: training INDIVIDUATES the latent below the untrained floor at every coupling but the loudest, while a 1-trit budget forces near-perfect cross-model agreement at every coupling
+
+*(Run 2026-08-01. Preregistered in `docs/CONVERGENCE.md`; the decision rules
+were committed as an executable script — `scripts/f24_verdicts.py` — in the
+same commit as the preregistration, before `scripts/f24_measure.py` first ran.
+All gates passed: self-alignment 1.0 exactly, scene-shuffle 0.018–0.029 vs
+3×chance 0.059, latent PR 9.8–70.3 with **zero** checkpoints dropped. 43
+continuous + 6 FSQ k=1 checkpoints, all pre-existing — no new training.
+Graded: **P1 falsified at 3 of 4 arms** (sign inverted), **P2 falsified**
+(NULL, not RISES), **P3 correct but underestimated seven-fold**, **P4 correct
+by the frozen rule with an asymmetry that narrows it**, **P5 correct**,
+**P6 correct by rule** with a large pre-registered-visible shift inside it.)*
+
+Motivation: the Platonic Representation Hypothesis (Huh et al. 2024,
+arXiv 2405.07987) claims independently trained models converge as capability
+rises, and names — without running — the falsification apparatus this project
+already owns: worlds that differ by construction. Coherence (F23) is
+within-model, cross-head; alignment is cross-model, same-representation. F23
+fixed one axis; this fixes the other. Metric: mutual kNN alignment (k = 10,
+the paper's own primary) over each arm's 512 scenes, **always reported as
+trained-pair minus untrained-pair on the same inputs** — 8 fresh inits per
+arm. That discipline turned out to be the difference between the right answer
+and a sign error, because:
+
+| arm | r | seeds | trained kNN | untrained floor | learned | Welch t |
+|---|---|---|---|---|---|---|
+| ctrl | 0.000 | 3 | 0.5249 | 0.6789 | **−0.1540** | −5.78 |
+| base | 0.263 | 8 | 0.5974 | 0.6761 | **−0.0787** | −4.33 |
+| g15 | 0.636 | 16 | 0.5767 | 0.6726 | **−0.0959** | −5.25 |
+| loud | 0.992 | 16 | 0.7773 | 0.7247 | **+0.0526** | +3.08 |
+
+- **The JL floor is enormous (P3, vindicated beyond its own prediction).**
+  Untrained encoder pairs align at 0.67–0.72 — **35× chance** (0.0196) — on
+  nothing but shared input statistics through random weights. P3 predicted
+  ≥ 0.10. Consequence for reading the literature: a raw PRH-style alignment
+  number with no untrained baseline is mostly floor.
+- **P1 falsified — training pushes seeds BELOW the floor.** At r ≤ 0.636,
+  independently trained seeds agree *less* with each other than untrained
+  encoders do (t = −4.3 to −5.8). Learning **individuates**: each seed carves
+  its own local neighborhood geometry out of the shared JL geometry. Only the
+  loudest world (r = 0.992) makes training a net converging force (+0.053).
+- **H1 NULL.** PRIMARY = learned(0.636) − learned(0.263) = −0.017, t = −1.62.
+  Reported beside F23's H1 NULL as two separate negatives, per both
+  preregistrations: a richer world changes *what* is extracted (F23 H2 — 86%
+  vs 16%), but neither how unified (F23) nor how convergent (this) the
+  representation becomes — until the coupling saturates near r ≈ 1.
+- **Where the individuation lives: the held-out corner inverts it.** On the
+  103 test scenes only, trained pairs agree *more* than untrained at
+  ctrl/base/g15 (0.86–0.90 vs 0.82) and the sign flips at loud (0.81 vs
+  0.83). The below-floor divergence is a property of the *training region* —
+  seed-idiosyncratic carving where the gradients lived, shared structure
+  showing through where they never went. (Registered as the secondary read;
+  the primary stays primary, the disagreement is reported as required.)
+- **kNN and CKA anti-correlate, exactly as the metric literature warns.**
+  Linear CKA (global structure) has trained > untrained at ctrl/base/g15
+  (0.95–0.98 vs 0.84–0.85) and trained < untrained at loud (0.908 vs 0.959) —
+  the mirror image of mutual kNN in every arm. Training at weak coupling
+  aligns the global axes while individuating local neighborhoods; at
+  saturated coupling the reverse. Neither metric alone would have reported
+  this correctly.
+- **H2 WORLD-SPECIFIC by the frozen rule — but only from the loud side.**
+  Loud-side paired d = +0.098 (t = 12.0, n = 16); the preregistered
+  base-side mirror is **−0.033** (t = −3.85): base seeds are no closer to
+  each other than to loud-trained latents once floors are subtracted. Every
+  cross-arm learned value is negative (−0.038 to −0.123). World-specificity
+  exists only where the world is loud enough to pin the geometry; the frozen
+  scope note in §5 of the preregistration (shape is shared across arms)
+  applies in full.
+- **H3 CONVERGENT at both couplings — the strongest effect in the study.**
+  Two independent 1-trit learners keep the **same 1.6 bits**: pairwise
+  agreement 0.87–0.955 against a selection-matched shuffle null of
+  0.375–0.445 (mean excess +0.51 / +0.53; every pair above its null p95).
+  While 256-dim continuous seeds diverge below the untrained floor, k = 1
+  seeds agree at 90–95%.
+- **H3b: the kept bits are shape — and begin re-ranking when the world
+  shouts.** At r = 0.263 the code is pure shape (MI 0.879 vs ≤ 0.004 for
+  every material factor). At r = 0.992 the frozen 1.2× rule still says
+  shape-coded (0.564 vs 0.231) — P6 correct — but hardness MI rose **from
+  0.001 to 0.231** while shape MI fell 0.879 → 0.564. The single trit starts
+  trading shape for material exactly when the coupling makes material worth
+  keeping. Recorded as a registered-visible shift inside a correct
+  prediction, not as a verdict.
+
+**What this adds to the arc.** F17 found scarcity manufactures *coherence*
+(within one model). F24 finds scarcity manufactures *consensus* (across
+models) — and that abundance does the opposite: free-form training under weak
+coupling diverges independent learners below even their untrained floor.
+Convergence at this scale is not what learning does by default; it is what
+constraint does — a loud world (weakly) or a starved budget (near-perfectly).
+The Platonic reading ("capable models converge") inverts here into its
+conditional form: models converge exactly insofar as something — world or
+bottleneck — leaves them no choice. Scale caveat as always: 1M params, 512
+scenes, one architecture; the PRH claim proper concerns capability grown by
+scale, which this instrument cannot dial.
+
+Reproduce: `python scripts/f24_measure.py` then
+`python scripts/f24_verdicts.py` (report at `runs/f24/f24_report.json`).
+
+---
+
 ## 4. Next steps — the gap is NOT intrinsic; the fork is resolved
 
 *(Rewritten 2026-07-30 after F22a. The previous version concluded the
@@ -1447,6 +1547,14 @@ of the architecture or the pipeline. What's left:
 4. **`appearance_weight = 0.3`** raised nothing in the end (F21 Arm 2 gain 1.44 ≈
    baseline); do NOT ship it as a default — the F20 "cheap tenth" did not survive
    Arm 2's fairer render. Leave `ModelConfig.appearance_weight = 0`.
+5. *(Added 2026-08-01 after F24.)* **If Option B is built, do not expect the
+   stronger world to unify or converge the latent on its own.** F23 (coherence
+   flat in r) and F24 (convergence flat in r, negative below the untrained
+   floor until r ≈ 1) both say the extra signal is spent on prediction, not on
+   structure. The F17/F24 pattern — scarcity manufactures coherence within a
+   model and consensus across models — says the Marble-like properties must be
+   *architected* (bottleneck, tying, or an explicit coherence objective), with
+   the strong world supplying the signal the constraint then routes.
 
 Reproduce F22a/F22b: see their entries.
 Reproduce F21: see its entry. Reproduce F20: sweep `train.py --appearance-weight
@@ -1465,6 +1573,6 @@ Reproduce F8: `python tests/batch_probe_stability.py`.
 
 ---
 
-*Tests: 205 across 27 suites, all passing; core imports with no
+*Tests: 231 across 30 suites, all passing (1 skipped); core imports with no
 mujoco/bpy/trimesh/numpy/mlx/torch. Personal research; not affiliated with World
 Labs.*

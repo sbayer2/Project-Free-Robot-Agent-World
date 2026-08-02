@@ -99,17 +99,17 @@ python scripts/eval_llm_transfer.py --condition essence --max-tokens 32768
   here so a headless `graphify` run fails loudly rather than picking one
   silently.
 
-**Status (2026-07-30):** F1–F21 merged to `main`; suite 209/28 (run with
+**Status (2026-08-01):** F1–F21 merged to `main`; F22–F24 complete on branches
+awaiting review (`claude/f22-coupling-dial` → `claude/f23-coherence-prereg` →
+`claude/f24-convergence-prereg`, stacked); suite 231/30 (run with
 `.venv/bin/python -m pytest` — system `python3` lacks hypothesis and silently
-collects 6 fewer). The F18→F21
-fidelity arc is **closed**. **Headline:** a shared latent learns a small, real
-coupling (+0.146 behavior coherence) on real renders, but the prediction gain
-behind it is shape-driven, not essence-driven. Improving render fidelity (noise
-sweep + oblique 256 px lighting) makes the essence more available and more
-legible yet does **not** move behavior gain off ~1.5 — the authored
-physics↔appearance link is too subtle to exploit. The negative is now reported at
-equal prominence. **F22 is preregistered but NOT run** (`docs/ABO_COUPLING.md`):
-the arc's evidence cannot separate "coupling too faint" from "architecture cannot
-route essence at any strength" — the fidelity levers changed availability and
-legibility, never *strength*. Staged: a cheap synthetic pilot gates whether the
-ABO arms are built at all.
+collects fewer). **Headline:** the F18–F21 gap was the *world*, not the
+architecture — strengthen the appearance↔physics coupling (F22a, r ≈ 0.26 →
+0.64) and the essence is learned (Δ +0.15 → +0.92, ~86 % of reachable). But the
+extra signal buys *prediction only*: coherence is flat in r (F23 H1 NULL),
+extraction efficiency falls as the world gets richer (F23 H2), and cross-seed
+convergence is flat too — training pushes independent seeds *below* the
+untrained alignment floor except at r ≈ 1, while a 1-trit FSQ budget forces
+90–95 % cross-model agreement at every coupling (F24). Scarcity manufactures
+coherence (F17) and consensus (F24); abundance individuates. ABO stage 2 stays
+blocked on outlier-dominated probe outcomes (F22b).
