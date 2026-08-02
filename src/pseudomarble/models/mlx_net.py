@@ -170,4 +170,36 @@ def loss_fn(model, batch: Dict, cfg: ModelConfig):
     if cfg.appearance_weight > 0:  # F20 aux: force z to retain the material channels
         a = mx.mean((out["appearance"] - batch["appearance"]) ** 2)
         total = total + cfg.appearance_weight * a
+    if cfg.coherence_weight > 0:  # F25 objective: train the heads to move together
+        total = total + cfg.coherence_weight * coherence_term(model, out, cfg)
     return total
+
+
+def coherence_term(model, out: Dict, cfg: ModelConfig):
+    """1 - Pearson(|render response|, |behavior response|) under shared latent
+    perturbations -- the differentiable analogue of models/coherence.py's metric
+    (losses.coherence_alignment_loss is the framework-free reference).
+
+    Perturbs each sample's z along cfg.coherence_dirs fresh random directions
+    (step cfg.coherence_eps) and correlates the two heads' per-(sample, dir)
+    response magnitudes over the B*D points. Adds no parameters; the extra cost
+    is D batched decoder/head forwards per step.
+    """
+    z = out["z"]                                   # (B, L)
+    B, L = z.shape
+    D = cfg.coherence_dirs
+    u = mx.random.normal((D, L))
+    u = u / mx.maximum(mx.sqrt(mx.sum(u * u, axis=1, keepdims=True)), 1e-8)
+    u = mx.stop_gradient(u)
+    zp = (z[:, None, :] + cfg.coherence_eps * u[None, :, :]).reshape(B * D, L)
+
+    d_render = model.decode(zp) - mx.repeat(out["render"], D, axis=0)
+    d_behav = model.behavior_from_z(zp) - mx.repeat(out["behavior"], D, axis=0)
+    r_mag = mx.mean(mx.abs(d_render.reshape(B * D, -1)), axis=1)   # (B*D,)
+    b_mag = mx.mean(mx.abs(d_behav.reshape(B * D, -1)), axis=1)
+
+    rc = r_mag - mx.mean(r_mag)
+    bc = b_mag - mx.mean(b_mag)
+    denom = mx.sqrt(mx.sum(rc * rc) * mx.sum(bc * bc))
+    corr = mx.sum(rc * bc) / mx.maximum(denom, 1e-12)
+    return 1.0 - corr

@@ -127,7 +127,18 @@ class ModelConfig:
     render_seed: int = 4           # spatial size of the decoder's seed feature map
     render_channels: int = 32      # channels in each decoder block
     render_weight: float = 1.0     # reconstruction loss weight
-    coherence_weight: float = 1.0  # reserved for the coherence experiment
+
+    # F25 coherence objective (docs/ARCHITECTED_UNITY.md): a training-time
+    # analogue of the F6/F13 coherence metric. When > 0, each step perturbs z
+    # along coherence_dirs random directions (step coherence_eps) and adds
+    # weight * (1 - Pearson(|render response|, |behavior response|)) so the two
+    # heads are trained to move TOGETHER. Adds no parameters; default 0.0 keeps
+    # the model, its checkpoints, and the suite byte-identical (the F20
+    # pattern). Historical checkpoints stored the old reserved value 1.0 --
+    # harmless, the field only acts inside training.
+    coherence_weight: float = 0.0
+    coherence_dirs: int = 4        # perturbation directions per step
+    coherence_eps: float = 0.1     # latent perturbation step size
 
 
 def conv_output_channels(cfg: "ModelConfig") -> int:
