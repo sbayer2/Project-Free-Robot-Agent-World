@@ -89,14 +89,29 @@ def overlap(ix: np.ndarray, iy: np.ndarray) -> float:
 
 
 def run_coherence(label: str, cks: list, trits: int, dry: bool):
-    """Drive scripts/run_coherence_experiment.py exactly as F23 did."""
+    """Drive scripts/run_coherence_experiment.py exactly as F23 did.
+
+    HARNESS REPAIR (2026-08-02, disclosed in the amendment): the driver builds
+    ONE ModelConfig from its CLI for every checkpoint it loads, so an FSQ arm's
+    --latent-trits config cannot load the CONTINUOUS masked-loss controls
+    (missing bottleneck weights -> load error). FSQ arms therefore run without
+    inline controls and INHERIT the cont arm's measured independent baseline
+    (same world, same disjoint training recipe -- the floor is a property of
+    (world, recipe), not of the measured arm's bottleneck). Direction-neutral:
+    the inherited value neither favors nor disfavors any hypothesis. A finished
+    out_dir is reused rather than re-measured (resume after the first crash).
+    """
     out_dir = f"runs/f25/coh_{label}"
+    cached = os.path.join(out_dir, "coherence_report.json")
+    if not dry and os.path.exists(cached):
+        print(f"  coherence: reusing existing {cached}")
+        return json.load(open(cached))
     cmd = [PY, "scripts/run_coherence_experiment.py", "--data", DATA,
            "--checkpoints", ",".join(cks), "--untrained-seeds", "5",
            "--image-size", "128", "--out", out_dir]
     if trits:
-        cmd += ["--latent-trits", str(trits)]
-    if os.path.exists(RENDER_ONLY) and os.path.exists(BEHAV_ONLY):
+        cmd += ["--latent-trits", str(trits)]  # controls are continuous: inherit
+    elif os.path.exists(RENDER_ONLY) and os.path.exists(BEHAV_ONLY):
         cmd += ["--render-only", RENDER_ONLY, "--physics-only", BEHAV_ONLY]
     else:
         print(f"  ! {label}: masked-loss controls missing -- CONTROL GATE UNMET")
@@ -104,7 +119,7 @@ def run_coherence(label: str, cks: list, trits: int, dry: bool):
         print("  would run:", " ".join(cmd[:6]), "... --out", out_dir)
         return None
     subprocess.run(cmd, check=True, capture_output=True)
-    return json.load(open(os.path.join(out_dir, "coherence_report.json")))
+    return json.load(open(cached))
 
 
 def main() -> None:
@@ -215,11 +230,18 @@ def main() -> None:
         coh = run_coherence(label, cks, trits, dry=False)
         if coh is not None:
             t = coh["targets"]["behavior"]
+            indep = t.get("independent_baseline")
+            inherited = False
+            if indep is None and kind == "fsq":
+                cont_coh = report["arms"].get("cont", {}).get("coherence", {})
+                indep = cont_coh.get("independent_baseline")
+                inherited = indep is not None
             arm["coherence"] = {
                 "learned": t["learned_coherence"],
                 "trained_shared": t["trained_shared"],
                 "architectural": t["architectural_baseline"],
-                "independent_baseline": t.get("independent_baseline"),
+                "independent_baseline": indep,
+                "control_inherited_from_cont": inherited,
                 "essence_learned": coh["targets"]["essence"]["learned_coherence"],
                 "latent_pr_trained": coh["latent_participation"]["trained_mean"],
             }

@@ -192,3 +192,39 @@ hour of training. Measurement reuses the F22/F23/F24 harnesses (~20 min).
   (H3) is descriptive, not inferential.
 - The strong world is synthetic with an authored coupling; nothing here
   speaks to real objects (ABO stage 2 remains blocked by F22b).
+
+---
+
+## AMENDMENT (2026-08-02) — after the run
+
+*Everything above is unchanged from the freeze commit. Full entry:
+`docs/FINDINGS.md` F25.*
+
+**One harness repair, disclosed:** `run_coherence_experiment.py` builds a
+single ModelConfig from its CLI, so an FSQ arm's `--latent-trits` config
+cannot load the *continuous* masked-loss control checkpoints (missing
+bottleneck weights). FSQ arms therefore ran without inline controls and
+inherit the cont arm's measured independent baseline (same world, same
+disjoint recipe; the floor is a property of (world, recipe), not of the
+measured arm's bottleneck). Direction-neutral; flagged per-arm in the report
+as `control_inherited_from_cont`.
+
+**Verdicts (from `scripts/f25_verdicts.py`, unedited):**
+
+- **H1a → FAILURE.** No k reaches UNIFIED-WITHOUT-COST; nearest miss k = 2
+  (coherence rise +0.082 vs +0.10, t 1.80 vs 2.5; Δ +0.456 vs the +0.50
+  floor).
+- **H1b → no ENGINEERING-SUCCESS at any w.** Trained-metric coherence +0.78
+  (t 13.7) beside Δ −0.06 … −0.44 (gain 0.981 at w = 1.0 — below the
+  train-mean baseline), essence coherence ≈ 0, PR healthy throughout: a
+  Goodhart channel, not unity.
+- **H2-OBJECTIVE → FAIL, sign inverted** (learned alignment −0.545/−0.610,
+  |t| ≈ 34–38). **H2-BUDGET → PASS** (ARI(k=1) = 0.741).
+- **H3 → mixed on all three series** (descriptive; n = 3).
+
+**Predictions graded:** P1 half-falsified (Δ destruction correct; the F17
+coherence bonus does NOT appear at r = 0.809 — +0.015, t 0.29). P2 falsified.
+P3 falsified (even w = 0.3 fails on Δ). P4 falsified with the sign inverted —
+the scientifically novel prediction was maximally wrong, and the inversion is
+the finding: budgets (world-referencing constraints) converge, objectives
+(metric-referencing constraints) diverge. P5 correct. P6 falsified.
