@@ -96,11 +96,18 @@ def participation_ratio(Z) -> float:
 
     The F12 healthy band (PR ~ 8-84) is stated in these units; do not swap in
     the covariance eigenvalue spectrum (see scripts/f22_pilot_eval.py note).
+
+    F27 bugfix: a numerically-collapsed latent (constant z up to float32
+    noise, per-dim variance ~1e-9) has UNIFORM tiny variance, so the raw
+    ratio reads ~n_dims -- full rank -- and masks exactly the collapse the
+    F10/F12 gate exists to catch. The epsilon in the denominator (matching
+    run_coherence_experiment.py's guard) sends that case toward 0 instead;
+    genuinely varying latents (per-dim var >> 1e-6) are unaffected.
     """
     np = _np()
     var = np.asarray(Z, dtype=np.float64).var(axis=0)
     s1, s2 = float(var.sum()), float((var**2).sum())
-    return s1 * s1 / s2 if s2 > 0 else 0.0
+    return s1 * s1 / (s2 + 1e-12)
 
 
 _TRIT_PERMS: list[dict] = [

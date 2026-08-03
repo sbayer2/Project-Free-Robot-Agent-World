@@ -99,21 +99,20 @@ python scripts/eval_llm_transfer.py --condition essence --max-tokens 32768
   here so a headless `graphify` run fails loudly rather than picking one
   silently.
 
-**Status (2026-08-02):** F1–F24 merged to `main`; F25 (PR #37) and F26
-(PR #38, stacked on #37) awaiting review; suite 240/31 (run with
-`.venv/bin/python -m pytest` — system `python3` lacks hypothesis and silently
-collects fewer). **Headline:** three preregistered routes to "one latent, two
-projections" have now failed on the same instrument. *Signal*: strengthening
-the coupling teaches the essence (F22a, Δ +0.15 → +0.92) but leaves coherence
-flat (F23) and pushes independent seeds *below* the untrained alignment floor
-(F24 — training individuates; only r ≈ 1 converges). *Budget*: FSQ forces
-90–95 % cross-model agreement at every coupling (F24/F25 — consensus is
-robust) but its F17 coherence bonus does not survive the strong world and no
-k reaches unified-without-cost (F25). *Objective*: a direct differentiable
-coherence loss Goodharts — trained metric +0.78, essence coherence ≈ 0, Δ
-negative, consensus annihilated (F25). Constraints that reference the world
-converge; constraints that reference a metric diverge. F26: the nine-point
-coherence-vs-r curve is trendless (ρ = 0.00; the zero-coupling world near the
-top) — the measured coherence is shape-carried, and the ~0.2 ceiling no lever
-has moved is the shape channel's size. ABO stage 2 stays blocked on
-outlier-dominated probe outcomes (F22b).
+**Status (2026-08-03):** F1–F25 merged to `main`; F26 (PR #38) and F27
+(stacked branch `claude/f27-shape-degenerate`) awaiting review; suite 241/31
+(run with `.venv/bin/python -m pytest` — system `python3` collects fewer).
+**Headline:** the program's levers are now all measured, and the founding
+metric is the casualty. Signal buys prediction (F22a; gain 5.67 in the
+shape-degenerate strong world — the largest ever) but not coherence (F23,
+F26: the nine-point coherence-vs-r curve is trendless). Budgets buy
+consensus (F24/F25), objectives Goodhart (F25). F27b then showed the
+magnitude-coherence metric certifies *substrate entanglement, not content
+unity*: +0.434 learned coherence with ZERO shared world-content between the
+heads (disjoint control +0.0001), more than double any multi-shape value —
+so every coherence number since F6 reads as shared-latent head entanglement,
+and F13 carries a dated interpretive note. Also: the F12 collapse cure is
+world-dependent (shape-degenerate weak-r worlds collapse at lr 5e-4; F27
+first pass VOID by its own gates, lr 2e-4 recipe frozen in amendment).
+Candidate F28: directional (content-matched) coherence. ABO stage 2 stays
+blocked (F22b).
