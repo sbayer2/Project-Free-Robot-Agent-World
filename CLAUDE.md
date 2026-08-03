@@ -99,8 +99,8 @@ python scripts/eval_llm_transfer.py --condition essence --max-tokens 32768
   here so a headless `graphify` run fails loudly rather than picking one
   silently.
 
-**Status (2026-08-02):** F1–F24 merged to `main`; F25 on
-`claude/f25-architected-unity` awaiting review; suite 240/31 (run with
+**Status (2026-08-02):** F1–F24 merged to `main`; F25 (PR #37) and F26
+(PR #38, stacked on #37) awaiting review; suite 240/31 (run with
 `.venv/bin/python -m pytest` — system `python3` lacks hypothesis and silently
 collects fewer). **Headline:** three preregistered routes to "one latent, two
 projections" have now failed on the same instrument. *Signal*: strengthening
@@ -112,5 +112,8 @@ robust) but its F17 coherence bonus does not survive the strong world and no
 k reaches unified-without-cost (F25). *Objective*: a direct differentiable
 coherence loss Goodharts — trained metric +0.78, essence coherence ≈ 0, Δ
 negative, consensus annihilated (F25). Constraints that reference the world
-converge; constraints that reference a metric diverge. ABO stage 2 stays
-blocked on outlier-dominated probe outcomes (F22b).
+converge; constraints that reference a metric diverge. F26: the nine-point
+coherence-vs-r curve is trendless (ρ = 0.00; the zero-coupling world near the
+top) — the measured coherence is shape-carried, and the ~0.2 ceiling no lever
+has moved is the shape channel's size. ABO stage 2 stays blocked on
+outlier-dominated probe outcomes (F22b).

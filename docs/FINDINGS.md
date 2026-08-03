@@ -1558,7 +1558,11 @@ between g15's −0.096 and loud's +0.053).
   a continuous baseline that already sits at +0.188. Scarcity's two products
   separate: **consensus is robust across couplings** (ARI 0.741; trit
   agreement 0.87–0.96 vs nulls ≈ 0.43, replicating F24 H3 at a third
-  coupling), **coherence was not**.
+  coupling), **coherence was not**. *(Dated note, 2026-08-02: F26 tested and
+  killed the "baseline pre-filled by the world" reading of this bullet — the
+  nine-point coherence-vs-r curve is trendless with the zero-coupling
+  control near the top; the compression is the k = 1 level falling, and
+  +0.188 is merely the trendless curve's highest point. See F26.)*
 - **H1b — the coherence objective is a Goodhart machine, and the registered
   co-readouts prove it.** The trained metric soars (+0.78, t 13.7). Every
   untrained readout collapses: Δ goes *negative* (at w = 1.0 the raw gain is
@@ -1599,6 +1603,85 @@ statement about this architecture class at this scale, not a theorem.
 
 Reproduce: `runs/f25/launch.sh` (23 runs), then
 `python scripts/f25_measure.py` and `python scripts/f25_verdicts.py`.
+
+---
+
+### F26 — ⭐ Coherence does not depend on the coupling at all: the nine-point curve is trendless (ρ = 0.00), the ZERO-coupling world sits near the top, and the co-movement is shape-carried
+
+*(Run 2026-08-02. Preregistered in `docs/COHERENCE_VS_R.md`; decision rules
+frozen as `scripts/f26_verdicts.py` before any new measurement. No primary
+training — the curve was already on disk (76 continuous checkpoints, nine
+worlds); twelve masked control pairs trained fresh, F23/F25 coherence reports
+reused unmodified where the identical harness produced them. Graded:
+**P1 falsified** — the prediction I explicitly believed, **P2 correct**
+(MIXED), **P3 falsified** (not monotone). One gate event, fully disclosed
+below.)*
+
+This experiment audits a **post-hoc mechanism claim of our own**: F25's
+discussion attributed part of the vanished k = 1 bonus to "a continuous
+baseline that already sits at +0.188" — the *pre-fill* reading (the world's
+coupling itself correlates the heads' responses, so scarcity has nothing
+left to add). The preregistration froze the kill switch in advance: if the
+zero-coupling control is not among the two lowest-coherence arms, the story
+dies regardless of the overall verdict.
+
+| r | n | learned coherence | sd | PR | essence coh |
+|---|---|---|---|---|---|
+| 0.000 | 3 | **+0.187** | 0.030 | 17.5 | +0.090 |
+| 0.263 | 8 | +0.152 | 0.067 | 28.1 | +0.076 |
+| 0.357 | 3 | +0.144 | 0.042 | 15.2 | +0.069 |
+| 0.517 | 3 | +0.082 | 0.024 | 18.4 | +0.183 |
+| 0.636 | 16 | +0.121 | 0.074 | 22.5 | +0.162 |
+| 0.809 | 8 | +0.188 | 0.122 | 29.2 | +0.222 |
+| 0.927 | 3 | +0.171 | 0.031 | 21.2 | +0.183 |
+| 0.978 | 3 | +0.144 | 0.058 | 27.9 | +0.140 |
+| 0.992 | 16 | +0.171 | 0.049 | 40.5 | +0.152 |
+
+- **H1 → MIXED, with the frozen summary applying: no interpretable
+  r-dependence.** Endpoints differ by −0.017 (Welch t −0.78); Spearman
+  ρ = **0.00** over the nine arms; spread 0.106 exceeds the FLAT band only
+  through arm-level noise (the two largest values sit at r = 0 and r = 0.809).
+- **The kill switch fired: ctrl ranks 8 of 9.** The world whose pixels carry
+  *nothing* about physics shows near-the-top learned coherence (+0.187).
+  **The pre-fill reading is dead**, per the consequence frozen in the
+  preregistration; F25's discussion bullet carries a dated note to that
+  effect.
+- **The F25 bonus compression is re-attributed.** The k = 1 *level* fell
+  (re-measured +0.266 at r = 0.263 → +0.203 / +0.211 at 0.809 / 0.992) while
+  the baseline curve is trendless; the F25 comparison happened to sit at the
+  trendless curve's highest point (g2, +0.188). Arm-level noise, not
+  mechanism. P3's strict monotone-down is falsified by the +0.211 rebound.
+- **F17's number survives its harness re-measurement.** `runs/fsq/k1`
+  re-measured under the current harness gives +0.266 vs the historical
+  +0.27 — no harness-generation correction needed.
+- **Gate disclosure.** g13's single control pair (seed 0) measured
+  |indep| = 0.081, tripping the frozen |0.05| bound and formally withholding
+  H1. Two fresh control pairs (seeds 1, 2) measured **−0.002 and +0.007**;
+  the seed-0 value is a one-off outlier and the mean of three (0.029) passes.
+  The mean-of-three refinement was adopted *after* seeing seed 0 fail and is
+  disclosed as such; all three values are reported, and no conclusion in
+  this entry changes if g13 is excluded entirely (the kill switch uses ctrl,
+  base, and the ranking, none of which involve g13).
+
+**Post-hoc synthesis, labeled as such: the measured coherence is
+shape-carried.** Learned coherence sits at ~0.08–0.19 in *every* world,
+including the one with zero appearance↔physics coupling — so the co-movement
+the metric detects never needed the material channel. The one factor that is
+visible to the render head *and* predictive for the behavior head in all
+nine worlds is **shape** — the same factor F18 found carrying the prediction
+gain and F24 found carrying the 1-trit consensus. Under this reading the
+~0.2 coherence ceiling that no lever has moved (F23, F25, F26) *is* the
+shape channel's size, and the Marble question sharpens once more: this
+architecture shares what is common to looking and acting (geometry), and
+nothing that must be *inferred* (material). Falsifiable implication, not
+run: in a shape-degenerate world (one shape, materials only), learned
+coherence should collapse toward zero at low r and — if material coupling
+can carry coherence at all — grow with r. That is the first design under
+which the coupling dial should finally move this metric.
+
+Reproduce: `python scripts/f26_measure.py` then
+`python scripts/f26_verdicts.py` (report at `runs/f26/f26_report.json`;
+g13 control replication under `runs/f26/coh_g13_c{1,2}`).
 
 ---
 
