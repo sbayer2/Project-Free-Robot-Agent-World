@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import json
 import re
+import urllib.parse
 import urllib.request
 from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
@@ -387,9 +388,19 @@ def chat_completion(
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
     if transport is None:
+        # The default transport only ever talks to an http(s) chat endpoint
+        # (localhost oMLX in practice). urlopen would also accept file:// and
+        # ftp:// URLs, so a mistyped --base-url could silently read local
+        # files; reject anything that is not http(s) before opening (also
+        # satisfies bandit B310, which flags un-audited urlopen schemes).
+        scheme = urllib.parse.urlsplit(url).scheme
+        if scheme not in ("http", "https"):
+            raise ValueError(
+                f"chat endpoint must be http(s); got scheme {scheme!r} in {url!r}")
+
         def transport(u: str, b: bytes, h: Dict[str, str]) -> bytes:  # pragma: no cover - network
             req = urllib.request.Request(u, data=b, headers=h)
-            with urllib.request.urlopen(req, timeout=timeout) as resp:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:  # nosec B310 - scheme validated above
                 return resp.read()
     raw = json.loads(transport(url, body, headers))
     try:

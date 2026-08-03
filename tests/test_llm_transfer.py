@@ -264,3 +264,32 @@ def test_chat_completion_no_key_no_auth_header():
     s = _sample()
     msgs = build_messages(s, s["behavior"]["probes"][0], "essence")
     assert chat_completion("http://host/v1", "m", msgs, transport=transport) == "ok"
+
+
+# --------------------------------------------------------------------------- #
+# Transport scheme validation (bandit B310 fix, 2026-08-03).
+# --------------------------------------------------------------------------- #
+
+def test_chat_completion_rejects_non_http_schemes():
+    """The default transport must refuse file:// and other non-http(s) URLs
+    BEFORE any network call: a mistyped --base-url must fail loudly, never
+    read local files. (An injected transport bypasses this by design.)"""
+    from pseudomarble.llm_transfer import chat_completion
+    for bad in ("file:///etc/hosts", "ftp://host/x", "gopher://x"):
+        try:
+            chat_completion(bad, model="m", messages=[])
+        except ValueError as e:
+            assert "http" in str(e)
+        else:  # pragma: no cover
+            raise AssertionError(f"{bad} was not rejected")
+
+
+def test_chat_completion_injected_transport_unaffected():
+    """Scheme validation lives in the default transport path only -- test
+    doubles keep working with any URL string."""
+    from pseudomarble.llm_transfer import chat_completion
+    out = chat_completion(
+        "anything://not-a-real-endpoint", model="m", messages=[],
+        transport=lambda u, b, h:
+            b'{"choices":[{"message":{"content":"ok"}}]}')
+    assert out == "ok"
