@@ -555,6 +555,13 @@ Reproduce: `python -m pseudomarble.models.train --data data/pm_big --epochs 50
 main 2026-07-12. F12 (basin mechanism + the lr-5e-4 checkpoints) was run
 2026-07-05.*
 
+*(Dated note, 2026-08-03: the number stands as measured, but its
+interpretation is narrowed by F27b — the same learned-coherence signal
+appears at nearly 3× this strength (+0.434, disjoint control +0.0001) in a
+world where the render and behavior tasks share ZERO world content. What
+joint training on a shared latent demonstrably couples is head
+*sensitivities*, not necessarily content. See F27.)*
+
 The F12 follow-through: the 20-seed coherence experiment re-run over the
 lr-5e-4 checkpoints (`runs/basin/lrlo_s*`), where all 20 seeds are healthy —
 so the statistics are **unconditional** (no escaped-only filtering, no
@@ -1682,6 +1689,92 @@ which the coupling dial should finally move this metric.
 Reproduce: `python scripts/f26_measure.py` then
 `python scripts/f26_verdicts.py` (report at `runs/f26/f26_report.json`;
 g13 control replication under `runs/f26/coh_g13_c{1,2}`).
+
+---
+
+### F27 — ⭐ The shape-degenerate world kills the shape-carried synthesis AND the metric's content-reading: joint training alone manufactures co-response (+0.434 with ZERO shared world-content; disjoint control +0.0001)
+
+*(Run 2026-08-02/03 in two passes. Preregistered in `docs/SHAPE_DEGENERATE.md`
+with `scripts/f27_verdicts.py` frozen before any dataset existed. **The first
+pass is VOID by its own gates**: at the program-standard lr 5e-4 the ctrl and
+base encoders fully collapsed — per-scene z constant to float32 noise — and
+the harness PR gate caught it; the collapsed ctrl arm had scored +0.393
+"coherence", the F10 law firing in a new costume, and a float-noise bug in
+`alignment.participation_ratio` that had masked the collapse in the driver
+was found and fixed with a regression test. F27b (lr 2e-4, frozen in
+Amendment 1 with a contamination disclosure — the void run's healthy-arm
+numbers were seen first) passed ALL gates: PR 24–101, apparatus perfect
+(all-box, physics matched across arms, r = 0.008/0.263/0.809/0.992).
+Graded: **P1 falsified** — the second consecutive synthesis killed by its own
+preregistered audit — **P2 correct**, **P3 falsified in a direction outside
+its hypothesis space**, **P4 correct**.)*
+
+The world: `--shapes box` — zero geometric variation (primitive dimensions
+are fixed; no per-scene scale), so all render variation is material
+appearance and all behavior variation is material physics, crossed with the
+coupling dial at four strengths.
+
+| arm | r | gain | app. ceiling | learned coh | disjoint ctrl | essence coh | align learned |
+|---|---|---|---|---|---|---|---|
+| ctrl | 0.008 | 1.121 | 0.957 | **+0.434** | **+0.0001** | +0.324 | −0.371 |
+| base | 0.263 | 1.113 | 1.841 | +0.423 | +0.009 | +0.313 | −0.396 |
+| g2 | 0.809 | 3.625 | 3.226 | +0.420 | +0.043 | +0.424 | −0.427 |
+| loud | 0.992 | **5.672** | 4.706 | **+0.205** | −0.016 | +0.207 | −0.153 |
+
+- **H1 → REFUTED, decisively and cleanly.** In the world with *no* shared
+  world-structure between the two tasks — one fixed shape, appearance pure
+  decoy — learned coherence is **+0.434**, more than double the multi-shape
+  zero-coupling value (+0.187) the shape-carried synthesis was built on, with
+  healthy PR and a disjoint control at +0.0001. The synthesis (F26, labeled
+  post-hoc there) is dead. Removing shape *raised* measured coherence.
+- **The contrast that matters is shared-latent vs disjoint, not any property
+  of the world.** Two separately trained single-head models: co-response
+  ≈ 0. One jointly trained shared latent: +0.43 — even when the two heads'
+  tasks have literally nothing in common. **Joint training on a shared
+  substrate couples head *sensitivities* regardless of content.** This
+  narrows the interpretation of every learned-coherence number since F6:
+  what the metric certifies is substrate entanglement, not "one physical
+  essence, two projections." F13 carries a dated note; its measurement
+  stands, its content-reading does not.
+- **H3 → MATERIAL LEARNED, spectacularly** (gain 1.12 → 5.67, t 14.2 — the
+  largest prediction gains in the program's history; the multi-shape worlds
+  were shadowing prediction as well as everything else). The single-shape
+  strong-coupling world is, by prediction gain, the most Marble-learnable
+  world this instrument has built.
+- **H2 → INCONCLUSIVE by the frozen rule — because the direction was outside
+  the rule's hypothesis space.** Not RISES (P3's 60/40 pick), not NULL: a
+  significant **FALL** at extreme coupling (−0.229, t −3.29; ~0.42–0.43 flat
+  across ctrl/base/g2, dropping to 0.205 at r = 0.992). The dial finally
+  moved the metric — *downward*, at the coupling where appearance and
+  physics are nearly the same information. No frozen interpretation covers
+  this; the observation is recorded without a mechanism claim, beside the
+  contamination note (the void run's g2/loud values, seen before F27b,
+  hinted the same drop).
+- **P4 correct:** individuation persists without geometry (learned alignment
+  −0.37 to −0.43) and is weakest at loud (−0.153) — the F24 pattern
+  reproduced in a new world class.
+- **The void run's own finding stands:** the F12 collapse cure (lr 5e-4) is
+  world-dependent — shape-degenerate weak-r worlds collapse under it, because
+  the shape diversity that anchored the encoder was removed. Stability
+  itself sits at the edge in geometry-quiet worlds.
+
+**What this closes and opens.** The founding metric's content-validity is
+now the program's central open problem. Every lever arc (signal F22–F23,
+budget F25, objective F25, world design F27) ran against a metric that F27b
+shows is dominated by substrate entanglement. The constructive next
+instrument, not yet preregistered: **directional (content-matched)
+coherence** — not "do response *magnitudes* correlate over random
+directions" but "do the specific z-directions that change material in the
+*render* also change the matching outcomes in the *behavior*" (e.g., the
+direction that brightens rust should raise friction's readout, in the
+coupled worlds only). That metric would be ≈ 0 in the ctrl world by
+construction, restoring the discriminative power the magnitude metric never
+had. Candidate F28.
+
+Reproduce: `runs/f27/launch.sh` (void pass, kept for the record),
+`runs/f27b/launch.sh` (verdict pass), then
+`python scripts/f27_measure.py --root runs/f27b` and
+`python scripts/f27_verdicts.py --report runs/f27b/f27_report.json`.
 
 ---
 

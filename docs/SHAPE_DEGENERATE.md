@@ -205,3 +205,33 @@ uniform recipe **lr 2e-4** (pilot check on ctrl seed 0: PR 41.7, de-collapsed;
 only the PR/std apparatus values were read from the pilot), 50 epochs, all
 four arms, 3 seeds + control pair each, under `runs/f27b/`. The measure
 driver gains a `--root` argument; nothing else changes.
+
+---
+
+## AMENDMENT 2 (2026-08-03) — F27b results and grades
+
+*Full entry: `docs/FINDINGS.md` F27.*
+
+**Gates: ALL PASS** (PR 24–101; apparatus perfect; untrained anchor
+0.1085–0.1086; every disjoint control within bounds).
+
+**Verdicts (from `scripts/f27_verdicts.py --report runs/f27b/f27_report.json`,
+unedited):** H1 → **REFUTED** (learned coherence at r = 0, single shape =
++0.434 vs the < 0.05 confirmation bar; disjoint control +0.0001). H3 →
+**MATERIAL LEARNED** (+4.55, t 14.2). H2 → **INCONCLUSIVE** by the frozen
+rule: the observed effect is a significant FALL (−0.229, t −3.29), a
+direction the rule did not anticipate; no frozen interpretation applies and
+none is claimed.
+
+**Predictions graded:** P1 falsified (the second synthesis in a row killed
+by its own audit). P2 correct. P3 falsified — and not toward its named
+alternative: neither RISES nor NULL but a fall at extreme coupling; graded
+with the Amendment-1 contamination note attached. P4 correct.
+
+**The load-bearing observation** (stated in FINDINGS with the F13 dated
+note): shared-latent +0.434 vs disjoint +0.0001 in a world where the two
+tasks share nothing — joint training couples head sensitivities regardless
+of content, so the magnitude-correlation coherence metric certifies
+substrate entanglement, not content unity. The constructive successor
+(directional, content-matched coherence) is recorded as candidate F28, not
+preregistered here.
