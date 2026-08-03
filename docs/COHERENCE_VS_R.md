@@ -126,3 +126,34 @@ invocations (~3–5 min each). No primary training. Total under an hour.
   `run_coherence_experiment.py` or `models/coherence.py` since), and the
   validity gate re-checks the base arm's number.
 - H2 is three points; it is descriptive and will be reported without a fit.
+
+---
+
+## AMENDMENT (2026-08-02) — after the run
+
+*Everything above is unchanged from the freeze commit. Full entry:
+`docs/FINDINGS.md` F26.*
+
+**Verdicts (from `scripts/f26_verdicts.py`, unedited):** H1 → **MIXED**
+(endpoints −0.017, Welch t −0.78; Spearman ρ = 0.00; spread 0.106); the
+frozen MIXED consequence applies — *no interpretable r-dependence*, pre-fill
+unsupported. **Sub-check → FAIL** (ctrl ranks 8 of 9; the frozen consequence:
+the pre-fill story is dead regardless of the overall verdict). H2: k = 1
+series +0.266 / +0.203 / +0.211 — mixed, not monotone; the re-measured F17
+point (+0.266 vs historical +0.27) needs no harness correction.
+
+**Gate event, disclosed:** g13's seed-0 control pair measured
+|indep| = 0.081 (> 0.05), formally withholding H1 under the frozen global
+gate. Two fresh pairs (seeds 1, 2) measured −0.002 and +0.007; the mean of
+three (0.029) passes. The mean-of-three refinement was adopted *after*
+seeing seed 0 fail and is recorded as such; all three values are reported,
+and no conclusion depends on g13 (the kill switch uses ctrl and the
+ranking).
+
+**Predictions graded:** P1 **falsified** — ctrl is near the TOP, not the
+bottom; the prediction the author explicitly believed. P2 correct (MIXED).
+P3 falsified (rebound at r = 0.992). The pre-fill analogy offered in the
+F25 discussion is retracted; F25's bullet carries the dated note. The
+post-hoc synthesis that replaces it (coherence is shape-carried, with a
+falsifiable shape-degenerate-world implication) is in the F26 entry,
+labeled post-hoc.
