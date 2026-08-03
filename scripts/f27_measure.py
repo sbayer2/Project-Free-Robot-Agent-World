@@ -68,8 +68,8 @@ def apparatus_checks() -> dict:
     return out
 
 
-def run_coherence(tag: str, cks: list, dry: bool):
-    out_dir = f"runs/f27/coh_{tag}"
+def run_coherence(root: str, tag: str, cks: list, dry: bool):
+    out_dir = f"{root}/coh_{tag}"
     cached = os.path.join(out_dir, "coherence_report.json")
     if not dry and os.path.exists(cached):
         print(f"  coherence: reusing {cached}")
@@ -77,8 +77,8 @@ def run_coherence(tag: str, cks: list, dry: bool):
     cmd = [PY, "scripts/run_coherence_experiment.py", "--data", f"data/pm_f27_{tag}",
            "--checkpoints", ",".join(cks), "--untrained-seeds", "5",
            "--image-size", "128", "--out", out_dir]
-    ro = f"runs/f27/{tag}_renderonly/model.safetensors"
-    bo = f"runs/f27/{tag}_behavonly/model.safetensors"
+    ro = f"{root}/{tag}_renderonly/model.safetensors"
+    bo = f"{root}/{tag}_behavonly/model.safetensors"
     if os.path.exists(ro) and os.path.exists(bo):
         cmd += ["--render-only", ro, "--physics-only", bo]
     else:
@@ -97,18 +97,22 @@ def overlap(ix: np.ndarray, iy: np.ndarray) -> float:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--out", default="runs/f27/f27_report.json")
+    ap.add_argument("--root", default="runs/f27",
+                    help="checkpoint/control/report root (F27b uses runs/f27b)")
+    ap.add_argument("--out", default=None)
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
+    root = args.root
+    out_path = args.out or f"{root}/f27_report.json"
 
     plan = []
     for tag, data in ARMS:
-        cks = sorted(glob.glob(f"runs/f27/{tag}_s*/model.safetensors"))
+        cks = sorted(glob.glob(f"{root}/{tag}_s*/model.safetensors"))
         plan.append((tag, data, cks))
         print(f"{tag:5s} {data:18s} {len(cks)} checkpoints")
     if args.dry_run:
         for tag, _data, cks in plan:
-            run_coherence(tag, cks, dry=True)
+            run_coherence(root, tag, cks, dry=True)
         return
 
     import mlx.core as mx  # type: ignore
@@ -177,7 +181,7 @@ def main() -> None:
               f"align learned {arm['align_learned']:+.4f}  "
               f"PR {min(prs):.1f}-{max(prs):.1f}")
 
-        coh = run_coherence(tag, cks, dry=False)
+        coh = run_coherence(root, tag, cks, dry=False)
         if coh is not None:
             t = coh["targets"]["behavior"]
             arm["coherence"] = {
@@ -193,10 +197,10 @@ def main() -> None:
                   f"essence {arm['coherence']['essence_learned']:+.4f}")
         report["arms"][tag] = arm
 
-    os.makedirs(os.path.dirname(args.out), exist_ok=True)
-    with open(args.out, "w") as f:
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+    with open(out_path, "w") as f:
         json.dump(report, f, indent=1)
-    print(f"wrote {args.out}")
+    print(f"wrote {out_path}")
 
 
 if __name__ == "__main__":

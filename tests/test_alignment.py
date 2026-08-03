@@ -200,6 +200,23 @@ def test_ari_independent_near_zero_and_validates():
         raise AssertionError("length mismatch must raise")
 
 
+
+def test_participation_ratio_flags_float_noise_collapse():
+    """F27 regression: a constant latent + float32 noise must read as
+    COLLAPSED (PR ~ 0), not as full-rank noise (~n_dims). This bug let two
+    fully collapsed F27 arms print healthy PRs while the coherence harness
+    (whose epsilon guard this now matches) correctly printed ~0."""
+    if _skip_if_no_numpy():
+        return
+    rng = np.random.default_rng(13)
+    z = np.ones((512, 256), dtype=np.float32) + rng.normal(
+        scale=3e-5, size=(512, 256)).astype(np.float32)
+    pr = participation_ratio(z)
+    assert pr < 1.0, f"float-noise collapse read as PR {pr:.1f}"
+    healthy = rng.normal(size=(512, 256))
+    assert participation_ratio(healthy) > 100  # unaffected by the epsilon
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

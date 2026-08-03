@@ -166,3 +166,42 @@ measurement (~20 min). Roughly 2 hours wall, all background.
 - With one shape the render task is appearance-only; encoders could organize
   differently from every prior world (the PR gate and untrained-baseline
   validity gate are the guards).
+
+---
+
+## AMENDMENT 1 (2026-08-03) — first run VOID by its own gates; F27b recipe frozen
+
+**The first run (lr 5e-4, the program-standard recipe) is VOID for its
+verdict-bearing arms.** The ctrl and base encoders **fully collapsed** —
+per-scene z constant to float32 noise (per-dim std ≈ 3e-5) while the renders
+demonstrably vary — and the coherence harness's PR gate caught it (0.05/0.20
+vs the ≥ 8 floor). Per §6, all verdicts are withheld. Three records from the
+void run:
+
+1. **The F12 cure does not transfer.** lr 5e-4 (which gave 20/20 healthy
+   seeds in multi-shape worlds) collapses shape-degenerate worlds at weak r:
+   with geometry gone and material unlearnable, the render task alone does
+   not anchor the encoder. This is the steam-engine/representation-collapse
+   reading measured in a new regime: remove the input diversity, get the
+   collapse.
+2. **The F10 law fired in a new costume.** The collapsed ctrl arm scored
+   learned coherence **+0.393** — the highest raw number in the program's
+   history, from an encoder representing nothing. Without the gate this
+   would have read as "H1 REFUTED"; with it, it reads as the artifact F10
+   documented. The gate, not the experimenter, caught it.
+3. **A metric bug was found and fixed.** `alignment.participation_ratio`
+   read the collapsed latents as PR ≈ 54–62 (uniform float32 noise ≈ full
+   rank; no epsilon guard). Fixed to match the harness's guard; regression
+   test added (`test_participation_ratio_flags_float_noise_collapse`).
+
+**Contamination disclosure:** before the void was diagnosed, the
+experimenter saw the first run's g2/loud numbers (gain 4.01/5.44; learned
+coherence +0.304/+0.237 at lr 5e-4). The frozen rules and predictions
+predate all data and stand unchanged, but P3's grading must carry this note:
+partial (healthy-arm) first-run data was seen before F27b ran.
+
+**F27b, frozen now:** identical design and rules; the single change is a
+uniform recipe **lr 2e-4** (pilot check on ctrl seed 0: PR 41.7, de-collapsed;
+only the PR/std apparatus values were read from the pilot), 50 epochs, all
+four arms, 3 seeds + control pair each, under `runs/f27b/`. The measure
+driver gains a `--root` argument; nothing else changes.
