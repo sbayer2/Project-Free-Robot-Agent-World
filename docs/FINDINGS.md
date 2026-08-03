@@ -1511,6 +1511,97 @@ Reproduce: `python scripts/f24_measure.py` then
 
 ---
 
+### F25 — ⭐ Architected unity fails both ways: the budget never reaches unified-without-cost, and the direct objective manufactures FAKE unity — trained-metric coherence +0.78 with essence coherence ≈ 0, prediction destroyed, consensus annihilated
+
+*(Run 2026-08-02. Preregistered in `docs/ARCHITECTED_UNITY.md`; decision rules
+frozen as `scripts/f25_verdicts.py` before any arm was trained. 23 new runs on
+`pm_f22_g2` (r = 0.809) against the existing 8-seed continuous baseline. All
+gates passed (PR 13.4–127.8, every disjoint-control |value| in bounds; one
+disclosed harness repair — the coherence driver cannot load continuous
+masked-loss controls under an FSQ config, so FSQ arms inherit the cont arm's
+measured control, direction-neutral). Graded: **P1 half-falsified** (the Δ
+half right, the coherence half wrong), **P2 falsified**, **P3 falsified**,
+**P4 falsified with the sign inverted at |t| ≈ 34**, **P5 correct**,
+**P6 falsified**. The prediction record is poor and the information content is
+high — every miss is a structural fact about what does NOT organize this
+latent.)*
+
+Option B, as sharpened by F22–F24: use the strong world for signal and
+*architect* the unity — an FSQ budget ladder (k ∈ {1,2,4,8} trits) and a
+direct differentiable coherence objective
+(`coherence_weight × (1 − Pearson(|render response|, |behavior response|))`
+under shared latent perturbations), every arm measured on the full triad:
+Δ (prediction), learned coherence (unity), kNN alignment / ARI (consensus).
+Reference (cont, n = 8): Δ +0.650, learned coherence +0.188, learned
+alignment −0.060 (negative — F24's individuation, interpolating cleanly
+between g15's −0.096 and loud's +0.053).
+
+| arm | Δ | learned coherence (rise vs cont, t) | essence coh | consensus |
+|---|---|---|---|---|
+| cont | +0.650 | +0.188 (—) | +0.222 | align −0.060 |
+| fsq k=1 | **−0.072** | +0.203 (+0.015, t 0.29) | +0.229 | **ARI 0.741** |
+| fsq k=2 | +0.456 | +0.270 (+0.082, t 1.80) | +0.200 | ARI 0.412 |
+| fsq k=4 | +0.266 | +0.109 (−0.079, t −1.21) | +0.061 | ARI 0.352 |
+| fsq k=8 | +0.641 | +0.127 (−0.062, t −0.92) | +0.113 | ARI 0.427 |
+| cohw 0.3 | **−0.061** | **+0.782** (+0.594, t 13.7) | **−0.033** | align −0.109 |
+| cohw 1.0 | **−0.351** | **+0.772** (+0.584, t 11.4) | +0.006 | align **−0.545** (t −34) |
+| cohw 3.0 | **−0.436** | +0.510 (+0.322, t 1.89) | −0.052 | align −0.610 (t −38) |
+
+- **H1a FAILURE — no budget width reaches UNIFIED-WITHOUT-COST.** The
+  nearest miss is k = 2 (coherence rise +0.082 vs the frozen +0.10 bar,
+  t 1.80 vs 2.5; Δ +0.456 vs the +0.50 floor) — close on both bars,
+  qualifying on neither. The k-ladder is a genuine trade-off curve with no
+  point in the target region.
+- **F17 does NOT transfer: scarcity's coherence bonus is a weak-world
+  property.** At r = 0.263 the 1-trit bottleneck roughly doubled learned
+  coherence (+0.146 → +0.27). At r = 0.809 it adds **+0.015** (t 0.29) over
+  a continuous baseline that already sits at +0.188. Scarcity's two products
+  separate: **consensus is robust across couplings** (ARI 0.741; trit
+  agreement 0.87–0.96 vs nulls ≈ 0.43, replicating F24 H3 at a third
+  coupling), **coherence was not**.
+- **H1b — the coherence objective is a Goodhart machine, and the registered
+  co-readouts prove it.** The trained metric soars (+0.78, t 13.7). Every
+  untrained readout collapses: Δ goes *negative* (at w = 1.0 the raw gain is
+  **0.981 — worse than predicting the train mean**; per-seed −0.33/−0.35/−0.38),
+  the essence head's coherence — the co-readout the objective never saw —
+  drops from +0.222 to **≈ 0**, and PR stays healthy (13–47) throughout, so
+  this is not collapse: the encoder spends its capacity building a
+  render↔behavior co-response channel that carries no essence and predicts
+  nothing. The preregistration's Goodhart disclosure ("what makes a cohw arm
+  interesting is everything it must NOT break") was the right frame: it broke
+  all of it, at every weight including 0.3.
+- **P4 inverted — the objective DESTROYS consensus.** H2-OBJECTIVE predicted
+  the constraint would raise cross-seed alignment; instead learned alignment
+  falls to −0.545/−0.610 (t ≈ −34/−38; raw trained alignment 0.13 against an
+  untrained floor of 0.67 — seeds' neighborhoods nearly disjoint). So
+  "constraint manufactures consensus" is **not** general: the two kinds of
+  constraint dissociate. A *budget* (FSQ) forces every seed onto the world's
+  own information ranking — consensus. An *objective* hands every seed the
+  same score to hack — and each seed hacks it its own way, more
+  idiosyncratically than free training ever was. **Constraints that reference
+  the world converge; constraints that reference a metric diverge.**
+- **H2-BUDGET PASS** (ARI(k=1) 0.741 > 0.5) — the one confirmed prediction
+  (P5), now shown at r = 0.263 (F24), 0.809 (here), and 0.992 (F24).
+- **H3 mixed everywhere** — none of the three k-series is monotone at n = 3
+  (coherence peaks at k = 2; Δ dips at k = 4). Recorded as descriptive per
+  the frozen rule; no dose-response law is claimed.
+
+**What this closes.** Three routes to a Marble-like "one latent, two
+projections" have now failed under preregistration on the same instrument:
+**signal** (F22a strengthens the world; F23 finds coherence flat), **budget**
+(F17's coherence bonus does not survive the strong world, and no k trades
+acceptably), and **objective** (trains its own metric and nothing else, while
+destroying prediction and consensus). What survives all three arcs is only
+the pairing: prediction is buyable with signal, consensus is buyable with a
+budget — *unity itself has resisted every lever this instrument has*. That is
+the project's sharpest statement of the Marble question to date, and it is a
+statement about this architecture class at this scale, not a theorem.
+
+Reproduce: `runs/f25/launch.sh` (23 runs), then
+`python scripts/f25_measure.py` and `python scripts/f25_verdicts.py`.
+
+---
+
 ## 4. Next steps — the gap is NOT intrinsic; the fork is resolved
 
 *(Rewritten 2026-07-30 after F22a. The previous version concluded the
@@ -1547,14 +1638,17 @@ of the architecture or the pipeline. What's left:
 4. **`appearance_weight = 0.3`** raised nothing in the end (F21 Arm 2 gain 1.44 ≈
    baseline); do NOT ship it as a default — the F20 "cheap tenth" did not survive
    Arm 2's fairer render. Leave `ModelConfig.appearance_weight = 0`.
-5. *(Added 2026-08-01 after F24.)* **If Option B is built, do not expect the
-   stronger world to unify or converge the latent on its own.** F23 (coherence
-   flat in r) and F24 (convergence flat in r, negative below the untrained
-   floor until r ≈ 1) both say the extra signal is spent on prediction, not on
-   structure. The F17/F24 pattern — scarcity manufactures coherence within a
-   model and consensus across models — says the Marble-like properties must be
-   *architected* (bottleneck, tying, or an explicit coherence objective), with
-   the strong world supplying the signal the constraint then routes.
+5. *(Added 2026-08-01 after F24; outcome recorded 2026-08-02.)* **"Architect
+   the unity" was run as F25 and failed both ways** — the FSQ budget ladder
+   never reaches unified-without-cost and the direct coherence objective
+   Goodharts (see F25). The surviving prescription is narrower: signal buys
+   prediction (F22a), budgets buy consensus (F24/F25), and no lever tried so
+   far buys genuine unity. Candidate next levers, none preregistered:
+   architectural tying (shared trunk between heads, deferred out of F25),
+   objectives that reference the *world* rather than a metric (e.g. predict
+   the render of the *post-probe* scene — a consequence target both heads
+   need), or accepting that unity at this scale requires the F17 regime's
+   weak-signal scarcity and is not compatible with strong extraction.
 
 Reproduce F22a/F22b: see their entries.
 Reproduce F21: see its entry. Reproduce F20: sweep `train.py --appearance-weight
@@ -1573,6 +1667,6 @@ Reproduce F8: `python tests/batch_probe_stability.py`.
 
 ---
 
-*Tests: 231 across 30 suites, all passing (1 skipped); core imports with no
+*Tests: 240 across 31 suites, all passing (1 skipped); core imports with no
 mujoco/bpy/trimesh/numpy/mlx/torch. Personal research; not affiliated with World
 Labs.*

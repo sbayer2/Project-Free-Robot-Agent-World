@@ -138,15 +138,17 @@ def build_model(cfg: ModelConfig = ModelConfig()):
 
 
 def loss_fn(out: Dict, behavior_t, essence_t, cfg: ModelConfig, render_t=None,
-            appearance_t=None):
+            appearance_t=None, model=None):
     """behavior_weight*behavior MSE + essence_weight*essence MSE
-    (+ render_weight*recon MSE) (+ appearance_weight*appearance MSE).
+    (+ render_weight*recon MSE) (+ appearance_weight*appearance MSE)
+    (+ coherence_weight*coherence term).
 
     ``render_t`` is the mean-view target (B, image_size, image_size, 3); when
     omitted the render term is skipped (e.g. behavior-only checks). ``appearance_t``
     is the 8-dim material-channel target (F20); added only when appearance_weight>0
-    and the target is supplied. Per-head weights mirror cfg so this matches the MLX
-    objective exactly."""
+    and the target is supplied. The F25 coherence term needs extra forwards, so it
+    is added only when ``model`` is passed and coherence_weight > 0. Per-head
+    weights mirror cfg so this matches the MLX objective exactly."""
     _require_torch()
     b = torch.mean((out["behavior"] - behavior_t) ** 2)
     e = torch.mean((out["essence"] - essence_t) ** 2)
@@ -156,7 +158,34 @@ def loss_fn(out: Dict, behavior_t, essence_t, cfg: ModelConfig, render_t=None,
     if cfg.appearance_weight > 0 and appearance_t is not None:
         loss = loss + cfg.appearance_weight * torch.mean(
             (out["appearance"] - appearance_t) ** 2)
+    if cfg.coherence_weight > 0 and model is not None:
+        loss = loss + cfg.coherence_weight * coherence_term(model, out, cfg)
     return loss
+
+
+def coherence_term(model, out: Dict, cfg: ModelConfig):
+    """F25 coherence objective, mirroring mlx_net.coherence_term exactly:
+    1 - Pearson(|render response|, |behavior response|) under shared latent
+    perturbations (framework-free reference: losses.coherence_alignment_loss)."""
+    _require_torch()
+    z = out["z"]                                   # (B, L)
+    B, L = z.shape
+    D = cfg.coherence_dirs
+    u = torch.randn(D, L, device=z.device, dtype=z.dtype)
+    u = u / torch.clamp(torch.sqrt(torch.sum(u * u, dim=1, keepdim=True)), min=1e-8)
+    u = u.detach()
+    zp = (z[:, None, :] + cfg.coherence_eps * u[None, :, :]).reshape(B * D, L)
+
+    d_render = model.decode(zp) - torch.repeat_interleave(out["render"], D, dim=0)
+    d_behav = model.behavior_from_z(zp) - torch.repeat_interleave(out["behavior"], D, dim=0)
+    r_mag = torch.mean(torch.abs(d_render.reshape(B * D, -1)), dim=1)
+    b_mag = torch.mean(torch.abs(d_behav.reshape(B * D, -1)), dim=1)
+
+    rc = r_mag - torch.mean(r_mag)
+    bc = b_mag - torch.mean(b_mag)
+    denom = torch.sqrt(torch.sum(rc * rc) * torch.sum(bc * bc))
+    corr = torch.sum(rc * bc) / torch.clamp(denom, min=1e-12)
+    return 1.0 - corr
 
 
 def overfit_smoke(cfg: ModelConfig, images, behavior_t, essence_t,

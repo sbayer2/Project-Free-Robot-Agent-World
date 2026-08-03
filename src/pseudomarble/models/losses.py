@@ -106,3 +106,37 @@ def per_field_mse(pred: Matrix, target: Matrix) -> list:
             sums[j] += (pr[j] - tg[j]) ** 2
     n = len(pred)
     return [s / n for s in sums]
+
+
+def pearson(a: Sequence[float], b: Sequence[float]) -> float:
+    """Pearson correlation of two equal-length sequences (pure Python).
+
+    Returns 0.0 when either side is constant -- during training that means the
+    coherence term contributes its neutral value rather than a NaN gradient.
+    """
+    n = len(a)
+    if n != len(b):
+        raise ValueError(f"length mismatch: {n} vs {len(b)}")
+    if n < 2:
+        raise ValueError("need at least 2 points")
+    ma = sum(a) / n
+    mb = sum(b) / n
+    cov = sum((x - ma) * (y - mb) for x, y in zip(a, b, strict=True))
+    va = sum((x - ma) ** 2 for x in a)
+    vb = sum((y - mb) ** 2 for y in b)
+    denom = (va * vb) ** 0.5
+    return cov / denom if denom > 0 else 0.0
+
+
+def coherence_alignment_loss(render_mags: Sequence[float],
+                             behavior_mags: Sequence[float]) -> float:
+    """The F25 coherence objective's math, framework-free (docs/ARCHITECTED_UNITY.md).
+
+    Inputs are the per-(sample, direction) response magnitudes: mean |delta| of
+    the render output and of the behavior output under the same latent
+    perturbation. The loss is 1 - Pearson(render_mags, behavior_mags), in
+    [0, 2]: 0 when the two heads always move together, 2 when perfectly
+    anti-coupled. The MLX and torch implementations must match this reference
+    on identical inputs; a unit test pins that.
+    """
+    return 1.0 - pearson(render_mags, behavior_mags)

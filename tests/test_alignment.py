@@ -172,6 +172,34 @@ def test_terciles_balanced():
     assert counts.min() > 250, f"terciles unbalanced: {counts.tolist()}"
 
 
+
+def test_ari_identical_and_relabeled_partitions():
+    if _skip_if_no_numpy():
+        return
+    from pseudomarble.models.alignment import adjusted_rand_index
+    rng = np.random.default_rng(11)
+    a = rng.integers(-1, 2, size=(512, 2))  # k=2 codes: 9 possible cells
+    assert adjusted_rand_index(a, a) == 1.0
+    relabeled = -a  # per-dim relabeling -1<->1: same partition, new labels
+    assert adjusted_rand_index(a, relabeled) == 1.0
+
+
+def test_ari_independent_near_zero_and_validates():
+    if _skip_if_no_numpy():
+        return
+    from pseudomarble.models.alignment import adjusted_rand_index
+    rng = np.random.default_rng(12)
+    a = rng.integers(0, 3, size=1000)
+    b = rng.integers(0, 3, size=1000)
+    assert abs(adjusted_rand_index(a, b)) < 0.05
+    try:
+        adjusted_rand_index([0, 1], [0, 1, 2])
+    except ValueError:
+        pass
+    else:  # pragma: no cover
+        raise AssertionError("length mismatch must raise")
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

@@ -99,17 +99,18 @@ python scripts/eval_llm_transfer.py --condition essence --max-tokens 32768
   here so a headless `graphify` run fails loudly rather than picking one
   silently.
 
-**Status (2026-08-01):** F1–F21 merged to `main`; F22–F24 complete on branches
-awaiting review (`claude/f22-coupling-dial` → `claude/f23-coherence-prereg` →
-`claude/f24-convergence-prereg`, stacked); suite 231/30 (run with
+**Status (2026-08-02):** F1–F24 merged to `main`; F25 on
+`claude/f25-architected-unity` awaiting review; suite 240/31 (run with
 `.venv/bin/python -m pytest` — system `python3` lacks hypothesis and silently
-collects fewer). **Headline:** the F18–F21 gap was the *world*, not the
-architecture — strengthen the appearance↔physics coupling (F22a, r ≈ 0.26 →
-0.64) and the essence is learned (Δ +0.15 → +0.92, ~86 % of reachable). But the
-extra signal buys *prediction only*: coherence is flat in r (F23 H1 NULL),
-extraction efficiency falls as the world gets richer (F23 H2), and cross-seed
-convergence is flat too — training pushes independent seeds *below* the
-untrained alignment floor except at r ≈ 1, while a 1-trit FSQ budget forces
-90–95 % cross-model agreement at every coupling (F24). Scarcity manufactures
-coherence (F17) and consensus (F24); abundance individuates. ABO stage 2 stays
+collects fewer). **Headline:** three preregistered routes to "one latent, two
+projections" have now failed on the same instrument. *Signal*: strengthening
+the coupling teaches the essence (F22a, Δ +0.15 → +0.92) but leaves coherence
+flat (F23) and pushes independent seeds *below* the untrained alignment floor
+(F24 — training individuates; only r ≈ 1 converges). *Budget*: FSQ forces
+90–95 % cross-model agreement at every coupling (F24/F25 — consensus is
+robust) but its F17 coherence bonus does not survive the strong world and no
+k reaches unified-without-cost (F25). *Objective*: a direct differentiable
+coherence loss Goodharts — trained metric +0.78, essence coherence ≈ 0, Δ
+negative, consensus annihilated (F25). Constraints that reference the world
+converge; constraints that reference a metric diverge. ABO stage 2 stays
 blocked on outlier-dominated probe outcomes (F22b).

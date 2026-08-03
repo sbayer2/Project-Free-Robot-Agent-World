@@ -52,6 +52,10 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
     p.add_argument("--render-weight", type=float, default=None,
                    help="loss weight on the render head (default 1.0; set 0 for a "
                         "behavior-only model)")
+    p.add_argument("--coherence-weight", type=float, default=None,
+                   help="loss weight on the F25 coherence objective (train the "
+                        "render and behavior heads to respond TOGETHER to latent "
+                        "perturbations; default 0/off — see docs/ARCHITECTED_UNITY.md)")
     p.add_argument("--behavior-warmup-epochs", type=int, default=0,
                    help="ramp the behavior-head loss weight linearly from 0 to its "
                         "full value over the first K epochs (basin-selection lever: "
@@ -88,6 +92,8 @@ def make_config(args: argparse.Namespace) -> ModelConfig:
         cfg = replace(cfg, render_weight=args.render_weight)
     if args.appearance_weight is not None:
         cfg = replace(cfg, appearance_weight=args.appearance_weight)
+    if args.coherence_weight is not None:
+        cfg = replace(cfg, coherence_weight=args.coherence_weight)
     return cfg
 
 

@@ -174,3 +174,36 @@ def terciles(values: Sequence[float]):
     v = np.asarray(values, dtype=np.float64).reshape(-1)
     lo, hi = np.quantile(v, [1.0 / 3.0, 2.0 / 3.0])
     return (v > lo).astype(np.int64) + (v > hi).astype(np.int64)
+
+
+def adjusted_rand_index(a: Sequence[int], b: Sequence[int]) -> float:
+    """Adjusted Rand index between two labelings of the same scenes.
+
+    Permutation-invariant by construction and chance-adjusted to ~0, so it
+    generalizes trit_agreement (whose max-over-relabelings search is factorial
+    in the code width) to FSQ codes of any k: treat each distinct code vector
+    as one cluster label. 1.0 = identical partitions.
+    """
+    np = _np()
+    a = np.asarray(a).reshape(len(a), -1)
+    b = np.asarray(b).reshape(len(b), -1)
+    if a.shape[0] != b.shape[0]:
+        raise ValueError(f"length mismatch: {a.shape[0]} vs {b.shape[0]}")
+    _, la = np.unique(a, axis=0, return_inverse=True)
+    _, lb = np.unique(b, axis=0, return_inverse=True)
+    n = la.shape[0]
+    contingency = np.zeros((la.max() + 1, lb.max() + 1), dtype=np.int64)
+    for i, j in zip(la.tolist(), lb.tolist(), strict=True):
+        contingency[i, j] += 1
+
+    def comb2(x):
+        return x * (x - 1) / 2.0
+
+    sum_ij = float(comb2(contingency).sum())
+    sum_a = float(comb2(contingency.sum(axis=1)).sum())
+    sum_b = float(comb2(contingency.sum(axis=0)).sum())
+    total = comb2(n)
+    expected = sum_a * sum_b / total if total > 0 else 0.0
+    max_index = 0.5 * (sum_a + sum_b)
+    denom = max_index - expected
+    return float((sum_ij - expected) / denom) if denom != 0 else 1.0
