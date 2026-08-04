@@ -99,9 +99,10 @@ python scripts/eval_llm_transfer.py --condition essence --max-tokens 32768
   here so a headless `graphify` run fails loudly rather than picking one
   silently.
 
-**Status (2026-08-03):** F1–F25 merged to `main`; F26 (PR #38) and F27
-(stacked branch `claude/f27-shape-degenerate`) awaiting review; suite 241/31
-(run with `.venv/bin/python -m pytest` — system `python3` collects fewer).
+**Status (2026-08-04):** F1–F27 merged to `main` (PRs #35–#39) plus the
+bandit-B310 security fix (#40); nothing in flight; suite 241/31 (run with
+`.venv/bin/python -m pytest` — system `python3` collects fewer). Knowledge
+graph (`graphify-out/`) rebuilt 2026-08-04, current through F27 and #40.
 **Headline:** the program's levers are now all measured, and the founding
 metric is the casualty. Signal buys prediction (F22a; gain 5.67 in the
 shape-degenerate strong world — the largest ever) but not coherence (F23,
