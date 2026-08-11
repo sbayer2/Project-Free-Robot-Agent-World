@@ -33,7 +33,7 @@
 #     zsh scripts/f29_retrain.sh                    # run
 #     zsh scripts/f29_retrain.sh --dry-run          # list actions, do nothing
 
-set -e
+set -e -o pipefail   # pipefail: a failing train.py must not be hidden by 'tail -1'
 cd /Users/sbm4_mac/Project-Free-Robot-Agent-World
 PY=.venv/bin/python
 ROOT=runs/f29_disjoint
@@ -89,10 +89,13 @@ for tag in ctrl base g2 loud; do
         continue
       fi
       echo "=== TRAIN $tag pair$seed $kind (seed=$seed, lr 2e-4) ==="
-      # shellcheck disable=SC2086
+      # ${=weights} forces zsh word-splitting on IFS so
+      # "--behavior-weight 0 --essence-weight 0" reaches train.py as four
+      # args, not one glued string. Bash-style unquoted $weights does NOT
+      # split in zsh -- burned 24 min on that once, never again.
       $PY -m pseudomarble.models.train --data "data/pm_f27_$tag" \
         --out "$out" --seed "$seed" --lr 2e-4 --epochs 50 --image-size 128 \
-        $weights 2>&1 | tail -1
+        ${=weights} 2>&1 | tail -1
       (( ++n_run ))
     done
   done
