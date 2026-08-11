@@ -28,6 +28,8 @@ from f28_measure import (  # noqa: E402
     BEHAVIOR_FIELDS,
     CHANNELS,
     ESSENCE_AXES,
+    MATCHED_BEHAVIOR,
+    MATCHED_ESSENCE,
     SIGNS_BEHAVIOR,
     SIGNS_ESSENCE,
     alignment_matrix,
@@ -53,13 +55,17 @@ def _cos(a: np.ndarray, b: np.ndarray) -> float:
 
 
 def test_committed_pairing_table_is_the_frozen_one():
-    """The section-3 commitment, pinned: any edit to the pairing must fail here."""
-    assert CHANNELS == ("metallic", "roughness", "value")
+    """The section-3 commitment as amended, pinned: any edit to the pairing
+    must fail here. Amendment 3 (2026-08-11) dropped roughness<->friction as
+    VOID-BY-LEGIBILITY; the two surviving cells are metallic<->density (+)
+    and value<->restitution (-), friction kept as mismatched diagnostic."""
+    assert CHANNELS == ("metallic", "value")
     assert ESSENCE_AXES == ("density", "friction", "restitution")
-    assert SIGNS_ESSENCE == (1.0, 1.0, -1.0)
-    assert BEHAVIOR_FIELDS == ("push.path_length", "push.slid_distance",
-                               "drop.n_bounces")
-    assert SIGNS_BEHAVIOR == (-1.0, -1.0, -1.0)
+    assert MATCHED_ESSENCE == ((0, 0), (1, 2))
+    assert SIGNS_ESSENCE == (1.0, -1.0)
+    assert BEHAVIOR_FIELDS == ("push.path_length", "drop.n_bounces")
+    assert MATCHED_BEHAVIOR == ((0, 0), (1, 1))
+    assert SIGNS_BEHAVIOR == (-1.0, -1.0)
     names = behavior_field_names()
     for f in BEHAVIOR_FIELDS:  # addressed by name; must exist in the vector
         assert f in names
@@ -70,10 +76,9 @@ def test_channel_targets_pick_the_committed_columns():
     Ya[0] = [0.2, 0.7, 0.4, 1.0, 0.31, 0.62, 0.0, 0.5]  # RGB max = 0.7 (G)
     Ya[1] = [0.9, 0.1, 0.1, 1.0, 0.11, 0.22, 0.0, 0.5]  # RGB max = 0.9 (R)
     Y = channel_targets(Ya)
-    assert Y.shape == (2, 3)
+    assert Y.shape == (2, 2)
     np.testing.assert_allclose(Y[:, 0], [0.62, 0.22])  # metallic = col 5
-    np.testing.assert_allclose(Y[:, 1], [0.31, 0.11])  # roughness = col 4
-    np.testing.assert_allclose(Y[:, 2], [0.7, 0.9])    # value = max(RGB)
+    np.testing.assert_allclose(Y[:, 1], [0.7, 0.9])    # value = max(RGB)
 
 
 def test_ridge_weights_match_ridge_fit_predict():
@@ -117,12 +122,14 @@ def test_standardized_coordinate_composition_on_synthetic_case():
 
 
 def test_directional_D_signs_and_mismatched_cells():
+    """2x3 alignment matrix, Amendment-3 matched cells (0,0) and (1,2):
+    D averages those two with committed signs; the other four cells feed
+    mismatched_abs only."""
     M = np.array([[0.5, 0.9, -0.9],
-                  [0.9, 0.4, 0.9],
-                  [-0.9, 0.9, -0.6]])
-    D, mism = directional_D(M, (1.0, 1.0, -1.0))
-    assert abs(D - (0.5 + 0.4 + 0.6) / 3) < 1e-12
-    assert abs(mism - 0.9) < 1e-12  # six off-diagonal cells, all |0.9|
+                  [0.9, -0.9, -0.6]])
+    D, mism = directional_D(M, ((0, 0), (1, 2)), (1.0, -1.0))
+    assert abs(D - (0.5 + 0.6) / 2) < 1e-12
+    assert abs(mism - 0.9) < 1e-12  # four unmatched cells, all |0.9|
 
 
 def test_stitch_transfer_matches_analytic_composition():

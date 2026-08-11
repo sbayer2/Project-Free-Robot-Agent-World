@@ -335,3 +335,83 @@ failing channel VOIDs its cells in that model". The three untrained builds
 are re-encoded per arm (§2's procedure: their z depends on the arm's
 images even though their weights do not), so the encode count is 32 rather
 than §9's 23-pass estimate; the 10–20 min wall-clock budget stands.
+
+---
+
+## Amendment 3 (2026-08-11, after pass 1 VOID) — the roughness↔friction cell is unmeasurable at this apparatus; the committed pairing shrinks to two cells
+
+**Pass 1 record.** Run 2026-08-11 on the frozen design. **VOID by its own
+§7 gates**: the trained-probe floor (R² ≥ 0.25 per committed channel)
+failed in all four arms — min 0.148 (ctrl), 0.219 (base), 0.215 (g2),
+0.248 (loud) — so no verdict was read. Aggregate observations recorded
+behind the failed gates (not verdicts): learned_D ≈ 0 at every arm
+(+0.0000 / +0.0001 / +0.0006 / +0.0031), untrained baselines ≈ 0,
+mismatched_abs ≤ 0.008; the loud disjoint cell survived its own gates with
+stitch R² 0.998 and D −0.0029. Report preserved at
+`runs/f28/f28_report_pass1.json` (gitignored, regenerable).
+
+**Diagnosis (post-void, measurement-only).** A per-channel breakdown on
+the same encodes shows the failing minimum is the **roughness** column in
+every arm (trained seeds 0.148–0.383; metallic 0.53–0.99 and value
+0.82–0.98 clear the floor everywhere, including every `renderonly`
+model). The cause is a render-configuration property measured three times
+before on other worlds — F19 (roughness "untestable", pixel ceiling 0.035
+at 128 px), F21 Arm 1 (untrained reach 0.18–0.33 across the noise
+ladder), F21 Arm 2 (256 px oblique doubles reachability to only ~0.37) —
+and now reproduced on the pm_f27 worlds (pixel-feature ceiling for
+roughness 0.05–0.26 per arm): **128 px flat-lit renders barely vary with
+roughness**. The trained latents often *exceed* the crude pixel-feature
+ceiling, so the latent is not discarding roughness; there is almost
+nothing to keep. The freeze-time error is §8/P3's appeal to "F19
+precedent" for probe readability: F19's readable channel was color;
+roughness was unmeasurable at this resolution in F19's own record. The
+coupling dial cannot fix this — it changes what the appearance *params*
+encode about physics, not how legibly the *render* exposes the params.
+
+**The change (this amendment alters §3; nothing else).** The committed
+pairing is reduced to the two cells whose render channels are measurable
+at this apparatus:
+
+| render channel | physics factor | essence output | sign | behavior field | sign |
+|---|---|---|---|---|---|
+| `metallic` (appearance_vector[5]) | heaviness | density | + | `push.path_length` | − |
+| value V = max(R,G,B) (appearance_vector[0:3]) | 1 − hardness | restitution | **−** | `drop.n_bounces` | − |
+
+- **D is the mean of the two matched signed cells.** The essence-head
+  Jacobians are still computed for all three outputs (they cost nothing
+  and their quality gate is unchanged), so the alignment matrix is 2 × 3
+  and `mismatched_abs` now averages the four unmatched cells — the
+  friction row survives as entanglement diagnostic.
+- **The roughness↔friction cell is recorded as VOID-BY-LEGIBILITY at this
+  apparatus, not NULL.** No statement about friction-content
+  directionality is made or implied by pass 2. The escalation path if that
+  cell is ever wanted is dataset regeneration at 256 px oblique lighting
+  (the F21 Arm 2 recipe) plus retraining — hours of work for a channel
+  F21 measured at only ~0.37 reachability even then; it is noted, not
+  planned.
+- All §6 hypotheses, decision rules, bars, §7 gates, and the §2 metric
+  construction are **untouched**. `scripts/f28_verdicts.py` is unchanged,
+  byte for byte. The driver and its pairing-pinning tests are updated in
+  the same commit as this amendment to implement the two-cell table —
+  the amendment changes the commitment; the driver follows it.
+
+**Contamination disclosure.** Pass 1's aggregate D values (≈ 0
+everywhere), gate minima, and the diagnostic's per-channel probe R² were
+all seen before this amendment. Per-cell alignment values M[c,p] were
+never stored or seen, so the two-cell D is not derivable from what was
+seen. The channel-set change is legibility-motivated, and the seen
+aggregates are null — no positive result exists to chase. The bars are
+not re-tuned (§10's commitment stands).
+
+**Pass-2 expectation, registered before the rerun.** Given the seen
+pass-1 aggregates, the live prediction is now **(65/35) H1 CLEAN and H2a
+UNDERPOWERED** — D ≈ 0 even at loud *with all gates passing*. That
+outcome would be a genuine finding, not a failure: at r = 0.992 the
+metallic probe reads the latent at R² ≥ 0.94 and the essence head extracts
+density at gain 5.67, yet the z-direction that writes metal into the
+render would share no orientation with the direction that moves the
+density readout — the strongest available form of F27b's
+substrate-entanglement-without-content-unity result, now measured
+directionally with a valid instrument. If instead D(loud) − D(ctrl)
+clears +0.10 (t ≥ 2.5), H2a is POWERED and H2 reads normally. Both
+readings inherit §6's frozen rules unchanged.

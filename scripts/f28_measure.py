@@ -5,7 +5,8 @@
 Per arm (ctrl/base/g2/loud; runs/f27b checkpoints on data/pm_f27_*):
 
   * ridge-probe directions for the committed render channels (metallic,
-    roughness, value = max RGB) fit on the train-split z,
+    value = max RGB; roughness dropped by Amendment 3 as unmeasurable at
+    this apparatus) fit on the train-split z,
   * essence-head Jacobian rows (density, friction, restitution) at each
     test-split z via MLX vjp,
   * both expressed in that model's own train-split standardized coordinates
@@ -68,14 +69,20 @@ from render_fidelity_eval import load_arrays  # noqa: E402
 from pseudomarble.models.alignment import participation_ratio  # noqa: E402
 from pseudomarble.probes import behavior_field_names  # noqa: E402
 
-# ---- committed constants: the section-3 pairing table, verbatim ------------- #
-# (channel order, physics order, and signs are FROZEN in the preregistration;
-# tests/test_f28_measure.py pins them. Matched cells are the diagonal.)
-CHANNELS = ("metallic", "roughness", "value")
+# ---- committed constants: the section-3 pairing table as amended ------------ #
+# (Amendment 3, 2026-08-11: the roughness<->friction cell is VOID-BY-LEGIBILITY
+# at this apparatus -- 128px flat-lit renders barely vary with roughness (F19,
+# F21, and the pass-1 diagnostic) -- so the committed pairing is the two
+# measurable cells. Essence Jacobians keep all three outputs; the friction row
+# survives in the 2x3 alignment matrix as mismatched-cell diagnostic only.
+# tests/test_f28_measure.py pins this table.)
+CHANNELS = ("metallic", "value")
 ESSENCE_AXES = ("density", "friction", "restitution")  # F19 order = head outputs 0,1,2
-SIGNS_ESSENCE = (1.0, 1.0, -1.0)
-BEHAVIOR_FIELDS = ("push.path_length", "push.slid_distance", "drop.n_bounces")
-SIGNS_BEHAVIOR = (-1.0, -1.0, -1.0)
+MATCHED_ESSENCE = ((0, 0), (1, 2))  # metallic<->density, value<->restitution
+SIGNS_ESSENCE = (1.0, -1.0)
+BEHAVIOR_FIELDS = ("push.path_length", "drop.n_bounces")
+MATCHED_BEHAVIOR = ((0, 0), (1, 1))
+SIGNS_BEHAVIOR = (-1.0, -1.0)
 RIDGE_ALPHA = 1e-3
 PROBE_R2_TRAINED = 0.25  # mirror of the frozen gate; used here only to VOID disjoint cells
 N_UNTRAINED = 3
@@ -88,9 +95,10 @@ ARMS = [("ctrl", "data/pm_f27_ctrl"), ("base", "data/pm_f27_base"),
 # ---- pure-numpy geometry (unit-tested in any session) ----------------------- #
 
 def channel_targets(Ya: np.ndarray) -> np.ndarray:
-    """(n, 3) committed probe targets from the 8-dim appearance vector:
-    metallic (col 5), roughness (col 4), value = max(R, G, B) (cols 0:3)."""
-    return np.stack([Ya[:, 5], Ya[:, 4], Ya[:, 0:3].max(axis=1)], axis=1)
+    """(n, 2) committed probe targets from the 8-dim appearance vector:
+    metallic (col 5), value = max(R, G, B) (cols 0:3). (Amendment 3 dropped
+    the roughness column, col 4.)"""
+    return np.stack([Ya[:, 5], Ya[:, 0:3].max(axis=1)], axis=1)
 
 
 def ridge_weights(Xtr: np.ndarray, Ytr: np.ndarray,
@@ -139,13 +147,16 @@ def alignment_matrix(dirs: np.ndarray, jacs_raw: np.ndarray,
     return M
 
 
-def directional_D(M: np.ndarray, signs: tuple[float, ...]) -> tuple[float, float]:
-    """(D, mismatched_abs): signed mean of the matched (diagonal) cells, and
-    mean |M| over the off-diagonal cells (prereg section 2.5)."""
-    k = len(signs)
-    matched = float(np.mean([signs[i] * M[i, i] for i in range(k)]))
-    off = ~np.eye(k, dtype=bool)
-    return matched, float(np.abs(M[off]).mean())
+def directional_D(M: np.ndarray, matched: tuple[tuple[int, int], ...],
+                  signs: tuple[float, ...]) -> tuple[float, float]:
+    """(D, mismatched_abs): signed mean of the matched cells, and mean |M|
+    over every other cell (prereg section 2.5; matched cells per the
+    Amendment-3 table are no longer the diagonal)."""
+    D = float(np.mean([s * M[r, c] for (r, c), s in zip(matched, signs, strict=True)]))
+    mask = np.ones(M.shape, dtype=bool)
+    for r, c in matched:
+        mask[r, c] = False
+    return D, float(np.abs(M[mask]).mean())
 
 
 def stitch_predict(W: np.ndarray, mu: np.ndarray, sd: np.ndarray,
@@ -225,9 +236,11 @@ def measure_model(m, imgs, Ych: np.ndarray, tr: np.ndarray, te: np.ndarray,
     probe_r2 = kfold_r2(z[tr], Ych[tr])                    # per-channel gate, train split
     dirs, _mu, sd = probe_directions(z[tr], Ych[tr])
     jac_e = head_jacobian_rows(m.essence_from_z, z[te], (0, 1, 2), len(ESSENCE_AXES))
-    D, mism = directional_D(alignment_matrix(dirs, jac_e, sd), SIGNS_ESSENCE)
+    D, mism = directional_D(alignment_matrix(dirs, jac_e, sd),
+                            MATCHED_ESSENCE, SIGNS_ESSENCE)
     jac_b = head_jacobian_rows(m.behavior_from_z, z[te], field_idx, n_behavior)
-    Db, _ = directional_D(alignment_matrix(dirs, jac_b, sd), SIGNS_BEHAVIOR)
+    Db, _ = directional_D(alignment_matrix(dirs, jac_b, sd),
+                          MATCHED_BEHAVIOR, SIGNS_BEHAVIOR)
     jac_min = min(float(np.median(np.linalg.norm(jac_e[p] * sd[None, :], axis=1)))
                   for p in range(len(ESSENCE_AXES)))
     return {"z": z, "pr": pr, "probe_r2": probe_r2, "sd": sd,
@@ -318,7 +331,7 @@ def main() -> None:
                 jac_bo = head_jacobian_rows(m_bo.essence_from_z, z_bo[te],
                                             (0, 1, 2), len(ESSENCE_AXES))
                 D_dj, _ = directional_D(alignment_matrix(dirs_t, jac_bo, sd_bo),
-                                        SIGNS_ESSENCE)
+                                        MATCHED_ESSENCE, SIGNS_ESSENCE)
                 jac_extra = [min(float(np.median(
                     np.linalg.norm(jac_bo[p] * sd_bo[None, :], axis=1)))
                     for p in range(len(ESSENCE_AXES)))]
