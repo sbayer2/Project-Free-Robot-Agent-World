@@ -1778,6 +1778,101 @@ Reproduce: `runs/f27/launch.sh` (void pass, kept for the record),
 
 ---
 
+### F28 — ⭐ Directional (content-matched) coherence is ZERO at every coupling with a valid instrument — even near-definitional, demonstrably-extracted content produces no shared direction, while magnitude coherence reads +0.42 on the same checkpoints
+
+*(Run 2026-08-11 in two passes on the F27b checkpoints; measurement-only,
+no training. Preregistered in `docs/DIRECTIONAL_COHERENCE.md` with
+`scripts/f28_verdicts.py` frozen before any directional number existed;
+Amendment 2 recorded the post-freeze Dyna-2 context and registered F29–F31
+candidates pre-run. **Pass 1 is VOID by its own gates**: the trained-probe
+floor (R² ≥ 0.25 per committed channel) failed in all four arms (min
+0.148–0.248), the failing column being **roughness** everywhere — the F19
+result ("untestable at 128 px, pixel ceiling 0.035") and F21's reach
+0.18–0.33 reproduced on the pm_f27 worlds (pixel ceiling 0.05–0.26;
+trained z often *exceeds* it, so the latent is not discarding roughness —
+there is almost nothing to keep). The freeze-time error was citing "F19
+precedent" for probe readability when F19's readable channel was color.
+Amendment 3 recorded roughness↔friction as **VOID-BY-LEGIBILITY at this
+apparatus, not NULL**, shrank the committed pairing to metallic↔density
+(+) and value↔restitution (−) — friction kept as mismatched-cell
+diagnostic in a 2×3 alignment matrix — left every bar, rule, and gate
+untouched, disclosed that pass-1 aggregates (≈ 0) were seen, and
+registered the pass-2 expectation (65/35 H1 CLEAN + H2a UNDERPOWERED)
+before the rerun. **Pass 2 passed ALL gates** (probe min 0.584–0.961, PR
+24–58, every stitch R² ≥ 0.998). Graded against the original freeze: **P1
+correct** (70/30, H1 CLEAN), **P2 falsified** (H2a UNDERPOWERED — the
+amended 65/35 expectation hit, at the lower evidential weight its timing
+deserves), **P3 unreadable by the frozen rule** (H2 NULL behind an
+UNDERPOWERED anchor — no CONTENT verdict anywhere), **P4 half-correct**
+(H3 ctrl PASS; the predicted content-without-substrate positive at g2 did
+not appear — D_disjoint +0.0026 ≈ 0), **P5 not meaningfully confirmed**
+(Spearman +1.00 but on noise-scale values).)*
+
+| arm | r | learned_D | behav_D | mism\|abs\| | disjoint D | stitch R² | magnitude (F27b) |
+|---|---|---|---|---|---|---|---|
+| ctrl | 0.008 | +0.0000 ± 0.000 | −0.0000 | 0.0001 | +0.0000 | 0.999 | +0.434 |
+| base | 0.263 | +0.0001 ± 0.000 | +0.0001 | 0.0001 | −0.0001 | 0.998 | +0.423 |
+| g2 | 0.809 | +0.0004 ± 0.005 | +0.0010 | 0.0053 | +0.0026 | 0.998 | +0.420 |
+| loud | 0.992 | +0.0040 ± 0.007 | −0.0097 | 0.0095 | −0.0022 | 0.998 | +0.205 |
+
+- **H1 → CLEAN.** learned_D(ctrl) = +0.0000: directionality escapes the
+  substrate entanglement that killed the magnitude metric (F27b). The
+  instrument is not inheriting the pathology it was built to escape — the
+  metric *works*; what it measures is genuinely absent.
+- **H2a → UNDERPOWERED, and that is the finding, not a power apology.** At
+  loud the dedicated map is 87.5%-blended — metallic *is* density to
+  r = 0.992, the probe reads it out of z at R² ≥ 0.94, and the essence
+  head extracts it at gain 5.67 (the program's largest). Yet
+  learned_D(loud) − learned_D(ctrl) = +0.0040 (t 0.97) against a +0.10
+  bar: **near-definitional, demonstrably-extracted content produces no
+  directional alignment between the render-writing and physics-reading
+  directions.** H2 is NULL behind it (g2 − ctrl +0.0003, t 0.13),
+  unreadable by the frozen rule.
+- **H3 → ctrl PASS; every coupled arm reads "shared ≈ disjoint — no unity
+  evidence"** (max gap +0.0062 at loud, bar +0.10). Joint training adds
+  nothing directional beyond what two separately trained models plus a
+  linear stitch already have — which is also ≈ 0.
+- **The dissociation is in the levels, not the trend.** Magnitude
+  coherence: +0.205 to +0.434 on these exact checkpoints. Directional
+  coherence: ≤ +0.0040 everywhere, mismatched cells ≤ 0.0095. Joint
+  training couples response *magnitudes* (F27b: substrate entanglement);
+  it produces **no shared content directions at all** — the "one essence,
+  two projections" property fails in its most literal geometric form.
+  H4's Spearman (+1.00) is over means of magnitude ≤ 0.004 with per-seed
+  sd up to 0.007 and is not evidence of a trend.
+- **Mechanistic observation (post-hoc, labeled):** the essence head
+  extracts material content (gain 5.67) while its per-scene Jacobian
+  directions average to nothing against the single global direction that
+  best writes that content into the render. Extraction must run through
+  scene-local / nonlinear direction sets, not a global linear channel —
+  consistent with F25's "routing" diagnosis of how objectives Goodhart.
+- **Side result with F24 reach:** stitch R² ≥ 0.998 at *every* arm — a
+  render-only and a behavior-only model, sharing nothing but the world,
+  produce latents that are near-perfect linear transforms of each other.
+  The JL/untrained-floor story (F24) at its extreme: latent geometry is
+  substrate-determined; training chooses what to read from it, not its
+  shape.
+
+**What this closes.** The coherence metric family's content-reading is now
+dead in both available forms: magnitude coherence certifies substrate
+entanglement (F27b), and directional coherence — the successor built to
+restore discriminative power, H1-verified as entanglement-free — finds
+nothing to discriminate, even where content is near-definitional and
+provably extracted. Within this instrument's regime (~1M params, 128 px,
+one world class), "one latent, two projections" has no internal geometric
+signature this program can measure. The registered successors point
+outward: F29 (held-out-transfer coherence — unity as the *advantage* of
+joint over disjoint training on a held-out world), F30 (render-only data
+scaling), F31 (dynamics head), per Amendment 2. The roughness↔friction
+cell remains VOID-BY-LEGIBILITY, escalation path 256 px oblique
+regeneration (noted, not planned).
+
+Reproduce: `python scripts/f28_measure.py --root runs/f27b` then
+`python scripts/f28_verdicts.py --report runs/f28/f28_report.json`
+(pass-1 artifacts preserved as `runs/f28/f28_report_pass1.json`).
+
+---
+
 ## 4. Next steps — the gap is NOT intrinsic; the fork is resolved
 
 *(Rewritten 2026-07-30 after F22a. The previous version concluded the
@@ -1843,6 +1938,6 @@ Reproduce F8: `python tests/batch_probe_stability.py`.
 
 ---
 
-*Tests: 240 across 31 suites, all passing (1 skipped); core imports with no
+*Tests: 254 across 32 suites, all passing (1 skipped); core imports with no
 mujoco/bpy/trimesh/numpy/mlx/torch. Personal research; not affiliated with World
 Labs.*
