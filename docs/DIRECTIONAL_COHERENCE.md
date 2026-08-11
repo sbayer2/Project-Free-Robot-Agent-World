@@ -266,3 +266,72 @@ source code (`materials.py`), not from data. The session sketch that
 preceded this document mispredicted the disjoint arm (≈ 0 at every r); the
 correction is recorded in §5.3 and the corrected P4 stands as the frozen
 prediction.
+
+---
+
+## Amendment 2 (2026-08-11, pre-run) — external context recorded; design unchanged; successor candidates registered
+
+*Written with the measure driver commit, before any measurement has run.
+Still true at this writing: no directional-coherence number has ever been
+computed on any checkpoint. Nothing in §§1–11 is altered.*
+
+**1. The Dyna-2 report post-dates this freeze and changes nothing here.**
+Between the freeze (2026-08-04) and this amendment, Dyna Robotics published
+"Dyna-2: A 1-Million-Hour Scaling Law for World-Action Models" (2026-08-10;
+single-lab tech report, not peer-reviewed), clipped and synthesized in the
+research vault 2026-08-11. It is architecturally this program's design at
+~1000× scale — a shared trunk under a video/world head and an action head,
+the action head never reading the world latent (the F20 mechanism) — and two
+of its results bear directly on F28's subject: its joint-training-alone
+ablation does not scale (corroborating F27b's substrate-entanglement
+reading), and its operational test for "the world model carries content" is
+**held-out prediction on a held-out embodiment** — an external transfer
+yardstick, not an internal scalar. This design was frozen before that report
+existed and runs exactly as frozen. The transfer yardstick is deliberately
+NOT adopted into F28: it addresses a different failure mode (F25's Goodhart
+circularity — optimizing/reading an internal metric) than directional
+coherence does (F27b's substrate entanglement — magnitude co-response
+without content), the two instruments are complements rather than
+substitutes, and H1's verdict is prerequisite knowledge for designing the
+transfer experiment properly (an ENTANGLED H1 kills the internal-coherence
+family outright and makes external transfer the only surviving
+operationalization of unity).
+
+**2. Successor candidates, registered by name before F28's numbers exist**
+(so their motivation cannot be back-fit to this experiment's outcome; none
+is designed or preregistered here, and none may inherit this document's
+rules):
+
+- **F29 candidate — held-out-transfer coherence.** Score unity externally:
+  the *advantage of a jointly trained shared-latent model over disjoint
+  single-head models* at prediction on a held-out world / shape-family
+  neither was trained on. The disjoint training recipe already exists
+  (F27b's `renderonly`/`behavonly` arms); the yardstick is Dyna-2's,
+  transplanted; the Goodhart immunity comes from the target referencing the
+  world, per F25's own lesson (constraints that reference the world
+  converge; constraints that reference a metric diverge).
+- **F30 candidate — render-only data scaling.** Fix the physics-labeled
+  scenes, scale render-only data well beyond them, co-train, and measure
+  whether transfer (F29's yardstick) moves where signal (F23), budget
+  (F24/F25), and objective (F25) all failed. Dyna-2's central ablation —
+  co-training helps only with extra content-bearing video, and the gap
+  opens with scale — is the motivating datapoint; its absence at small
+  scale is that report's own low-data regime, so a null here would not
+  falsify the mechanism, only bound it below this instrument's scale.
+- **F31 candidate — dynamics head.** The honest disanalogy: Dyna-2's world
+  head predicts the *future*; this program's render head is static
+  multi-view appearance (the one-step degenerate case). A
+  next-observation-given-action head would test whether the scaling axis
+  Dyna-2 found requires dynamics prediction — the sharpest reason a static
+  render head might never organize the latent at any scale.
+
+**3. Driver bookkeeping (documented in `scripts/f28_measure.py`, restated
+here so the prereg is self-contained; decisions, not new rules).** The
+arm-level trained-probe gate covers the three shared seeds — the models the
+primary statistic reads; a `renderonly` model failing the same R² floor
+voids its own disjoint cell (emitted as `null`, which the frozen verdicts
+script renders VOID) rather than the arm's verdict, implementing §7's "a
+failing channel VOIDs its cells in that model". The three untrained builds
+are re-encoded per arm (§2's procedure: their z depends on the arm's
+images even though their weights do not), so the encode count is 32 rather
+than §9's 23-pass estimate; the 10–20 min wall-clock budget stands.
