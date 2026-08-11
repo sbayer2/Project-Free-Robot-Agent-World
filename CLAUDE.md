@@ -99,21 +99,25 @@ python scripts/eval_llm_transfer.py --condition essence --max-tokens 32768
   here so a headless `graphify` run fails loudly rather than picking one
   silently.
 
-**Status (2026-08-04):** F1–F27 merged to `main` (PRs #35–#39) plus the
-bandit-B310 security fix (#40); nothing in flight; suite 241/31 (run with
-`.venv/bin/python -m pytest` — system `python3` collects fewer). Knowledge
-graph (`graphify-out/`) rebuilt 2026-08-04, current through F27 and #40.
-**Headline:** the program's levers are now all measured, and the founding
-metric is the casualty. Signal buys prediction (F22a; gain 5.67 in the
-shape-degenerate strong world — the largest ever) but not coherence (F23,
-F26: the nine-point coherence-vs-r curve is trendless). Budgets buy
-consensus (F24/F25), objectives Goodhart (F25). F27b then showed the
-magnitude-coherence metric certifies *substrate entanglement, not content
-unity*: +0.434 learned coherence with ZERO shared world-content between the
-heads (disjoint control +0.0001), more than double any multi-shape value —
-so every coherence number since F6 reads as shared-latent head entanglement,
-and F13 carries a dated interpretive note. Also: the F12 collapse cure is
-world-dependent (shape-degenerate weak-r worlds collapse at lr 5e-4; F27
-first pass VOID by its own gates, lr 2e-4 recipe frozen in amendment).
-Candidate F28: directional (content-matched) coherence. ABO stage 2 stays
-blocked (F22b).
+**Status (2026-08-11):** F1–F27 merged to `main` (PRs #35–#41); **F28 in
+flight** as draft PR #42 (`claude/f28-directional-prereg`): preregistered
+directional (content-matched) coherence, run in two passes on the F27b
+checkpoints — pass 1 VOID by its own probe gate (roughness illegible at
+128 px, the F19/F21 legibility result reproduced; Amendment 3 records the
+cell VOID-by-legibility and shrinks the pairing to two cells), pass 2 ALL
+GATES PASS. Suite 254/32 (run with `.venv/bin/python -m pytest` — system
+`python3` collects fewer). Knowledge graph current through F27 and #40
+(F28 not yet extracted). **Headline:** the coherence family's
+content-reading is dead in both available forms. Magnitude coherence
+certifies substrate entanglement (F27b: +0.434 with ZERO shared content);
+directional coherence — H1-verified free of that entanglement — reads
+ZERO at every coupling (learned_D ≤ +0.0040) even where content is
+near-definitional and demonstrably extracted (loud: metallic ≈ density at
+r 0.992, probe R² ≥ 0.94, gain 5.67), while magnitude reads +0.205–0.434
+on the same checkpoints. No internal geometric signature of "one latent,
+two projections" remains measurable in this regime; side result: render-
+only and behavior-only latents are near-perfect linear transforms of each
+other (stitch R² ≥ 0.998, F24's JL floor at its extreme). Successors
+registered pre-run (Amendment 2): F29 held-out-transfer coherence, F30
+render-only data scaling, F31 dynamics head. ABO stage 2 stays blocked
+(F22b).
