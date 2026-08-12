@@ -111,15 +111,21 @@ def passes_filter(phys_raw: tuple, threshold: float, hull) -> bool:
 
 
 def pilot_assignments(arm: str, alpha: float, train_phys: list,
-                      n_scenes: int = N_SCENES_PER_ARM) -> tuple:
+                      n_scenes: int = N_SCENES_PER_ARM,
+                      seed: int | None = None) -> tuple:
     """(assignments, stats) for one (arm, alpha) cell.
 
     Candidates are drawn from a MaterialSampler seeded by alpha ONLY (not
     arm), and the filter reads physics only, so the acceptance sequence is
     identical across arms -- the matched-arms property. Assignments carry
-    split "test" and sequential test_NNNNNN ids."""
+    split "test" and sequential test_NNNNNN ids.
+
+    ``seed`` overrides the pilot seed family: the MAIN holdout (Amendment 1)
+    uses seed 2941 through this same machinery so the frozen filter and the
+    matched-arms construction are shared, not duplicated."""
     ca, cg = ARM_DIALS[arm]
-    sampler = MaterialSampler(seed=pilot_seed(alpha),
+    eff_seed = pilot_seed(alpha) if seed is None else seed
+    sampler = MaterialSampler(seed=eff_seed,
                               appearance_noise=APPEARANCE_NOISE,
                               coupling_alpha=ca, coupling_gain=cg)
     threshold = product_threshold(train_phys, alpha)
@@ -139,7 +145,7 @@ def pilot_assignments(arm: str, alpha: float, train_phys: list,
             continue
         out.append({"scene_id": f"test_{len(out):06d}", "shape": "box",
                     "sample": ms, "split": "test"})
-    stats = {"alpha": alpha, "arm": arm, "seed": pilot_seed(alpha),
+    stats = {"alpha": alpha, "arm": arm, "seed": eff_seed,
              "threshold": threshold, "n_drawn": n_drawn,
              "acceptance_rate": n_scenes / n_drawn}
     return out, stats
