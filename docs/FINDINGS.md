@@ -1873,6 +1873,113 @@ Reproduce: `python scripts/f28_measure.py --root runs/f27b` then
 
 ---
 
+### F29 — ⭐ Held-out-transfer advantage of joint over disjoint training is null or inconclusive at every coupling, on two independent holdouts — unity has no operational signature on this axis at this scale (bounded by a gentle-extrapolation caveat)
+
+*(Run 2026-08-12. Preregistered in `docs/HELD_OUT_TRANSFER.md` with
+`scripts/f29_verdicts.py` frozen before any held-out number existed;
+two amendments, both disclosed in full. The question F28 left: unity has
+no INTERNAL geometric signature — does it have an OPERATIONAL one? Metric:
+advantage(W) = mean held-out gain of 3 jointly-trained seeds minus 3
+disjoint (renderonly/behavonly) pairs, on a material-extrapolation region
+neither student saw, per arm of the f27b coupling ladder. The 24 disjoint
+pairs were retrained at the frozen F27b recipe (seeds shared with the
+joint arms); the extrapolation aggression was set by a preregistered
+pilot.)*
+
+**Amendment 1 (pilot):** the frozen α\*-rule picked **α = 0.40**, but the
+[0.25, 0.75] combined-drop band was **MISSED low** (drops 0.055 / 0.004 /
+0.114 at α 0.05 / 0.20 / 0.40) — structurally, because §3.4's train-gain
+anchor is the f27 *test* split, which IS the heavy+bouncy extrapolation
+corner: the anchor was already an extrapolation measurement. Frozen
+limit on inference, binding this entry: **a main-run H2 NULL at
+α\* = 0.40 is weaker evidence against operational unity than a NULL at
+drop ≈ 0.5 would have been** (both students sit near ceiling on so
+gentle a holdout, compressing the room for differentiation).
+
+**Amendment 2 (gates):** the first verdicts pass was **WITHHELD by two
+freeze-time gate errors**, both provable without outcome data: a
+retraining floor (1.5 at every arm) that contradicted the joint
+reference gains frozen five lines above it in the same file (joint
+students score 1.121/1.113 at ctrl/base), and a flat apparatus
+tolerance (0.05) that ignored correlation-estimator variance — **the
+flat bar failed BOTH independent holdout draws, in OPPOSITE directions
+(Δr +0.083 and −0.060 at ctrl), each under 1σ of sampling noise: two
+noise-triggered failures of opposite sign, the cleanest proof the old
+gate tested the estimator, not the apparatus.** The recalibration
+(retraining ≥ 0.85 × the arm's joint gain — any factor in [0.5, 0.88]
+gives identical outcomes, not tuned to a boundary; apparatus 2σ floored
+at 0.05) touched gates only; verdict bars untouched. Disclosure: the
+outcome table had printed before the gate check (a layout flaw, fixed
+and test-pinned), so the amendment was written with the table seen —
+cured by a **registered confirmatory rerun on a fresh seed-2942 holdout
+that did not exist at amendment time**, which reproduced every verdict.
+
+| | seed 2941 | seed 2942 (fresh, post-amendment) |
+|---|---|---|
+| gates | ALL PASS | ALL PASS |
+| H0 kill switch | PASS (4.49 / 4.68) | PASS (5.01 / 5.32) |
+| H2 loud (primary) | INCONCLUSIVE (−0.069, t −0.13) | INCONCLUSIVE (−0.115, t −0.16) |
+| ctrl / base | NULL / NULL (±0.000) | NULL / NULL (±0.000) |
+| g2 | INCONCLUSIVE (+0.112, t 1.45) | INCONCLUSIVE (+0.156, t 0.95) |
+| H3 curve | INCONCLUSIVE (ρ −0.20) | INCONCLUSIVE (ρ −0.20) |
+| H4 tie-in | not triggered | not triggered |
+
+- **The finding: no advantage approaches any bar, anywhere, twice.** At
+  weak coupling joint and disjoint students converge to literally the
+  same predictor (advantages ±0.000 to three decimals). At loud —
+  near-definitional content, the program's best students — the
+  advantage is small, negative, and statistically nothing (t ≤ 0.16).
+  Subject to Amendment 1's frozen limit, joint training on a shared
+  latent buys **no measurable held-out-transfer advantage** over two
+  independently trained single-task students.
+- **g2's repeated-sign blip is an observation, not a verdict:** +0.112
+  and +0.156 on the two holdouts, same sign twice, t ≤ 1.45 both times.
+  Recorded; not evidence at these n.
+- **Grading:** P1 (60/40, NULL every arm) correct in direction,
+  falsified in letter — two arms read INCONCLUSIVE, their advantages
+  in the 0.05–0.15 dead zone with negligible t. P2 (25/75 POSITIVE at
+  loud) falsified. P3 (15/85 NEGATIVE at ctrl) falsified — ctrl is an
+  exact null. P4 (75/25 H0 PASS) correct, with huge margin.
+- **Side observation (post-hoc, labeled), the init thread:** loud's
+  seed variance is **synchronized across students** — seed 0 yields the
+  weaker encoder in BOTH training regimes on BOTH holdouts (per-seed
+  correlation between joint and disjoint gains 1.000 then 0.999;
+  descriptive at n = 3). Wired to the standing thread: F9/F10 found
+  coupling init-unstable, F12 cured collapse but not init-quality
+  variance, F24/F28 showed latent geometry is substrate-determined —
+  and F29 now shows init-quality variance synchronized across students
+  sharing nothing but the init seed. The cleanest evidence yet that in
+  this regime **the init, not the objective, sets encoder quality**.
+- **Both students transfer astonishingly well** (the Amendment-1 miss,
+  restated as a finding): gains drop only ~11% on materials strictly
+  outside the training hull at the top-product tail. The smooth
+  material→behavior map extrapolates almost freely — which is exactly
+  why the holdout is gentle and the limit on inference exists.
+
+**What this closes and what it bounds.** With F28: the "one latent, two
+projections" property now has **no internal geometric signature** (F28:
+directional coherence zero with a valid instrument) **and no
+operational signature measurable on this extrapolation axis at this
+scale** (F29: transfer advantage null/inconclusive twice) — jointly
+consistent with the scale-bound reading Dyna-2's low-data ablation
+supports (joint-alone does not pay off below a data threshold; its
+payoff opens with scale we cannot reach). F29 does NOT kill operational
+unity: the holdout was gentle (limit on inference), one axis (material
+extrapolation; geometry and probes held fixed), one world class.
+F30 (render-only data scaling) and F31 (dynamics head) remain the
+registered levers that could move what signal, budget, objective, and
+now transfer did not.
+
+Reproduce: `runs/f29_retrain.log` (24 disjoint pairs,
+`scripts/f29_retrain.sh`), `python scripts/f29_generate_pilot.py` +
+`python scripts/f29_pilot.py` (pilot, α\*), `python scripts/f29_run.py
+--generate` + `python scripts/f29_run.py` +
+`python scripts/f29_verdicts.py` (main, seed 2941), and the same three
+with `--seed 2942 --data-template "data/pm_f29_confirm_{arm}" --out
+runs/f29/f29_confirm_report.json` (confirmatory).
+
+---
+
 ## 4. Next steps — the gap is NOT intrinsic; the fork is resolved
 
 *(Rewritten 2026-07-30 after F22a. The previous version concluded the
@@ -1938,6 +2045,6 @@ Reproduce F8: `python tests/batch_probe_stability.py`.
 
 ---
 
-*Tests: 254 across 32 suites, all passing (1 skipped); core imports with no
+*Tests: 283 across 35 suites, all passing (1 skipped); core imports with no
 mujoco/bpy/trimesh/numpy/mlx/torch. Personal research; not affiliated with World
 Labs.*
