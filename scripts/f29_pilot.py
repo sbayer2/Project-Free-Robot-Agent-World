@@ -19,9 +19,16 @@ where combined_drop(alpha) is the mean of joint's and disjoint's drop_ratios
 at loud on the alpha-tail pilot dataset. If combined_drop(alpha*) falls
 outside [0.25, 0.75], Amendment 1 discloses the miss explicitly.
 
-The MLX layer is intentionally NOT WRITTEN in this commit: it depends on
-the 24 disjoint checkpoints landing (runs/f29_disjoint/) and on the pilot
-datasets existing (data/pm_f29_pilot_a*). Follow-up commit wires those.
+The MLX layer measures held_out_gain for both students at loud on each
+pilot dataset (prereg section 3.2-3.3), plus the disjoint train-world
+gains the drop_ratio needs (section 3.4; the joint train gains already
+exist per-seed in runs/f27b/f27_report.json). Output feeds pilot_summary
+verbatim; the resulting dict is what Amendment 1 pins and what the main
+run embeds as meta.amendment_1 (the frozen verdicts' pilot gate).
+
+Usage (Mac only):
+    .venv/bin/python scripts/f29_pilot.py --dry-run   # list work, check inputs
+    .venv/bin/python scripts/f29_pilot.py             # measure + write report
 """
 
 from __future__ import annotations
@@ -142,3 +149,154 @@ def pilot_summary(alphas, per_alpha: list[dict]) -> dict:
         "combined_drop_at_alpha_star": combined[star_i],
         "within_acceptable_band": within_acceptable_band(combined[star_i]),
     }
+
+
+def r_from_records(records: list) -> float:
+    """Coupling r of a dataset: corrcoef(appearance roughness, physics
+    friction) over its scene records -- scripts/f27_measure.py's apparatus
+    convention, restated here so the pilot report and the F27b report
+    measure r identically. Pure (numpy only), unit-tested."""
+    import numpy as np
+    rough = [s["material_truth"]["appearance_params"]["roughness"] for s in records]
+    fric = [s["physics"]["raw"]["friction"] for s in records]
+    return float(np.corrcoef(rough, fric)[0, 1])
+
+
+# ---- MLX measurement layer (Mac only; every heavy import is lazy) ---------- #
+
+def _measure_models_on(imgs, Yb_train, Yb_eval, ckpts: dict) -> dict:
+    """{name: {"gain": float, "pr": float}} for each checkpoint, encoding
+    ``imgs`` once per model and scoring gain against the train-mean
+    baseline of ``Yb_train`` (prereg section 2's formula)."""
+    from f28_measure import load_model
+    from oracle_ceiling import gain as gain_ratio
+    from probe_appearance import encode_z
+    from render_fidelity_eval import behavior_from_z
+
+    from pseudomarble.models.alignment import participation_ratio
+
+    out = {}
+    for name, ck in ckpts.items():
+        m = load_model(ck)
+        z = encode_z(m, imgs)
+        pred = behavior_from_z(m, z)
+        out[name] = {"gain": float(gain_ratio(Yb_train, Yb_eval, pred)),
+                     "pr": float(participation_ratio(z))}
+        del m
+    return out
+
+
+def main() -> None:
+    import argparse
+    import json
+    import os
+
+    import numpy as np
+
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--alphas", default=None,
+                    help="comma-separated subset of the frozen alphas")
+    ap.add_argument("--out", default="runs/f29/pilot_report.json")
+    ap.add_argument("--dry-run", action="store_true")
+    args = ap.parse_args()
+    alphas = ([float(a) for a in args.alphas.split(",")] if args.alphas
+              else list(PILOT_ALPHAS))
+    for a in alphas:
+        if a not in PILOT_ALPHAS:
+            raise SystemExit(f"alpha {a} is not in the frozen set {PILOT_ALPHAS}")
+
+    joint_cks = {f"s{k}": JOINT_CHECKPOINTS.format(arm=PILOT_ARM, seed=k)
+                 for k in range(3)}
+    disjoint_cks = {f"pair{k}": DISJOINT_BEHAV.format(arm=PILOT_ARM, k=k)
+                    for k in range(3)}
+    pilot_dirs = {a: PILOT_DATA.format(tag=alpha_tag(a), arm=PILOT_ARM)
+                  for a in alphas}
+    missing = [p for p in (list(joint_cks.values()) + list(disjoint_cks.values()))
+               if not os.path.exists(p)]
+    missing += [d for d in pilot_dirs.values()
+                if not os.path.exists(os.path.join(d, "manifest.json"))]
+    if missing:
+        listing = "\n  ".join(missing)
+        raise SystemExit(f"missing inputs (run the retrain/generator first):\n  {listing}")
+    if args.dry_run:
+        print(f"would measure {len(joint_cks)} joint + {len(disjoint_cks)} disjoint "
+              f"models on {len(pilot_dirs)} pilot sets at {PILOT_ARM}: "
+              + ", ".join(pilot_dirs.values()))
+        return
+
+    import mlx.core as mx
+    from f29_generate_pilot import build_hull, load_train_physics, normalize_phys
+    from render_fidelity_eval import load_arrays
+
+    with open("runs/f27b/f27_report.json") as f:
+        f27 = json.load(f)
+    joint_train_per_seed = f27["arms"][PILOT_ARM]["gain_per_seed"]
+    r_train = float(f27["apparatus"]["r"][PILOT_ARM])
+
+    # Phase MLX-1: disjoint train-world gains on the f27 loud training world
+    # (section 3.4's "measured during the retrain-sanity check").
+    print(f"[pilot] measuring disjoint train gains on data/pm_f27_{PILOT_ARM}")
+    imgs, Yb, _Ya, tr, te, _ds = load_arrays(f"data/pm_f27_{PILOT_ARM}")
+    disjoint_train = _measure_models_on(imgs, Yb[tr], Yb[te],
+                                        {k: v for k, v in disjoint_cks.items()})
+    Yb_train = Yb[tr]
+    del imgs
+    mx.clear_cache()
+    dt_gains = [disjoint_train[k]["gain"] for k in sorted(disjoint_train)]
+    print("[pilot] disjoint train gains: "
+          + ", ".join(f"{g:.3f}" for g in dt_gains)
+          + "  (joint per-seed from f27b: "
+          + ", ".join(f"{g:.3f}" for g in joint_train_per_seed) + ")")
+
+    train_phys = load_train_physics("ctrl")
+    hull = build_hull(train_phys)
+
+    per_alpha, detail = [], {}
+    for a in alphas:
+        d = pilot_dirs[a]
+        imgs_H, Yb_H, _Ya_H, _trH, _teH, ds_H = load_arrays(d)
+        records = [s.record for s in ds_H.scenes]
+        held = _measure_models_on(imgs_H, Yb_train, Yb_H,
+                                  {**joint_cks, **disjoint_cks})
+        del imgs_H
+        mx.clear_cache()
+        phys = [(s["physics"]["raw"]["density"], s["physics"]["raw"]["friction"],
+                 s["physics"]["raw"]["restitution"]) for s in records]
+        ext = float(np.mean([hull.find_simplex([normalize_phys(p)])[0] < 0
+                             for p in phys]))
+        j_held = [held[f"s{k}"]["gain"] for k in range(3)]
+        d_held = [held[f"pair{k}"]["gain"] for k in range(3)]
+        per_alpha.append({
+            "joint_train": float(np.mean(joint_train_per_seed)),
+            "joint_held": float(np.mean(j_held)),
+            "disjoint_train": float(np.mean(dt_gains)),
+            "disjoint_held": float(np.mean(d_held)),
+            "joint_held_per_seed": j_held,
+            "disjoint_held_per_pair": d_held,
+            "r_held": r_from_records(records),
+            "r_train": r_train,
+            "extrapolation_frac": ext,
+        })
+        detail[f"a{alpha_tag(a)}"] = held
+        print(f"[pilot] a={a:.2f}: joint held "
+              + "/".join(f"{g:.2f}" for g in j_held)
+              + "  disjoint held " + "/".join(f"{g:.2f}" for g in d_held)
+              + f"  r_held {per_alpha[-1]['r_held']:+.3f}  outside-hull {ext:.0%}")
+
+    summary = pilot_summary(alphas, per_alpha)
+    report = {"summary": summary,
+              "detail": {"models_held": detail,
+                         "disjoint_train": disjoint_train,
+                         "joint_train_per_seed": joint_train_per_seed}}
+    os.makedirs(os.path.dirname(args.out), exist_ok=True)
+    with open(args.out, "w") as f:
+        json.dump(report, f, indent=1)
+    band = "OK" if summary["within_acceptable_band"] else \
+        "MISSED -- Amendment 1 must disclose"
+    print(f"\n[pilot] alpha* = {summary['alpha_star']} "
+          f"(combined_drop {summary['combined_drop_at_alpha_star']:.3f}, band {band})")
+    print(f"wrote {args.out} -- next: Amendment 1 pins alpha* from this file")
+
+
+if __name__ == "__main__":
+    main()

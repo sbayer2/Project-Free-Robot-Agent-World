@@ -146,6 +146,19 @@ def test_pilot_summary_full_schema():
     assert r["within_acceptable_band"] is True
 
 
+def test_r_from_records_matches_f27_convention():
+    """corrcoef(appearance roughness, physics friction) -- perfect coupling
+    r=1, anti-coupling r=-1, decoy r~0."""
+    from f29_pilot import r_from_records
+
+    def rec(rough, fric):
+        return {"material_truth": {"appearance_params": {"roughness": rough}},
+                "physics": {"raw": {"friction": fric}}}
+    xs = [0.1, 0.3, 0.5, 0.7, 0.9]
+    assert r_from_records([rec(x, x) for x in xs]) == pytest.approx(1.0)
+    assert r_from_records([rec(x, 1 - x) for x in xs]) == pytest.approx(-1.0)
+
+
 def test_pilot_summary_flags_out_of_band_miss():
     """A pilot whose alpha* misses the band gets flagged (Amendment 1 must
     explicitly disclose; the alpha* is not overridden)."""
