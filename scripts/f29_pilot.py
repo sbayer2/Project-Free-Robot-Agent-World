@@ -164,10 +164,17 @@ def r_from_records(records: list) -> float:
 
 # ---- MLX measurement layer (Mac only; every heavy import is lazy) ---------- #
 
-def _measure_models_on(imgs, Yb_train, Yb_eval, ckpts: dict) -> dict:
+def _measure_models_on(imgs, Yb_train, Yb_eval, ckpts: dict,
+                       eval_idx=None) -> dict:
     """{name: {"gain": float, "pr": float}} for each checkpoint, encoding
     ``imgs`` once per model and scoring gain against the train-mean
-    baseline of ``Yb_train`` (prereg section 2's formula)."""
+    baseline of ``Yb_train`` (prereg section 2's formula).
+
+    ``eval_idx`` subsets the predictions to the scenes ``Yb_eval`` covers
+    (the train-gain phase encodes the full training world but scores only
+    its test split); None means every encoded scene is scored (the pilot
+    datasets, which are all-eval). PR is computed on the full encoded z
+    either way, matching the f27_measure convention."""
     from f28_measure import load_model
     from oracle_ceiling import gain as gain_ratio
     from probe_appearance import encode_z
@@ -180,7 +187,8 @@ def _measure_models_on(imgs, Yb_train, Yb_eval, ckpts: dict) -> dict:
         m = load_model(ck)
         z = encode_z(m, imgs)
         pred = behavior_from_z(m, z)
-        out[name] = {"gain": float(gain_ratio(Yb_train, Yb_eval, pred)),
+        pred_eval = pred if eval_idx is None else pred[eval_idx]
+        out[name] = {"gain": float(gain_ratio(Yb_train, Yb_eval, pred_eval)),
                      "pr": float(participation_ratio(z))}
         del m
     return out
@@ -238,7 +246,8 @@ def main() -> None:
     print(f"[pilot] measuring disjoint train gains on data/pm_f27_{PILOT_ARM}")
     imgs, Yb, _Ya, tr, te, _ds = load_arrays(f"data/pm_f27_{PILOT_ARM}")
     disjoint_train = _measure_models_on(imgs, Yb[tr], Yb[te],
-                                        {k: v for k, v in disjoint_cks.items()})
+                                        {k: v for k, v in disjoint_cks.items()},
+                                        eval_idx=te)
     Yb_train = Yb[tr]
     del imgs
     mx.clear_cache()
