@@ -390,6 +390,16 @@ alter any H0/H2/H3 verdict — gates only decide WHETHER verdicts are
 read, and the verdict bars are untouched — so the seen table cannot
 have steered the amendment toward a preferred outcome.
 
+**4. Confirmatory run (user-approved, registered here BEFORE it runs):**
+to make the seen-table objection moot, the full generate + measure +
+verdicts chain reruns on a FRESH holdout at **seed 2942**
+(`data/pm_f29_confirm_{arm}`, report `runs/f29/f29_confirm_report.json`)
+— data that did not exist when this amendment was written. The
+confirmatory verdicts are read under the same frozen rules and the
+amended gates; the FINDINGS entry reports BOTH readouts, and any
+verdict-level disagreement between them is reported as such, not
+averaged away. Seed-2941 artifacts are preserved unchanged.
+
 ## 11. Contamination disclosure
 
 All F27b gains, F28 directional numbers, F24 alignment results, and the

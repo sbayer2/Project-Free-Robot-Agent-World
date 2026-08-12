@@ -62,9 +62,12 @@ def arm_record(r: float, gates: dict, joint_gains: list[float],
             "disjoint": {"per_pair_gain": [float(g) for g in disjoint_gains]}}
 
 
-def generate_main() -> None:
-    """Holdout datasets at MAIN_ALPHA / MAIN_SEED through the pilot's frozen
-    machinery. Mirrors f29_generate_pilot.main()'s generation block."""
+def generate_main(seed: int = MAIN_SEED, data_template: str = MAIN_DATA) -> None:
+    """Holdout datasets at MAIN_ALPHA through the pilot's frozen machinery.
+    Mirrors f29_generate_pilot.main()'s generation block. ``seed`` and
+    ``data_template`` support Amendment 2's registered confirmatory run
+    (seed 2942 -> data/pm_f29_confirm_{arm}); defaults are the pinned
+    Amendment-1 values."""
     from f29_generate_pilot import (
         ARM_DIALS,
         load_train_physics,
@@ -81,7 +84,7 @@ def generate_main() -> None:
     per_arm, per_stats = {}, {}
     for arm in ARM_DIALS:
         per_arm[arm], per_stats[arm] = pilot_assignments(
-            arm, MAIN_ALPHA, train_phys, seed=MAIN_SEED)
+            arm, MAIN_ALPHA, train_phys, seed=seed)
         s = per_stats[arm]
         print(f"  main {arm:5s} accepted {len(per_arm[arm])} of {s['n_drawn']} "
               f"draws ({s['acceptance_rate']:.1%}), seed {s['seed']}")
@@ -108,7 +111,7 @@ def generate_main() -> None:
     render_cfg = RenderConfig(resolution=128, num_views=16, lighting="flat")
     physics_cfg = PhysicsConfig()
     for arm, assignments in per_arm.items():
-        out_dir = MAIN_DATA.format(arm=arm)
+        out_dir = data_template.format(arm=arm)
         os.makedirs(out_dir, exist_ok=True)
         n = len(assignments)
         rw = resolve_workers(0, n, default=default_render_workers())
@@ -144,11 +147,16 @@ def main() -> None:
                     help="generate the main holdout datasets (MuJoCo only)")
     ap.add_argument("--pilot-report", default="runs/f29/pilot_report.json")
     ap.add_argument("--out", default="runs/f29/f29_report.json")
+    ap.add_argument("--seed", type=int, default=MAIN_SEED,
+                    help="material seed (2942 + confirm paths = Amendment 2's "
+                         "registered confirmatory run)")
+    ap.add_argument("--data-template", default=MAIN_DATA,
+                    help="holdout dataset dir template with {arm}")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
     if args.generate:
-        generate_main()
+        generate_main(seed=args.seed, data_template=args.data_template)
         return
 
     joint_cks = {arm: {f"s{k}": JOINT_CHECKPOINTS.format(arm=arm, seed=k)
@@ -159,9 +167,9 @@ def main() -> None:
                for p in (list(joint_cks[arm].values())
                          + list(disjoint_cks[arm].values()))
                if not os.path.exists(p)]
-    missing += [MAIN_DATA.format(arm=arm) for arm in ARMS
-                if not os.path.exists(os.path.join(MAIN_DATA.format(arm=arm),
-                                                   "manifest.json"))]
+    missing += [args.data_template.format(arm=arm) for arm in ARMS
+                if not os.path.exists(os.path.join(
+                    args.data_template.format(arm=arm), "manifest.json"))]
     if not os.path.exists(args.pilot_report):
         missing.append(args.pilot_report + " (run scripts/f29_pilot.py first)")
     if missing:
@@ -188,7 +196,8 @@ def main() -> None:
 
     hull = build_hull(load_train_physics("ctrl"))
     report = {"meta": {"amendment_1": pilot, "main_alpha": MAIN_ALPHA,
-                       "main_seed": MAIN_SEED},
+                       "main_seed": args.seed,
+                       "data_template": args.data_template},
               "arms": {}}
 
     for arm in ARMS:
@@ -203,7 +212,8 @@ def main() -> None:
         mx.clear_cache()
 
         # Phase B: the holdout -- both students, gains + PRs.
-        imgs_H, Yb_H, _YaH, _trH, _teH, ds_H = load_arrays(MAIN_DATA.format(arm=arm))
+        imgs_H, Yb_H, _YaH, _trH, _teH, ds_H = load_arrays(
+            args.data_template.format(arm=arm))
         records = [s.record for s in ds_H.scenes]
         joint_held = _measure_models_on(imgs_H, Yb_train, Yb_H, joint_cks[arm])
         dis_held = _measure_models_on(imgs_H, Yb_train, Yb_H, disjoint_cks[arm])
