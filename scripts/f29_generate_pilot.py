@@ -40,7 +40,12 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 sys.path.insert(0, os.path.dirname(__file__))
 
-from f29_pilot import N_SCENES_PER_ARM, PILOT_ALPHAS, alpha_tag  # noqa: E402
+from f29_pilot import (  # noqa: E402
+    N_SCENES_PER_ARM,
+    PILOT_ALPHAS,
+    PILOT_DATA,
+    alpha_tag,
+)
 
 from pseudomarble.config import PHYSICS_NORMALIZERS  # noqa: E402
 from pseudomarble.materials import MaterialSampler  # noqa: E402
@@ -80,10 +85,12 @@ def load_train_physics(arm: str = "ctrl") -> list:
 
 def product_threshold(train_phys: list, alpha: float) -> float:
     """The (1 - alpha) quantile of density x restitution over training
-    scenes. Acceptance is STRICTLY above this value (prereg section 3)."""
+    scenes. Acceptance is STRICTLY above this value (prereg section 3).
+    method="linear" is pinned explicitly: the threshold is part of the
+    frozen filter, so a numpy default change must not move it."""
     import numpy as np
     products = np.array([d * r for d, _f, r in train_phys])
-    return float(np.quantile(products, 1.0 - alpha))
+    return float(np.quantile(products, 1.0 - alpha, method="linear"))
 
 
 def build_hull(train_phys: list):
@@ -148,7 +155,8 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--alphas", default=None,
                     help="comma-separated subset of the frozen alphas")
-    ap.add_argument("--out-template", default="data/pm_f29_pilot_a{tag}_{arm}")
+    ap.add_argument("--out-template", default=PILOT_DATA,
+                    help="single source of truth: f29_pilot.PILOT_DATA")
     ap.add_argument("--dry-run", action="store_true",
                     help="filter stats + matched-arms assert only; no MuJoCo")
     ap.add_argument("--render-workers", type=int, default=0)
@@ -161,15 +169,18 @@ def main() -> None:
             raise SystemExit(f"alpha {a} is not in the frozen set {PILOT_ALPHAS}")
 
     train_phys = load_train_physics("ctrl")
-    # F27 apparatus re-check: training physics matched across arms.
-    if load_train_physics("loud") != train_phys:
-        raise SystemExit("ctrl/loud training physics differ -- apparatus broken")
-    print(f"[f29 pilot gen] {len(train_phys)} training physics rows loaded")
+    # F27 apparatus re-check: training physics matched across ALL arms.
+    for other in ("base", "g2", "loud"):
+        if load_train_physics(other) != train_phys:
+            raise SystemExit(f"ctrl/{other} training physics differ -- apparatus broken")
+    print(f"[f29 pilot gen] {len(train_phys)} training physics rows loaded "
+          f"(matched across all 4 arms)")
 
     for alpha in alphas:
-        per_arm = {}
+        per_arm, per_arm_stats = {}, {}
         for arm in ARM_DIALS:
-            per_arm[arm], stats = pilot_assignments(arm, alpha, train_phys)
+            per_arm[arm], per_arm_stats[arm] = pilot_assignments(arm, alpha, train_phys)
+            stats = per_arm_stats[arm]
             print(f"  a={alpha:.2f} {arm:5s} accepted {len(per_arm[arm])} of "
                   f"{stats['n_drawn']} draws ({stats['acceptance_rate']:.1%}), "
                   f"threshold {stats['threshold']:.1f}")
@@ -219,8 +230,7 @@ def main() -> None:
             manifest = samples.build_manifest(
                 "mujoco", {"n_train": 0, "n_test": n, "n_scenes": n}, [], scenes)
             manifest["f29_pilot"] = {
-                "alpha": alpha, "seed": pilot_seed(alpha),
-                "threshold": product_threshold(train_phys, alpha),
+                **per_arm_stats[arm],  # alpha, arm, seed, threshold, n_drawn, acceptance_rate
                 "filter": "product>threshold AND outside training hull "
                           "(docs/HELD_OUT_TRANSFER.md section 3)",
                 "train_source": TRAIN_DATA.format(arm="ctrl"),

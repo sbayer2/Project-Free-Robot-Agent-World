@@ -41,7 +41,7 @@ def test_frozen_prereg_constants_pinned():
     assert PILOT_ARM == "loud"
     assert N_SCENES_PER_ARM == 128
     assert JOINT_CHECKPOINTS == "runs/f27b/{arm}_s{seed}/model.safetensors"
-    assert PILOT_DATA == "data/pm_f29_pilot_a{tag}"
+    assert PILOT_DATA == "data/pm_f29_pilot_a{tag}_{arm}"
 
 
 def test_alpha_tag_matches_dataset_naming_convention():
@@ -50,8 +50,9 @@ def test_alpha_tag_matches_dataset_naming_convention():
     assert alpha_tag(0.20) == "20"
     assert alpha_tag(0.40) == "40"
     for a in PILOT_ALPHAS:
-        path = PILOT_DATA.format(tag=alpha_tag(a))
+        path = PILOT_DATA.format(tag=alpha_tag(a), arm="loud")
         assert path.startswith("data/pm_f29_pilot_a")
+        assert path.endswith("_loud")
     with pytest.raises(ValueError):
         alpha_tag(0.055)  # non-percent
     with pytest.raises(ValueError):

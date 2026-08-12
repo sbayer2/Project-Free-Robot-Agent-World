@@ -36,7 +36,11 @@ N_SCENES_PER_ARM: int = 128                           # section 3.1
 # Paths (all conventions frozen; MLX layer will consume them verbatim).
 JOINT_CHECKPOINTS = "runs/f27b/{arm}_s{seed}/model.safetensors"  # seed in 0,1,2
 DISJOINT_BEHAV = "runs/f29_disjoint/{arm}_pair{k}/behav/model.safetensors"  # k in 0,1,2
-PILOT_DATA = "data/pm_f29_pilot_a{tag}"  # tag in "5", "20", "40" (percent, no leading zero)
+# One dataset dir per (alpha, arm) so PseudoMarbleDataset's one-dir-per-arm
+# convention holds. The per-arm suffix refines prereg section 4's family name
+# "pm_f29_pilot_a{5,20,40}" (a layout decision, recorded in Amendment 1 so it
+# cannot read as silent prereg drift). tag is percent, no leading zero.
+PILOT_DATA = "data/pm_f29_pilot_a{tag}_{arm}"
 
 
 def alpha_tag(alpha: float) -> str:
