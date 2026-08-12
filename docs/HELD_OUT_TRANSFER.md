@@ -327,6 +327,69 @@ filter, same matched-arms construction and asserts.
 outside-hull fraction 100% at every α; acceptance rates 5.2% / 6.3% /
 9.1%, matching the generator's pre-registered dry-run exactly.
 
+## Amendment 2 (2026-08-12, post-main-measurement) — two section-7 gates recalibrated; verdict bars untouched
+
+*Written after the main run's verdicts were WITHHELD by the frozen gates
+(user-approved recalibration). This amendment changes ONLY the two gate
+constants shown below, inside `scripts/f29_verdicts.py`, in the same
+commit as this text — the F28-Amendment-3 mechanism. The H0/H2/H3
+verdict bars, the metric, and every measurement are untouched; the
+rerun is verdicts-only on the already-written report.*
+
+**1. What tripped, and why both trips are freeze-time gate errors:**
+
+- **Retraining gate** (`disjoint_train_gain_min >= 1.5` at every arm)
+  tripped at ctrl (1.064) and base (1.053). The floor is unachievable
+  BY CONSTRUCTION at weak coupling: the JOINT students' own train
+  gains there are 1.121 and 1.113 — frozen as `TRAIN_GAIN_JOINT` in
+  the same file, three constants above the gate. §7 extended H0's
+  loud-only 1.5 floor to all arms in contradiction of reference values
+  the file itself carries. The retrains are healthy: disjoint matches
+  joint capability at every arm.
+- **Apparatus gate** (`|r_held − r_train| < 0.05` flat) tripped at ctrl
+  (0.083) and g2 (0.053). The sd of a sample correlation is
+  ≈ (1 − r²)/√n; at n = 128 and r ≈ 0 that is 0.088, so ctrl's 0.083
+  is ~1σ of sampling noise, and g2's 0.053 is ~1.7σ. The flat bar
+  ignored estimator variance; the pilot passed it only because loud's
+  near-1 correlation has almost none.
+
+**2. Recalibrated gates (frozen here, applied to the verdicts script in
+this commit):**
+
+    retraining   disjoint_train_gain_min >= 0.85 × TRAIN_GAIN_JOINT[arm]
+                 (arm-relative: catches a broken retrain — wrong
+                 checkpoint, failed convergence — without demanding the
+                 structurally impossible; a pair that lost ≥ 15% of the
+                 joint students' capability still fails)
+    apparatus    |r_held − r_train| < max(0.05, 2 · (1 − r_train²)/√128)
+                 (variance-aware 2σ bar with the old 0.05 as floor;
+                 √128 is N_SCENES_PER_ARM, frozen in §3)
+
+**Robustness of the recalibration (defusing post-hoc tuning):** the
+observed disjoint/joint train-gain ratios are 0.949 / 0.946 / 0.886 /
+0.921 (ctrl/base/g2/loud), so ANY retraining factor in [0.5, 0.88]
+yields the identical all-pass gate outcome on this data; 0.85 sits
+below the minimum observed ratio with margin and was not tuned to a
+boundary. On the apparatus side the per-arm deviations in estimator-σ units are
+0.94σ / 0.36σ / 1.73σ / 2.19σ (ctrl/base/g2/loud) — and notably
+**loud, the LARGEST σ-deviation of the four, PASSED the old flat gate**
+while ctrl's 0.94σ failed it:
+the flat bar's strictness was r-dependent noise, not protection, and
+no arm is being selected against. (Independently verified by the
+monitoring session; the [0.5, 0.92] robustness band it first proposed
+is corrected here to [0.5, 0.88] — g2's 0.886 ratio, which that
+session lacked, caps it.)
+
+**3. Disclosure:** the main-run outcome table (advantages −0.000 /
++0.000 / +0.112 / −0.069 at ctrl/base/g2/loud, |t| ≤ 1.45) was printed
+and seen before this amendment — the verdicts script's layout prints
+the table before the gate check, itself a flaw to fix in any future
+verdicts script. The recalibration direction was chosen from the gate
+analysis alone; note that no choice of these two gate constants can
+alter any H0/H2/H3 verdict — gates only decide WHETHER verdicts are
+read, and the verdict bars are untouched — so the seen table cannot
+have steered the amendment toward a preferred outcome.
+
 ## 11. Contamination disclosure
 
 All F27b gains, F28 directional numbers, F24 alignment results, and the
