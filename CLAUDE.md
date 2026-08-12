@@ -99,25 +99,28 @@ python scripts/eval_llm_transfer.py --condition essence --max-tokens 32768
   here so a headless `graphify` run fails loudly rather than picking one
   silently.
 
-**Status (2026-08-11):** F1–F27 merged to `main` (PRs #35–#41); **F28 in
-flight** as draft PR #42 (`claude/f28-directional-prereg`): preregistered
-directional (content-matched) coherence, run in two passes on the F27b
-checkpoints — pass 1 VOID by its own probe gate (roughness illegible at
-128 px, the F19/F21 legibility result reproduced; Amendment 3 records the
-cell VOID-by-legibility and shrinks the pairing to two cells), pass 2 ALL
-GATES PASS. Suite 254/32 (run with `.venv/bin/python -m pytest` — system
-`python3` collects fewer). Knowledge graph current through F27 and #40
-(F28 not yet extracted). **Headline:** the coherence family's
-content-reading is dead in both available forms. Magnitude coherence
-certifies substrate entanglement (F27b: +0.434 with ZERO shared content);
-directional coherence — H1-verified free of that entanglement — reads
-ZERO at every coupling (learned_D ≤ +0.0040) even where content is
-near-definitional and demonstrably extracted (loud: metallic ≈ density at
-r 0.992, probe R² ≥ 0.94, gain 5.67), while magnitude reads +0.205–0.434
-on the same checkpoints. No internal geometric signature of "one latent,
-two projections" remains measurable in this regime; side result: render-
-only and behavior-only latents are near-perfect linear transforms of each
-other (stitch R² ≥ 0.998, F24's JL floor at its extreme). Successors
-registered pre-run (Amendment 2): F29 held-out-transfer coherence, F30
-render-only data scaling, F31 dynamics head. ABO stage 2 stays blocked
-(F22b).
+**Status (2026-08-12):** F1–F28 merged to `main` (PRs #35–#42); **F29 in
+flight** on `claude/f29-transfer-prereg`: preregistered held-out-transfer
+coherence — does joint training buy operational transfer advantage over
+disjoint (renderonly/behavonly) training on a material-extrapolation
+holdout? Run with a preregistered pilot (Amendment 1: α\* = 0.40, band
+missed low, limit-on-inference frozen), a gate recalibration (Amendment
+2: two provable freeze-time gate bugs, verdict bars untouched), and a
+fresh-seed confirmatory rerun that reproduced every verdict. Suite
+283/35 (run with `.venv/bin/python -m pytest` — system `python3`
+collects fewer). Knowledge graph current through F27 and #40 (F28/F29
+not yet extracted); vault synced through F28. **Headline:** unity now
+has no internal signature AND no measurable operational signature on
+this axis at this scale. F28: directional coherence reads ZERO at every
+coupling with a valid instrument. F29: held-out-transfer advantage of
+joint over disjoint is NULL or INCONCLUSIVE at every coupling on two
+independent holdouts (loud −0.069/−0.115, t ≤ 0.16; ctrl/base exact
+nulls) — bounded by the frozen caveat that the holdout was gentle (both
+students keep ~89% of gain outside the training hull), so this bounds
+rather than kills operational unity; jointly consistent with the
+scale-bound reading Dyna-2's low-data ablation supports. Side results:
+init-quality variance is synchronized across students sharing only the
+seed (the init, not the objective, sets encoder quality here); F32
+(executive/muscle-memory stack) parked at DESIGN VOID on its own pilot
+gate. Registered successors: F30 render-only data scaling, F31 dynamics
+head. ABO stage 2 stays blocked (F22b).
