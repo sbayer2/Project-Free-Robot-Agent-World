@@ -260,6 +260,73 @@ Total: **~3 hr wall-clock**, no LLM, no unified-memory contention.
 - MLX 0.31.2 GPU matmul carries ~1e-3 relative error (F28 finding).
   Negligible against the ±0.15 gain bar.
 
+## Amendment 1 (2026-08-12, post-pilot, pre-main-measurement) — α\* = 0.40 pinned; band MISSED low; limits on inference frozen
+
+*Written after the §3 pilot ran (user-approved 2026-08-12) and before any
+main-experiment measurement. The §3 procedure was followed exactly; this
+amendment pins its outputs and discloses everything the procedure
+required. Pilot artifacts: `runs/f29/pilot_report.json`,
+`data/pm_f29_pilot_a{5,20,40}_{ctrl,base,g2,loud}` (12 datasets, 128
+scenes each), `runs/f29_pilot_gen.log`, `runs/f29_pilot_measure.log`.*
+
+**1. The pilot table (loud arm, per §3.2–3.5; gains = mean over 3
+seeds/pairs; train anchors: joint 5.672 per-seed [5.040, 5.910, 6.067]
+from `runs/f27b/f27_report.json`, disjoint 5.692 per-pair [5.222, 5.887,
+5.967] measured per §3.4 — retrain sanity ≥ 1.5 satisfied at loud):**
+
+| α | joint held | disjoint held | joint drop | disjoint drop | combined |
+|---|---|---|---|---|---|
+| 0.05 | 5.327 | 5.413 | 0.061 | 0.049 | 0.055 |
+| 0.20 | 5.607 | 5.713 | 0.011 | −0.004 | 0.004 |
+| 0.40 | 5.010 | 5.053 | 0.117 | 0.112 | 0.114 |
+
+**α\* = 0.40** by the frozen §3.6 rule (argmin |combined − 0.5|).
+
+**2. Band MISSED, disclosed, continue-with-α\* chosen (user decision
+2026-08-12).** combined_drop(α\*) = 0.114 < 0.25. Of the two frozen
+options, "add one α between the closest tested points" is arithmetically
+unreachable — every interval drop lies in [0.004, 0.114], below the band
+floor — so the run continues at α\* with this disclosure. Extending the
+grid beyond 0.40 is not among the frozen options and was not taken.
+
+**3. Structural diagnosis of the miss (recorded, not excused).** §3.4's
+train-gain anchor is the f27 datasets' test split, which is
+`EXTRAPOLATION_REGION_HOLDOUT` — the heavy+bouncy corner (density
+[0.55, 1.01] × restitution [0.6, 0.9]). The anchor was therefore already
+an extrapolation measurement, and the pilot's top-product tail is that
+corner's neighborhood: small drops are structural. Independently
+verified by the monitoring session against the dataset manifests. The
+α = 0.20 non-monotonicity (less drop than α = 0.05) is sampling noise
+at n = 3 seeds over 128-scene sets with different draws per α.
+
+**4. LIMIT ON INFERENCE, frozen before the main run:** at drop ≈ 0.11
+both students sit near their training-world ceiling on the held-out set,
+compressing the room for joint–disjoint differentiation. **A main-run
+H2 NULL at α\* = 0.40 is therefore weaker evidence against operational
+unity than a NULL at drop ≈ 0.5 would have been**, and the F29 FINDINGS
+entry must carry this sentence. A POSITIVE or NEGATIVE that clears the
+±0.15 bar despite compression is, conversely, mildly strengthened.
+
+**5. Pilot information leak, disclosed:** the pilot necessarily revealed
+loud-arm held-out gains for both students; their difference (−0.04 to
+−0.11, inside every frozen bar) previews P1's NULL shape at loud. The
+H2/H3 rules were frozen before any of it, the main run measures all four
+arms, and the main dataset uses a fresh seed (below), so no pilot scene
+is reused.
+
+**6. Main dataset, pinned:** `data/pm_f29_holdout_{arm}` (the per-arm
+suffix refines §4's family name the same way the pilot datasets did —
+`PseudoMarbleDataset` expects one directory per arm), 128 scenes × 4
+arms at α\* = 0.40, **seed 2941** (fresh; the pilot's α = 0.40 seed was
+2940, and reusing it would duplicate `pm_f29_pilot_a40_*` scene-for-
+scene, importing the leak of §5 into the main measurement). Same frozen
+filter, same matched-arms construction and asserts.
+
+**7. Apparatus, carried:** r_held +0.997 / +0.996 / +0.995 at
+α = 0.05 / 0.20 / 0.40 versus r_train +0.992 — inside the §5.2 gate;
+outside-hull fraction 100% at every α; acceptance rates 5.2% / 6.3% /
+9.1%, matching the generator's pre-registered dry-run exactly.
+
 ## 11. Contamination disclosure
 
 All F27b gains, F28 directional numbers, F24 alignment results, and the
