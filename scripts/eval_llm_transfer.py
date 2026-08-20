@@ -24,9 +24,9 @@ import argparse
 import json
 import os
 import sys
-from typing import Dict, List, Optional, Tuple
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
+sys.path.insert(0, os.path.dirname(__file__))  # F33 video helpers (f33_video)
 
 from pseudomarble.llm_transfer import (  # noqa: E402
     build_messages,
@@ -40,14 +40,18 @@ from pseudomarble.llm_transfer import (  # noqa: E402
 from pseudomarble.probes import PROBE_ORDER  # noqa: E402
 
 
-def parse_args(argv: List[str]) -> argparse.Namespace:
+def parse_args(argv: list[str]) -> argparse.Namespace:
     p = argparse.ArgumentParser(description="LLM world-model transfer eval")
     p.add_argument("--data", required=True, help="dataset root (schema v2)")
     p.add_argument("--split", default="test", help="split to evaluate (held-out=test)")
     p.add_argument("--condition", default="essence",
-                   choices=("essence", "appearance", "vision"))
+                   choices=("essence", "appearance", "vision",
+                            "video_pred", "video_percep"))
     p.add_argument("--views", type=int, default=3,
                    help="rendered views attached per scene (vision condition only)")
+    p.add_argument("--clips-root", default=None,
+                   help="F33 video conditions: clip dir (default <data>_clips; "
+                        "run scripts/f33_render_clips.py first)")
     p.add_argument("--base-url", default="http://127.0.0.1:8080/v1",
                    help="OpenAI-compatible server base URL")
     p.add_argument("--model", default="default", help="served model name")
@@ -65,7 +69,7 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
     return p.parse_args(argv)
 
 
-def load_split(data: str, split: str) -> List[Tuple[str, Dict]]:
+def load_split(data: str, split: str) -> list[tuple[str, dict]]:
     manifest = json.load(open(os.path.join(data, "manifest.json")))
     out = []
     for entry in manifest["scenes"]:
@@ -76,7 +80,7 @@ def load_split(data: str, split: str) -> List[Tuple[str, Dict]]:
     return out
 
 
-def cached_response(path: str, messages: List[Dict], args) -> str:
+def cached_response(path: str, messages: list[dict], args) -> str:
     if os.path.exists(path):
         return json.load(open(path))["response"]
     text = chat_completion(args.base_url, args.model, messages,
@@ -87,7 +91,28 @@ def cached_response(path: str, messages: List[Dict], args) -> str:
     return text
 
 
-def main(argv: List[str]) -> None:
+def cached_video_response(path: str, messages: list[dict], clip_path: str,
+                          args) -> tuple[str, dict]:
+    """F33 video legs: capture usage (the prompt_tokens tripwire needs it)
+    and cache the CLIP PATH instead of its base64 payload."""
+    from f33_video import chat_completion_usage
+    if os.path.exists(path):
+        d = json.load(open(path))
+        return d["response"], d.get("usage", {})
+    text, usage = chat_completion_usage(
+        args.base_url, args.model, messages, temperature=args.temperature,
+        max_tokens=args.max_tokens, timeout=args.timeout, api_key=args.api_key)
+    slim = [messages[0],
+            {"role": "user", "content": [{"type": "input_video_path",
+                                          "path": clip_path},
+                                         messages[1]["content"][1]]}]
+    with open(path, "w") as fh:
+        json.dump({"messages": slim, "response": text, "usage": usage}, fh,
+                  indent=2)
+    return text, usage
+
+
+def main(argv: list[str]) -> None:
     args = parse_args(argv)
     scenes = load_split(args.data, args.split)
     if not scenes:
@@ -96,7 +121,7 @@ def main(argv: List[str]) -> None:
         scenes = scenes[: args.limit]
     train_mean = train_mean_outcomes([s for _, s in load_split(args.data, "train")])
 
-    def images_for(sid: str, sample: Dict) -> Optional[List[str]]:
+    def images_for(sid: str, sample: dict) -> list[str] | None:
         if args.condition != "vision":
             return None
         renders = os.path.join(args.data, sid, "renders")
@@ -105,6 +130,15 @@ def main(argv: List[str]) -> None:
     if args.dry_run:
         sid, sample = scenes[0]
         for record in sample["behavior"]["probes"]:
+            if args.condition.startswith("video_"):
+                from f33_video import action_text, video_state_text
+                leg = args.condition.split("_", 1)[1]
+                print(f"--- {sid} / {record['probe']} ({args.condition}) ---")
+                print("[user] <input_video: "
+                      f"{record['probe']}_{leg}.mp4 (raw base64, video-first)> +")
+                print(video_state_text(sample, leg))
+                print(action_text(record) + "\n\nPredict the outcome fields.\n")
+                continue
             msgs = build_messages(sample, record, args.condition, images_for(sid, sample))
             print(f"--- {sid} / {record['probe']} ({args.condition}) ---")
             for m in msgs:
@@ -115,9 +149,26 @@ def main(argv: List[str]) -> None:
                 print(f"[{m['role']}]\n{c}\n")
         return
 
+    is_video = args.condition.startswith("video_")
+    if is_video:
+        from f33_video import (
+            build_video_messages,
+            clip_path_for,
+            confab_time_claims,
+            tripwire_ok,
+        )
+        clips_root = args.clips_root or (args.data.rstrip("/") + "_clips")
+        clips_manifest = json.load(
+            open(os.path.join(clips_root, "clips_manifest.json")))
+        frames_by_clip = {(r["scene_id"], r["probe"], r["kind"]):
+                          r["n_frames_decoded"] for r in clips_manifest["clips"]}
+        leg_kind = args.condition.split("_", 1)[1]  # pred | percep
+
     resp_dir = os.path.join(args.out, "responses")
     os.makedirs(resp_dir, exist_ok=True)
-    rows: List[Tuple[str, str, Optional[Dict], Dict]] = []
+    rows: list[tuple[str, str, dict | None, dict]] = []
+    tripwire_failures: list[str] = []
+    confab_hits = 0
     for i, (sid, sample) in enumerate(scenes):
         truths = probe_outcomes(sample)
         for record in sample["behavior"]["probes"]:
@@ -125,10 +176,27 @@ def main(argv: List[str]) -> None:
             if kind not in PROBE_ORDER:
                 continue
             cache = os.path.join(resp_dir, f"{sid}.{kind}.{args.condition}.json")
-            text = cached_response(cache,
-                                   build_messages(sample, record, args.condition,
-                                                  images_for(sid, sample)),
-                                   args)
+            if is_video:
+                clip = clip_path_for(clips_root, sid, kind, leg_kind)
+                msgs = build_video_messages(sample, record, clip, leg_kind)
+                text, usage = cached_video_response(cache, msgs, clip, args)
+                n_frames = frames_by_clip.get((sid, kind, leg_kind), 0)
+                if not tripwire_ok(usage.get("prompt_tokens", 0), n_frames):
+                    # Amendment A.3: APPARATUS failure -- excluded and counted,
+                    # never scored as model capability.
+                    tripwire_failures.append(f"{sid}.{kind}")
+                    print(f"[llm-transfer] {i + 1}/{len(scenes)} {sid}.{kind}: "
+                          f"TRIPWIRE (prompt_tokens="
+                          f"{usage.get('prompt_tokens')}, frames={n_frames})")
+                    continue
+                if confab_time_claims(text):
+                    confab_hits += 1
+            else:
+                text = cached_response(cache,
+                                       build_messages(sample, record,
+                                                      args.condition,
+                                                      images_for(sid, sample)),
+                                       args)
             pred = extract_prediction(text)
             rows.append((sid, kind, pred, truths[kind]))
             tag = "ok" if pred else "PARSE-FAIL"
@@ -139,6 +207,16 @@ def main(argv: List[str]) -> None:
         "model": args.model, "n_scenes": len(scenes),
         **score_predictions(rows, train_mean),
     }
+    if is_video:
+        n_attempted = len(rows) + len(tripwire_failures)
+        report["video"] = {
+            "clips_root": clips_root, "leg_kind": leg_kind,
+            "n_tripwire_failures": len(tripwire_failures),
+            "tripwire_failed": tripwire_failures,
+            "tripwire_rate": (len(tripwire_failures) / n_attempted
+                              if n_attempted else 0.0),
+            "confab_response_rate": confab_hits / len(rows) if rows else 0.0,
+        }
     os.makedirs(args.out, exist_ok=True)
     path = os.path.join(args.out, "transfer_report.json")
     with open(path, "w") as fh:
