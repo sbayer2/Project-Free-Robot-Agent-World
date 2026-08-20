@@ -344,6 +344,46 @@ also verifies the expected-count arithmetic above; a 1-frame prefix is
 distinguished from a 0-frame tripwire failure (underpowered stimulus vs
 apparatus fault), and only the recorded count separates them.
 
+## Amendment C (2026-08-20, pre-pilot, zero data) — timestamp fabrication under sparse markers: prompt disclosure, scoring scope, confabulation co-report
+
+*Written before any request. Based on the monitoring session's direct
+observation (not inference): given a clip whose only timestamp markers
+were 0.00 s and 5.00 s — confirmed in the model's own reasoning trace —
+the model asserted events "at 0:04s", "at 0:05s", "at 0:08s": temporal
+precision invented to match the question's granularity. Under our 4×
+stretch, marker density (5000 ms of video time) means the full episode
+gets TWO markers and every prediction prefix gets exactly ONE — the
+model has essentially no temporal grid for a process whose structure is
+temporal. This is an apparatus limitation that would masquerade as a
+model failure, and the prompt_tokens tripwire cannot catch it (frames
+present, token count normal).*
+
+**Frozen handling:**
+
+1. **Scoring scope unchanged and now explicit:** only the final JSON
+   outcome fields are scored (`extract_prediction`), never the prose
+   reasoning. Fabricated timestamps in reasoning cannot directly enter
+   the score. The field schema is NOT re-worded toward ordinal phrasing
+   — F11 comparability requires the identical fields — but see 3.
+2. **Prompt disclosure extended** (same renormalization logic as the 4×
+   line): the video-leg prompt states that frame timestamps are labeled
+   only at 5-second intervals of video time, and instructs the model
+   not to infer finer timing than the evidence supports — grounds to
+   hedge rather than invent.
+3. **`settle_time` is the exposed field** — the one scored quantity
+   that IS a metric-time estimate, compounding fabricated precision
+   with the 4× time-base conversion. Frozen: video-leg per-field
+   co-reports break out `settle_time` explicitly, and any H2/H3
+   reading that flips when `settle_time` is excluded from the
+   aggregate is reported as FRAGILE (both aggregates shown). The
+   frozen ratios themselves remain all-field (F11-lineage convention).
+4. **Confabulation co-report (descriptive, no verdict):** responses in
+   video legs are scanned for metric-time claims finer than the marker
+   grid (pattern-matched in the reasoning text); the RATE of such
+   claims is reported per leg as a measurement of confabulation under
+   information scarcity — logged in a different column than accuracy,
+   exactly as the monitoring session framed it.
+
 ## 11. Contamination disclosure
 
 All F11 numbers, the Muse run results, F28/F29 outcomes, and the Dyna-2
