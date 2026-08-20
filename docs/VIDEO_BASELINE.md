@@ -59,6 +59,19 @@ locally.** Three questions, one battery:
   work concurrent with any leg (one unified-memory pool; the serving
   stack alone has peaked at 58/64 GB).
 
+**Apparatus note (2026-08-20, pre-pilot; no measurement affected):**
+before any F33 request was made, the monitoring llama.cpp session
+discovered that the then-recorded build hash (b10499-5d477d2f1) was
+WRONG, not stale — the running binary had been built with uncommitted
+working-tree changes, so its reported commit never described it. The
+user performed a planned restart after those changes were committed and
+the tree rebuilt coherently; the expected identity is now
+b10501-eab19b649, functionally identical, truthfully hashed. The §2
+protocol absorbs this: the hash is re-read from `/props` directly at
+measurement time, never carried forward from transcription. Recorded
+here because it is exactly the defect class the protocol exists for,
+caught before it could enter the record.
+
 ## 3. Datasets and requests
 
 - **Synthetic (primary):** `data/pm_big` **test split — the same 20
