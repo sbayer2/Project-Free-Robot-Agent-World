@@ -8,7 +8,9 @@ sample.json, same timestep) while capturing frames from ONE fixed oblique
 camera, then encodes TWO clips through the frozen filter chain:
 
     percep  full episode (outcome visible)      ~32 sampled frames
-    pred    pre-outcome prefix only             drop ~4 / tilt ~5 / push ~10
+    pred    pre-outcome prefix only             drop 4 / tilt 6 / push 10
+                                                (tilt freeze-padded even;
+                                                 Amendment D pairwise fusion)
 
 Frozen apparatus honored here:
   * -vf "setpts=4*PTS,fps=4" then -movflags +faststart (Amendment B: the
@@ -65,6 +67,27 @@ OUTCOME_ATOL = 1e-4          # is deterministic; drift shows up far above this)
 def expected_frames(real_seconds: float) -> int:
     """Amendment B arithmetic: real x STRETCH x SERVER_FPS (~ +/-1 at decode)."""
     return round(real_seconds * STRETCH * SERVER_FPS)
+
+
+def sampled_count(n_src: int) -> int:
+    """Frames the server's fps=4 sampler emits for n_src source frames at
+    ENCODE_FPS under STRETCH: floor(n_src / ENCODE_FPS * STRETCH * SERVER_FPS).
+    Matches observed decode counts exactly (48->32, 6->4, 8->5, 15->10)."""
+    return int(n_src * STRETCH * SERVER_FPS / ENCODE_FPS)
+
+
+def pad_to_even(n_src: int, max_pad: int = 4) -> int:
+    """Amendment D: source frames to APPEND (duplicates of the final frame)
+    so the sampled count is EVEN. Qwen-VL fuses frames pairwise and the
+    orphan last frame of an odd count is discarded -- for a pre-outcome
+    clip that is the most informative frame. A freeze-pad adds zero new
+    dynamics and cannot leak an outcome."""
+    if sampled_count(n_src) % 2 == 0:
+        return 0
+    for k in range(1, max_pad + 1):
+        if sampled_count(n_src + k) % 2 == 0:
+            return k
+    raise ValueError(f"no even padding within {max_pad} frames of {n_src}")
 
 
 def ffmpeg_args(out_path: str) -> list[str]:
@@ -279,8 +302,10 @@ def main() -> None:
         n = len(paths)
         print(f"{n} scenes x 3 probes -> {n*3*2} clips under {out_root}/")
         for k, s in PREFIX_S.items():
-            print(f"  {k}: pred {s}s real -> ~{expected_frames(s)} frames; "
-                  f"percep {EPISODE_S}s -> ~{expected_frames(EPISODE_S)}")
+            src = sum(1 for t in capture_times(EPISODE_S) if t < s)
+            src += pad_to_even(src)
+            print(f"  {k}: pred {s}s real -> {sampled_count(src)} sampled "
+                  f"(even); percep -> {sampled_count(48 + pad_to_even(48))}")
         return
 
     rows, excluded = [], []
@@ -302,17 +327,22 @@ def main() -> None:
                 print(f"  !! {sid}/{kind}: outcome mismatch on {bad} -- EXCLUDED")
                 continue
             n_prefix = sum(1 for t in caps if t < PREFIX_S[kind])
-            for clip_kind, clip_frames, real_s in (
-                    ("percep", frames, EPISODE_S),
-                    ("pred", frames[:n_prefix], PREFIX_S[kind])):
+            for clip_kind, clip_frames in (
+                    ("percep", frames),
+                    ("pred", frames[:n_prefix])):
+                # Amendment D: freeze-pad so the sampled count is even
+                # (pairwise fusion discards an orphan last frame).
+                pad = pad_to_even(len(clip_frames))
+                clip_frames = clip_frames + [clip_frames[-1]] * pad
                 path = os.path.join(scene_dir, f"{kind}_{clip_kind}.mp4")
                 encode(clip_frames, path)
                 nf = ffprobe_frames(path)
-                exp = expected_frames(real_s)
+                exp = sampled_count(len(clip_frames))
                 checks = {
                     "faststart_moov_first": moov_before_mdat(path),
                     "rotation_absent": ffprobe_rotation_absent(path),
                     "frame_count_ok": abs(nf - exp) <= 1,
+                    "even_sampled": exp % 2 == 0,
                 }
                 if not all(checks.values()):
                     print(f"  !! {sid}/{kind}/{clip_kind}: checks {checks}")

@@ -399,6 +399,55 @@ present, token count normal).*
    free measurement of whether the model performs the renormalization
    it is invited to perform.
 
+## Amendment D (2026-08-20, pre-pilot) — pairwise frame fusion: even-frame rule; apparatus-validation event disclosed
+
+**Apparatus event (disclosed):** with the user's authorization via the
+monitoring session, 4 requests were spent against :8080 validating
+apparatus on **train-split scene train_000000 only** (separate dir
+`data/pm_big_clips_apparatus/`); no scene that will ever be scored has
+produced a model response. Raw results:
+
+    prompt_tokens: drop_pred(4f) 3108 · tilt_pred(5f) 3108 ·
+                   push_pred(10f) 6186 · drop_percep(32f) 17528
+    fit: 1026 tokens per FRAME PAIR exactly + 1056 fixed overhead,
+         holding across an 8x range (32f predicted 17472 + longer text)
+
+**The finding (strongly supported, not proven):** Qwen-VL fuses video
+frames PAIRWISE (clip.cpp:5824); the cost unit is the pair, and a
+5-frame clip costs identically to a 4-frame clip — consistent with
+floor(n/2) pairs and **the orphan last frame being discarded**. Our
+tilt_pred was the only odd clip, and its would-be-discarded frame is
+the LAST — the frame nearest the outcome boundary, the most informative
+one in a pre-outcome design. The renderer's frames are produced and
+decoded correctly (duration × 16 arithmetic unaffected); the loss is
+downstream in fusion.
+
+**Frozen rule:** every clip must yield an EVEN sampled-frame count. The
+renderer freeze-pads: when the sampled count would be odd, the final
+source frame is duplicated just long enough to cross the next 4 fps
+sample boundary — a visible pause, zero new dynamics, no outcome leak;
+the pre-outcome content boundary does not move. Today this affects only
+tilt_pred (5 → 6); the rule is general (GSO arm inherits it). Expected
+sampled frames become: drop 4, **tilt 6**, push 10, percep 32.
+
+**Pilot additions:** (1) decisive fusion confirmation — a 6-frame vs
+7-frame variant pair; identical prompt_tokens confirms the discard
+mechanism; (2) our own tripwire baseline supersedes the borrowed
+reference: expected prompt_tokens ≈ 1056 + 1026 × (frames/2) + text
+tokens, checked within ±10% per clip class.
+
+**Mode-detector attempt (B), recorded:** one 300-token-capped response
+on the drop_percep clip narrated frame-by-frame and truncated before
+emitting settle_time — INCONCLUSIVE by design cap, mode key unopened.
+Two observations worth keeping: the model anchored on the two real
+markers (0.00 s / 5.00 s) and referred to contact ORDINALLY ("around
+the 3rd or 4th frame") rather than fabricating metric times — the
+opposite of the Amendment-C hazard, mildly encouraging; and the
+truncation itself is the datum that video-leg completion budgets must
+clear a narration preamble, folded into the pilot's max-tokens
+calibration. The mode detector runs properly in the pilot (5 scenes,
+adequate budget) rather than via further one-off requests.
+
 ## 11. Contamination disclosure
 
 All F11 numbers, the Muse run results, F28/F29 outcomes, and the Dyna-2

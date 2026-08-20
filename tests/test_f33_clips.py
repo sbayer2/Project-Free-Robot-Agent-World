@@ -33,6 +33,8 @@ from f33_render_clips import (  # noqa: E402
     manifest_row,
     moov_before_mdat,
     outcome_mismatches,
+    pad_to_even,
+    sampled_count,
 )
 
 
@@ -47,11 +49,35 @@ def test_frozen_clip_constants_pinned():
 
 
 def test_expected_frames_matches_amendment_b_arithmetic():
-    """real x 16: drop ~4, tilt ~5, push ~10, full episode ~32."""
+    """real x 16: drop ~4, tilt ~5, push ~10, full episode ~32 (raw,
+    before the Amendment-D even rule)."""
     assert expected_frames(PREFIX_S["drop"]) == 4
     assert expected_frames(PREFIX_S["tilt"]) == 5
     assert expected_frames(PREFIX_S["push"]) == 10
     assert expected_frames(EPISODE_S) == 32
+
+
+def test_sampled_count_matches_observed_decodes():
+    """floor(src x 2/3): the values every smoke decode confirmed."""
+    assert sampled_count(48) == 32
+    assert sampled_count(6) == 4
+    assert sampled_count(8) == 5
+    assert sampled_count(15) == 10
+
+
+def test_amendment_d_even_rule():
+    """Pairwise fusion discards an orphan last frame; odd sampled counts
+    get freeze-padded to even. Only tilt (8 src -> 5 sampled) pads today;
+    one duplicated source frame lifts it to 6."""
+    assert pad_to_even(6) == 0                     # drop: 4 sampled, even
+    assert pad_to_even(15) == 0                    # push: 10 sampled, even
+    assert pad_to_even(48) == 0                    # percep: 32, even
+    k = pad_to_even(8)                             # tilt: 5 sampled, odd
+    assert k >= 1 and sampled_count(8 + k) % 2 == 0
+    assert sampled_count(8 + k) == 6
+    # generality: every src count in a wide range resolves to even
+    for src in range(4, 80):
+        assert sampled_count(src + pad_to_even(src)) % 2 == 0
 
 
 def test_ffmpeg_args_carry_the_frozen_chain():
