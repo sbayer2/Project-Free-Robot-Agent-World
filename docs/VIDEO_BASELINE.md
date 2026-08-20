@@ -383,6 +383,21 @@ present, token count normal).*
    claims is reported per leg as a measurement of confabulation under
    information scarcity — logged in a different column than accuracy,
    exactly as the monitoring session framed it.
+5. **Reporting time base pinned (addendum, same day):** the slow-motion
+   disclosure invites renormalization but left the ANSWER's time base
+   ambiguous — a model could report `settle_time` in video seconds, in
+   real seconds, or inconsistently across trials; the third mode
+   injects an unrecoverable bimodal 4× error into a scored continuous
+   field that no tripwire sees (plausible values, plausible range), and
+   silently breaks F11 comparability. Frozen: the video-leg prompt
+   states **"report every quantity, including settle_time, in
+   real-world seconds — the simulator's time base — accounting for the
+   4× slow motion"**, identical across legs (real-world base chosen
+   because the F11 field spec and normalizers are already in it). The
+   pilot additionally checks whether reported settle_time clusters near
+   the real-world value or near 4× it — a direct mode detector, and a
+   free measurement of whether the model performs the renormalization
+   it is invited to perform.
 
 ## 11. Contamination disclosure
 
