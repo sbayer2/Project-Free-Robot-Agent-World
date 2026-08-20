@@ -140,16 +140,36 @@ def confab_time_claims(text: str) -> list:
     return claims
 
 
+# ---- Amendment E: response classifier (budget starvation != model miss) ----- #
+
+def classify_response(text: str, finish_reason: str | None) -> str:
+    """Measured hazard (monitoring session): with reasoning on, a starved
+    completion budget can spend EVERYTHING in reasoning_content and emit an
+    empty content field with finish_reason=length -- an APPARATUS failure
+    that a naive parser scores as a model miss. Classes:
+
+        budget_starved  length + empty content  -> APPARATUS, excluded
+        truncated       length + content        -> counted toward the frozen
+                                                   truncation gate; scored
+                                                   normally (parse may fail)
+        scoreable       everything else
+    """
+    if finish_reason == "length":
+        return "budget_starved" if not (text or "").strip() else "truncated"
+    return "scoreable"
+
+
 # ---- usage-returning chat client (frozen F11 client stays untouched) -------- #
 
 def chat_completion_usage(base_url: str, model: str, messages: list,
                           temperature: float = 0.0, max_tokens: int = 4096,
                           timeout: float = 600.0, api_key: str | None = None,
                           transport=None) -> tuple:
-    """(text, usage_dict). Same scheme-validated urllib client as
-    llm_transfer.chat_completion (that function discards usage; the F33
-    tripwire needs prompt_tokens, and the frozen F11 module is not
-    modified)."""
+    """(text, info). Same scheme-validated urllib client as
+    llm_transfer.chat_completion (that function discards everything but
+    content; F33 needs prompt_tokens for the tripwire, finish_reason for
+    the Amendment-E classifier, and reasoning_content for the confab
+    scan). info = {"usage", "finish_reason", "reasoning_content"}."""
     import json as _json
     import urllib.parse
     import urllib.request
@@ -172,6 +192,11 @@ def chat_completion_usage(base_url: str, model: str, messages: list,
                 return resp.read()
     raw = _json.loads(transport(url, body, headers))
     try:
-        return raw["choices"][0]["message"]["content"], raw.get("usage", {})
+        choice = raw["choices"][0]
+        msg = choice["message"]
+        info = {"usage": raw.get("usage", {}),
+                "finish_reason": choice.get("finish_reason"),
+                "reasoning_content": msg.get("reasoning_content") or ""}
+        return msg["content"] or "", info
     except (KeyError, IndexError, TypeError) as e:
         raise RuntimeError(f"unexpected chat-completions response: {raw}") from e

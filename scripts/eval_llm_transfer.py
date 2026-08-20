@@ -93,13 +93,14 @@ def cached_response(path: str, messages: list[dict], args) -> str:
 
 def cached_video_response(path: str, messages: list[dict], clip_path: str,
                           args) -> tuple[str, dict]:
-    """F33 video legs: capture usage (the prompt_tokens tripwire needs it)
-    and cache the CLIP PATH instead of its base64 payload."""
+    """F33 video legs: capture usage + finish_reason + reasoning_content
+    (tripwire, Amendment-E classifier, confab scan) and cache the CLIP
+    PATH instead of its base64 payload."""
     from f33_video import chat_completion_usage
     if os.path.exists(path):
         d = json.load(open(path))
-        return d["response"], d.get("usage", {})
-    text, usage = chat_completion_usage(
+        return d["response"], d.get("info", {"usage": d.get("usage", {})})
+    text, info = chat_completion_usage(
         args.base_url, args.model, messages, temperature=args.temperature,
         max_tokens=args.max_tokens, timeout=args.timeout, api_key=args.api_key)
     slim = [messages[0],
@@ -107,9 +108,9 @@ def cached_video_response(path: str, messages: list[dict], clip_path: str,
                                           "path": clip_path},
                                          messages[1]["content"][1]]}]
     with open(path, "w") as fh:
-        json.dump({"messages": slim, "response": text, "usage": usage}, fh,
+        json.dump({"messages": slim, "response": text, "info": info}, fh,
                   indent=2)
-    return text, usage
+    return text, info
 
 
 def main(argv: list[str]) -> None:
@@ -153,6 +154,7 @@ def main(argv: list[str]) -> None:
     if is_video:
         from f33_video import (
             build_video_messages,
+            classify_response,
             clip_path_for,
             confab_time_claims,
             tripwire_ok,
@@ -168,7 +170,11 @@ def main(argv: list[str]) -> None:
     os.makedirs(resp_dir, exist_ok=True)
     rows: list[tuple[str, str, dict | None, dict]] = []
     tripwire_failures: list[str] = []
-    confab_hits = 0
+    budget_starved: list[str] = []
+    n_truncated = 0
+    confab_content = confab_reasoning = 0
+    completion_tokens: list[int] = []
+    reasoning_lens: list[int] = []
     for i, (sid, sample) in enumerate(scenes):
         truths = probe_outcomes(sample)
         for record in sample["behavior"]["probes"]:
@@ -179,7 +185,8 @@ def main(argv: list[str]) -> None:
             if is_video:
                 clip = clip_path_for(clips_root, sid, kind, leg_kind)
                 msgs = build_video_messages(sample, record, clip, leg_kind)
-                text, usage = cached_video_response(cache, msgs, clip, args)
+                text, info = cached_video_response(cache, msgs, clip, args)
+                usage = info.get("usage", {})
                 n_frames = frames_by_clip.get((sid, kind, leg_kind), 0)
                 if not tripwire_ok(usage.get("prompt_tokens", 0), n_frames):
                     # Amendment A.3: APPARATUS failure -- excluded and counted,
@@ -189,8 +196,25 @@ def main(argv: list[str]) -> None:
                           f"TRIPWIRE (prompt_tokens="
                           f"{usage.get('prompt_tokens')}, frames={n_frames})")
                     continue
+                completion_tokens.append(usage.get("completion_tokens", 0))
+                reasoning = info.get("reasoning_content", "")
+                reasoning_lens.append(len(reasoning))
+                cls = classify_response(text, info.get("finish_reason"))
+                if cls != "scoreable":
+                    n_truncated += 1  # feeds the frozen truncation gate
+                if cls == "budget_starved":
+                    # Amendment E: length + EMPTY content = the whole budget
+                    # went to reasoning_content -- APPARATUS, not a model
+                    # parse-failure; excluded and counted.
+                    budget_starved.append(f"{sid}.{kind}")
+                    print(f"[llm-transfer] {i + 1}/{len(scenes)} {sid}.{kind}: "
+                          f"BUDGET-STARVED (reasoning {len(reasoning)} chars, "
+                          f"content empty)")
+                    continue
                 if confab_time_claims(text):
-                    confab_hits += 1
+                    confab_content += 1
+                if confab_time_claims(reasoning):
+                    confab_reasoning += 1
             else:
                 text = cached_response(cache,
                                        build_messages(sample, record,
@@ -208,14 +232,28 @@ def main(argv: list[str]) -> None:
         **score_predictions(rows, train_mean),
     }
     if is_video:
-        n_attempted = len(rows) + len(tripwire_failures)
+        n_attempted = len(rows) + len(tripwire_failures) + len(budget_starved)
         report["video"] = {
             "clips_root": clips_root, "leg_kind": leg_kind,
+            "n_requests": n_attempted,
             "n_tripwire_failures": len(tripwire_failures),
             "tripwire_failed": tripwire_failures,
             "tripwire_rate": (len(tripwire_failures) / n_attempted
                               if n_attempted else 0.0),
-            "confab_response_rate": confab_hits / len(rows) if rows else 0.0,
+            "n_truncated": n_truncated,  # frozen f33 gate reads this
+            "n_budget_starved": len(budget_starved),
+            "budget_starved": budget_starved,
+            # Amendment C.4 + E: confab scanned in BOTH channels, labeled --
+            # fabrications live in reasoning_content, not content.
+            "confab_content_rate": (confab_content / len(rows)
+                                    if rows else 0.0),
+            "confab_reasoning_rate": (confab_reasoning / len(rows)
+                                      if rows else 0.0),
+            "mean_completion_tokens": (sum(completion_tokens)
+                                       / len(completion_tokens)
+                                       if completion_tokens else 0.0),
+            "mean_reasoning_chars": (sum(reasoning_lens) / len(reasoning_lens)
+                                     if reasoning_lens else 0.0),
         }
     os.makedirs(args.out, exist_ok=True)
     path = os.path.join(args.out, "transfer_report.json")

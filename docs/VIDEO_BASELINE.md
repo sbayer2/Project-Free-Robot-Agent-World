@@ -470,6 +470,45 @@ clear a narration preamble, folded into the pilot's max-tokens
 calibration. The mode detector runs properly in the pilot (5 scenes,
 adequate budget) rather than via further one-off requests.
 
+## Amendment E (2026-08-20, pre-pilot) — budget starvation classified as apparatus; confab scan covers both channels
+
+*Based on the monitoring session's measured three-response comparison:
+with reasoning on, a starved completion budget can spend EVERYTHING in
+`reasoning_content` and return `finish_reason=length` with a completely
+EMPTY `content` field — zero characters, not truncated JSON. A naive
+parser scores that as a model parse-failure; it is a budget failure. The
+prompt_tokens tripwire cannot catch it (input side is normal); this is
+the zero-frame trap arriving through the completion door.*
+
+**Frozen classifier** (`f33_video.classify_response`), applied per
+video-leg response:
+
+    budget_starved  finish_reason=length AND content empty
+                    -> APPARATUS, excluded from scoring, counted
+    truncated       finish_reason=length AND content non-empty
+                    -> counted toward the frozen truncation gate,
+                       scored normally (parse may fail naturally)
+    scoreable       otherwise
+
+Both non-scoreable classes count toward the frozen §7 truncation gate
+(> 10 %/leg → leg VOID, cap raised by amendment, cache makes the rerun
+cheap) — no frozen bar changes. `completion_tokens` and
+`reasoning_content` length are recorded per response so the pilot
+calibrates the cap from measurement, not inference.
+
+**Confab scan scope corrected:** with reasoning on, thinking lands in
+`reasoning_content` — a SEPARATE field the content-scoped scanner never
+saw (the observed "0:04s" fabrication lived there). The scan now covers
+BOTH channels, reported separately (`confab_content_rate`,
+`confab_reasoning_rate`); scoring safety was never at risk (JSON fields
+only), but the descriptive measurement now measures what it claims to.
+
+**Runtime facts recorded (from the monitoring session, server verified
+coherent):** post-restart n_ctx is 65536 (down from 262144; ~4× our
+largest expected video prompt — prompt truncation, not an error, is the
+failure mode if ever approached), RSS 24.4 GB, build b10501-eab19b649
+verified three ways with zero uncommitted tracked files.
+
 ## 11. Contamination disclosure
 
 All F11 numbers, the Muse run results, F28/F29 outcomes, and the Dyna-2

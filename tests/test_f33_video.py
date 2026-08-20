@@ -134,6 +134,39 @@ def test_confab_scanner_marker_grid_semantics():
     assert confab_time_claims("around the 3rd or 4th frame") == []
 
 
+def test_classify_response_amendment_e():
+    """Measured hazard: length + empty content = budget starvation
+    (APPARATUS), distinct from ordinary truncation and from scoreable."""
+    from f33_video import classify_response
+    assert classify_response("", "length") == "budget_starved"
+    assert classify_response("   ", "length") == "budget_starved"
+    assert classify_response('{"toppled": 0}', "length") == "truncated"
+    assert classify_response('{"toppled": 0}', "stop") == "scoreable"
+    assert classify_response("", "stop") == "scoreable"   # empty but complete
+    assert classify_response("x", None) == "scoreable"
+
+
+def test_chat_completion_usage_parses_reasoning_fields():
+    """The usage twin surfaces finish_reason + reasoning_content (and
+    tolerates a null content field, the starvation shape)."""
+    import json as j
+
+    from f33_video import chat_completion_usage
+    raw = {"choices": [{"finish_reason": "length",
+                        "message": {"content": None,
+                                    "reasoning_content": "thinking..."}}],
+           "usage": {"prompt_tokens": 3108, "completion_tokens": 800}}
+
+    def transport(u, b, h):
+        return j.dumps(raw).encode()
+
+    text, info = chat_completion_usage("http://x/v1", "m", [], transport=transport)
+    assert text == ""                                   # null content -> ""
+    assert info["finish_reason"] == "length"
+    assert info["reasoning_content"] == "thinking..."
+    assert info["usage"]["prompt_tokens"] == 3108
+
+
 def test_eval_runner_surface():
     """Video conditions added; F11 conditions and defaults untouched."""
     import eval_llm_transfer as ev
