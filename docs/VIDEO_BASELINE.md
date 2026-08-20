@@ -247,6 +247,53 @@ during legs).
   **excluded from this comparison by user decision** (dead end as VLM);
   no Muse numbers are published here.
 
+## Amendment A (2026-08-20, pre-pilot, zero data) — video-ingestion tripwires hardened
+
+*Written before the clip renderer exists and before any request has been
+made. Tightens (never relaxes) the §7 `video-sanity` gate, based on the
+monitoring llama.cpp session's measured silent-failure signature.*
+
+**The failure mode this guards:** both known video-decode bugs fail
+SILENTLY — the server returns HTTP 200, the model reports no video was
+attached, and a scored eval reads that as a model capability result, not
+an apparatus fault. The two fixes for those bugs are **local-only
+commits the user has decided to keep local**; clean upstream master has
+both bugs. Consequences frozen here:
+
+1. **`-movflags +faststart` is an apparatus REQUIREMENT, not a spec
+   detail.** The trailing-moov bug is not phone-specific — it hits any
+   default-muxed MP4 fed through the server's pipe (backward seek for
+   the index fails; zero frames decode). Faststart clips decode
+   correctly on BOTH the patched :8080 build AND clean upstream master,
+   which **removes the build-dependent confound from the video legs**:
+   a FINDINGS-grade clean-master rerun and the pilot build produce
+   comparable video ingestion.
+2. **Rotation side-data must be asserted absent, not assumed:** the
+   renderer verifies `ffprobe -show_entries stream_side_data=rotation`
+   returns nothing for its output (the rotation bug fires only on
+   90/270 display-matrix tags — a camera artifact our renders should
+   never carry, now checked rather than trusted).
+3. **The §7 `video-sanity` gate is superseded by a sharper, per-request
+   tripwire:** every video-leg request's `prompt_tokens` must exceed
+   the token count of its own text-only prompt by ≥ 100 (decoded frames
+   contribute vision tokens; a silently-dropped video contributes ~none
+   — reference measurements: an 8 s 640×480 clip = 18,729 prompt tokens
+   ingested vs 85 when silently dropped). A request failing the
+   tripwire is an APPARATUS failure, excluded from scoring and counted;
+   > 10% of a leg tripping VOIDs the leg as apparatus, never scored as
+   model capability.
+4. **Positive control:** before each video leg, one control clip with a
+   pre-verified nonzero decoded-frame count is sent and its
+   prompt_tokens checked against the tripwire — distinguishing a
+   silent zero-frame regime from genuine model misses before 60
+   requests are spent.
+5. **Frame-count reality check for the pilot:** at the server's
+   fps_target 4.0, the drop prefix (0.25 s) may sample only 1–2
+   frames. The pilot records decoded-frame counts per prefix; if a
+   prefix yields zero frames by sampling arithmetic (not decode
+   failure), Amendment 1 may adjust encode fps or prefix span for that
+   probe — clip *content* boundaries (pre-outcome) may not move.
+
 ## 11. Contamination disclosure
 
 All F11 numbers, the Muse run results, F28/F29 outcomes, and the Dyna-2
