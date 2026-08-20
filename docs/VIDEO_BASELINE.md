@@ -436,6 +436,28 @@ mechanism; (2) our own tripwire baseline supersedes the borrowed
 reference: expected prompt_tokens ≈ 1056 + 1026 × (frames/2) + text
 tokens, checked within ±10% per clip class.
 
+**Addendum (same day) — the pad's semantic channel, examined and
+closed:** the monitoring session flagged that a duplicated TERMINAL
+sampled frame would read as "the object has stopped" — outcome-adjacent
+evidence, differentially applied to odd-sampling clips only, at the
+most heavily weighted position. Resolution: the concern targets the
+sampled stream, but our pad operates PRE-SAMPLER, and under minimal
+back-padding **the duplicated frame is never sampled at all** — it
+extends duration so the 4 fps sampler emits one more GENUINE frame (the
+very frame odd-parity fusion would have discarded). Proven arithmetically
+for every source count in [4, 80] (`test_pad_duplicate_is_never_sampled`:
+all sampled source indices < original count) and empirically on the
+smoke clip (6 pairwise-distinct decoded frames; terminal ≠ penultimate).
+The suggested front-pad would instead SHIFT the sampling grid and lose
+the true boundary frame — the exact loss the even rule exists to
+prevent. No sampled frame is ever synthetic; the semantic channel never
+opens.
+
+**Throughput datum for §9 budgeting (measured on our clips):** prompt
+processing DEGRADES with length — 291.9 tok/s at 5k tokens → 246.9 at
+17.5k (drop_percep, 71 s wall). Video legs are budgeted at ~250 tok/s
+prompt processing, not the ~290 short-prompt figure.
+
 **Mode-detector attempt (B), recorded:** one 300-token-capped response
 on the drop_percep clip narrated frame-by-frame and truncated before
 emitting settle_time — INCONCLUSIVE by design cap, mode key unopened.

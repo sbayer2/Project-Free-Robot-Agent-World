@@ -80,6 +80,24 @@ def test_amendment_d_even_rule():
         assert sampled_count(src + pad_to_even(src)) % 2 == 0
 
 
+def test_pad_duplicate_is_never_sampled():
+    """The semantic-leak counter-proof (Amendment D addendum): the sampler
+    picks source index floor(k x 24/16) for output frame k. Under minimal
+    back-padding, every sampled index stays < the ORIGINAL source count --
+    the duplicated frame extends duration so one more GENUINE frame is
+    emitted, and the frozen frame itself never appears in the output.
+    (Front-padding would instead shift the grid and lose the true boundary
+    frame.) Verified empirically on the smoke clip: 6 pairwise-distinct
+    decoded frames."""
+    step = ENCODE_FPS / (STRETCH * SERVER_FPS)          # 1.5 src per sample
+    for src in range(4, 80):
+        pad = pad_to_even(src)
+        n_out = sampled_count(src + pad)
+        idxs = [int(k * step) for k in range(n_out)]
+        assert len(set(idxs)) == len(idxs)              # distinct sources
+        assert max(idxs) < src, f"src={src}: duplicate frame sampled"
+
+
 def test_ffmpeg_args_carry_the_frozen_chain():
     args = ffmpeg_args("out.mp4")
     joined = " ".join(args)
