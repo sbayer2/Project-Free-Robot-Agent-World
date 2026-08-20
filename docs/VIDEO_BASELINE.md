@@ -293,6 +293,56 @@ both bugs. Consequences frozen here:
    prefix yields zero frames by sampling arithmetic (not decode
    failure), Amendment 1 may adjust encode fps or prefix span for that
    probe — clip *content* boundaries (pre-outcome) may not move.
+   *(Clause 5's encode-fps contingency is superseded by Amendment B —
+   encode fps is a dead lever; see below.)*
+
+## Amendment B (2026-08-20, pre-pilot, zero data) — encode fps is a dead lever; uniform 4× time-stretch adopted, disclosed to the model
+
+*Written before the clip renderer exists. Supersedes Amendment A
+clause 5's contingency; the pre-outcome content boundaries remain
+inviolable.*
+
+**The dead lever, source-verified by the monitoring session:**
+`fps_target` is hardcoded at 4.0 (`mtmd-helper.cpp:890`) with no server
+flag, request field, or env override, and the decode pipeline applies
+`-vf fps=<target>` (`:761`), which RESAMPLES regardless of source rate —
+30 fps encodes decimate to 4, sub-4 encodes pad with duplicates.
+Encode fps cannot change frames-per-real-second. Measured confirmation:
+an 8.17 s clip decodes to 33 frames (duration × 4 within rounding), so
+expected counts are computable in advance.
+
+**The design decision (frozen):** all clips — video_pred, video_percep,
+GSO variants, and the positive control — are time-stretched by a
+uniform factor of **4×** (`-vf "setpts=4*PTS,fps=4"` before
+`+faststart`). Expected sampled frames: drop prefix 0.25 s → 1.0 s
+video-time → ~4; tilt 0.30 s → ~5; push 0.60 s → ~10; full episode
+2.0 s → 8.0 s → ~32.
+
+**Why stretch rather than accept 1–2-frame prefixes:** the pre-outcome
+windows are physically capped (~0.35 s to drop contact) — real-time
+prefixes cannot be lengthened without leaking outcomes, and a 1-frame
+"video" is a degenerate stimulus carrying *less* than the 3-view stills
+condition it is compared against, gutting H2's construct validity.
+
+**Confound management (frozen):**
+- The stretch factor is a single constant across ALL conditions and
+  legs; it may not vary per probe or per leg.
+- **The prompt tells the model the video is 4× slow motion**, so
+  velocity-, momentum-, and contact-dynamics inferences can be
+  renormalized rather than silently mismeasured. This is honest
+  stimulus labeling, same policy as F11's simulator-context prompt.
+- The server's timestamp markers are emitted on a 5000 ms interval in
+  the video's own time base; under 4× stretch they land every 1.25 s of
+  real time. Disclosed; identical across conditions, so no differential
+  effect.
+- Limits (§10) gains a line: the video legs measure physics-from-
+  slow-motion-video with declared time base — a stimulus choice forced
+  by the fixed 4 fps sampler, not a free parameter.
+
+The pilot's per-prefix decoded-frame recording stays mandatory and now
+also verifies the expected-count arithmetic above; a 1-frame prefix is
+distinguished from a 0-frame tripwire failure (underpowered stimulus vs
+apparatus fault), and only the recorded count separates them.
 
 ## 11. Contamination disclosure
 
