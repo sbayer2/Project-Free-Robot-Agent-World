@@ -164,20 +164,30 @@ def classify_response(text: str, finish_reason: str | None) -> str:
 def chat_completion_usage(base_url: str, model: str, messages: list,
                           temperature: float = 0.0, max_tokens: int = 4096,
                           timeout: float = 600.0, api_key: str | None = None,
+                          extra_body: dict | None = None,
                           transport=None) -> tuple:
     """(text, info). Same scheme-validated urllib client as
     llm_transfer.chat_completion (that function discards everything but
     content; F33 needs prompt_tokens for the tripwire, finish_reason for
     the Amendment-E classifier, and reasoning_content for the confab
-    scan). info = {"usage", "finish_reason", "reasoning_content"}."""
+    scan). info = {"usage", "finish_reason", "reasoning_content"}.
+
+    ``extra_body`` merges additional per-request fields — notably
+    ``{"reasoning_effort": ...}``: the Qwen3.8 chat template DEFAULTS to
+    'xhigh' (which injects a maximal-reasoning instruction into the
+    system prompt); 'medium' injects NOTHING (neutral), 'low' injects a
+    brevity instruction, 'none' disables thinking. Leaving it unset is
+    NOT neutral on this model."""
     import json as _json
     import urllib.parse
     import urllib.request
 
     url = base_url.rstrip("/") + "/chat/completions"
-    body = _json.dumps({"model": model, "messages": messages,
-                        "temperature": temperature,
-                        "max_tokens": max_tokens}).encode()
+    payload = {"model": model, "messages": messages,
+               "temperature": temperature, "max_tokens": max_tokens}
+    if extra_body:
+        payload.update(extra_body)
+    body = _json.dumps(payload).encode()
     headers = {"Content-Type": "application/json"}
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"

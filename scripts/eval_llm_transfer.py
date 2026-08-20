@@ -52,6 +52,14 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     p.add_argument("--clips-root", default=None,
                    help="F33 video conditions: clip dir (default <data>_clips; "
                         "run scripts/f33_render_clips.py first)")
+    p.add_argument("--reasoning-effort", default=None,
+                   choices=("xhigh", "medium", "low", "none"),
+                   help="per-request reasoning_effort. The Qwen3.8 template "
+                        "DEFAULTS to xhigh (maximal-reasoning instruction) "
+                        "when unset; 'medium' injects nothing (neutral). "
+                        "Setting this routes ALL conditions through the "
+                        "usage-capturing client with the Amendment-E "
+                        "classifier (budget starvation != parse failure)")
     p.add_argument("--base-url", default="http://127.0.0.1:8080/v1",
                    help="OpenAI-compatible server base URL")
     p.add_argument("--model", default="default", help="served model name")
@@ -91,25 +99,33 @@ def cached_response(path: str, messages: list[dict], args) -> str:
     return text
 
 
-def cached_video_response(path: str, messages: list[dict], clip_path: str,
-                          args) -> tuple[str, dict]:
-    """F33 video legs: capture usage + finish_reason + reasoning_content
-    (tripwire, Amendment-E classifier, confab scan) and cache the CLIP
-    PATH instead of its base64 payload."""
+def cached_usage_response(path: str, messages: list[dict], args,
+                          clip_path: str | None = None) -> tuple[str, dict]:
+    """F33 usage-capturing path (video legs always; text legs when
+    --reasoning-effort is set): captures usage + finish_reason +
+    reasoning_content (tripwire, Amendment-E classifier, confab scan).
+    Video caches store the CLIP PATH instead of its base64 payload."""
     from f33_video import chat_completion_usage
     if os.path.exists(path):
         d = json.load(open(path))
         return d["response"], d.get("info", {"usage": d.get("usage", {})})
+    extra = ({"reasoning_effort": args.reasoning_effort}
+             if args.reasoning_effort else None)
     text, info = chat_completion_usage(
         args.base_url, args.model, messages, temperature=args.temperature,
-        max_tokens=args.max_tokens, timeout=args.timeout, api_key=args.api_key)
-    slim = [messages[0],
-            {"role": "user", "content": [{"type": "input_video_path",
-                                          "path": clip_path},
-                                         messages[1]["content"][1]]}]
+        max_tokens=args.max_tokens, timeout=args.timeout, api_key=args.api_key,
+        extra_body=extra)
+    if clip_path is not None:
+        cached_msgs = [messages[0],
+                       {"role": "user",
+                        "content": [{"type": "input_video_path",
+                                     "path": clip_path},
+                                    messages[1]["content"][1]]}]
+    else:
+        cached_msgs = messages
     with open(path, "w") as fh:
-        json.dump({"messages": slim, "response": text, "info": info}, fh,
-                  indent=2)
+        json.dump({"messages": cached_msgs, "response": text, "info": info,
+                   "reasoning_effort": args.reasoning_effort}, fh, indent=2)
     return text, info
 
 
@@ -182,20 +198,30 @@ def main(argv: list[str]) -> None:
             if kind not in PROBE_ORDER:
                 continue
             cache = os.path.join(resp_dir, f"{sid}.{kind}.{args.condition}.json")
-            if is_video:
-                clip = clip_path_for(clips_root, sid, kind, leg_kind)
-                msgs = build_video_messages(sample, record, clip, leg_kind)
-                text, info = cached_video_response(cache, msgs, clip, args)
+            use_usage = is_video or args.reasoning_effort
+            if use_usage:
+                if is_video:
+                    clip = clip_path_for(clips_root, sid, kind, leg_kind)
+                    msgs = build_video_messages(sample, record, clip, leg_kind)
+                    text, info = cached_usage_response(cache, msgs, args,
+                                                       clip_path=clip)
+                else:
+                    from f33_video import classify_response, confab_time_claims
+                    msgs = build_messages(sample, record, args.condition,
+                                          images_for(sid, sample))
+                    text, info = cached_usage_response(cache, msgs, args)
                 usage = info.get("usage", {})
-                n_frames = frames_by_clip.get((sid, kind, leg_kind), 0)
-                if not tripwire_ok(usage.get("prompt_tokens", 0), n_frames):
-                    # Amendment A.3: APPARATUS failure -- excluded and counted,
-                    # never scored as model capability.
-                    tripwire_failures.append(f"{sid}.{kind}")
-                    print(f"[llm-transfer] {i + 1}/{len(scenes)} {sid}.{kind}: "
-                          f"TRIPWIRE (prompt_tokens="
-                          f"{usage.get('prompt_tokens')}, frames={n_frames})")
-                    continue
+                if is_video:
+                    n_frames = frames_by_clip.get((sid, kind, leg_kind), 0)
+                    if not tripwire_ok(usage.get("prompt_tokens", 0), n_frames):
+                        # Amendment A.3: APPARATUS failure -- excluded and
+                        # counted, never scored as model capability.
+                        tripwire_failures.append(f"{sid}.{kind}")
+                        print(f"[llm-transfer] {i + 1}/{len(scenes)} "
+                              f"{sid}.{kind}: TRIPWIRE (prompt_tokens="
+                              f"{usage.get('prompt_tokens')}, "
+                              f"frames={n_frames})")
+                        continue
                 completion_tokens.append(usage.get("completion_tokens", 0))
                 reasoning = info.get("reasoning_content", "")
                 reasoning_lens.append(len(reasoning))

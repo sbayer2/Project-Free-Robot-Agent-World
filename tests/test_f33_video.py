@@ -167,6 +167,29 @@ def test_chat_completion_usage_parses_reasoning_fields():
     assert info["usage"]["prompt_tokens"] == 3108
 
 
+def test_chat_completion_usage_extra_body_reaches_request():
+    """reasoning_effort (and any extra field) must land in the request
+    body -- the Qwen3.8 template defaults to xhigh when unset, so the
+    field is load-bearing for the essence-leg calibration."""
+    import json as j
+
+    from f33_video import chat_completion_usage
+    captured = {}
+
+    def transport(u, b, h):
+        captured.update(j.loads(b))
+        return j.dumps({"choices": [{"finish_reason": "stop",
+                                     "message": {"content": "ok"}}],
+                        "usage": {}}).encode()
+
+    chat_completion_usage("http://x/v1", "m", [], transport=transport,
+                          extra_body={"reasoning_effort": "medium"})
+    assert captured["reasoning_effort"] == "medium"
+    captured.clear()
+    chat_completion_usage("http://x/v1", "m", [], transport=transport)
+    assert "reasoning_effort" not in captured    # unset stays unset
+
+
 def test_eval_runner_surface():
     """Video conditions added; F11 conditions and defaults untouched."""
     import eval_llm_transfer as ev
@@ -177,3 +200,6 @@ def test_eval_runner_surface():
         a = ev.parse_args(["--data", "x", "--condition", c])
         assert a.condition == c
     assert ev.parse_args(["--data", "x"]).clips_root is None
+    assert ev.parse_args(["--data", "x"]).reasoning_effort is None
+    a = ev.parse_args(["--data", "x", "--reasoning-effort", "medium"])
+    assert a.reasoning_effort == "medium"
