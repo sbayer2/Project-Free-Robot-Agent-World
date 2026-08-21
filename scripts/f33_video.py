@@ -152,10 +152,28 @@ def classify_response(text: str, finish_reason: str | None) -> str:
         truncated       length + content        -> counted toward the frozen
                                                    truncation gate; scored
                                                    normally (parse may fail)
+        empty_stop      stop + empty content    -> MODEL failure (Amendment
+                                                   1): voluntary termination
+                                                   with the answer stranded
+                                                   in reasoning_content;
+                                                   scored as a parse failure
+                                                   (baseline imputation),
+                                                   co-reported, NOT counted
+                                                   toward the truncation/
+                                                   apparatus gate
         scoreable       everything else
+
+    empty_stop was observed once in the pilot (28,252 tokens of reasoning
+    ending "Let me commit to my final answers", then EOS, zero content);
+    the only apparatus mechanism with that signature (reasoning_budget's
+    grammar-forced think-close) was verified disabled, so the class is the
+    model's own emission failure. Amendment E's original pin of
+    ("", "stop") -> scoreable was wrong and is corrected here.
     """
     if finish_reason == "length":
         return "budget_starved" if not (text or "").strip() else "truncated"
+    if finish_reason == "stop" and not (text or "").strip():
+        return "empty_stop"
     return "scoreable"
 
 

@@ -509,6 +509,125 @@ largest expected video prompt — prompt truncation, not an error, is the
 failure mode if ever approached), RSS 24.4 GB, build b10501-eab19b649
 verified three ways with zero uncommitted tracked files.
 
+## Amendment 1 (2026-08-21, post-pilot) — generation conditions pinned from the pilot; classifier extended; co-reports registered
+
+*The pilot (21 cells: 15 essence over 5 scenes, 6 video_percep over 2
+scenes; full record with every mid-pilot decision timestamped in
+`runs/f33/pilot/pilot2_predictions.json`) calibrated every open
+generation parameter and surfaced one new failure class. No frozen
+verdict bar changes. Two of the pins below are CORRECTIONS of silent
+divergences from the F11 anchor, stated as such.*
+
+**Pin 1 — `reasoning_effort: "medium"` (parity correction).** Leaving
+the field unset is NOT neutral: the Qwen3.8 chat template defaults to
+`xhigh`, injecting a maximal-reasoning instruction absent from F11's
+AgentWorld template (verified: 8,051 chars, no reasoning_effort
+concept). `medium` injects nothing = instruction parity. Measured
+consequences: at xhigh, tilt-essence starved a 16,384 budget with empty
+content and a 32k diagnostic was still generating at 27,939 tokens when
+cancelled; at medium the same cell terminated at 10,819 with clean
+content. Same model, probe, and day — one injected sentence converts an
+effectively unbounded spiral into termination. (This also RETIRES the
+cross-model "tilt tar-pit" claim in its simple form: F11 spiraled with
+no such instruction; different phenomena. Surviving weaker claim: tilt
+is the hardest probe at matched conditions — see tilt-dominance test
+below.) The lever is ~inert on tractable probes (drop: 7,800 @ medium
+vs 7,897 @ xhigh), so parity costs nothing. `reasoning_budget_tokens`
+(a per-request sampling-time grammar constraint, prompt-neutral) stays
+shelved as a pre-registered unused contingency.
+
+**Pin 2 — `max_tokens: 32768` for all legs (parity correction +
+measured tail).** 16,384 was itself a silent divergence: F11 ran at
+32,768. The raise was decided precautionarily mid-pilot (9 attempts, no
+binding) and vindicated two scenes later by a 19,932-token tilt, then a
+28,252-token tilt (86% of the new cap). Essence completion range
+4,149–28,252 with the running max still climbing at n=15 — the tail is
+not bounded; a leg cell above 32,768 would not surprise. The cap stays
+at 32,768 (= F11 parity) with the acknowledged limit that it may bind;
+**every leg reports the count of completions in 16,384–32,768** (the
+counterfactual band — how often the old cap WOULD have bound) **and the
+count at exactly 32,768** (starvation under the frozen Amendment-E
+class). Caveat from the pilot: the 28,252 cell shows the longest chains
+may fail to emit regardless (below), so headroom above ~28k buys
+measurement, not necessarily data.
+
+**Pin 3 — timeouts, jointly non-binding (checked property, margins
+named).** Client `--timeout 3600` (raised with the cap: 1800s kills
+chains past ~22k at ~12 tok/s — a latent binder). Server `-to 7200`
+(added by the operator 2026-08-21 at planned restart; the llama-server
+HTTP default of 3600 would have exactly equaled the client's, and equal
+limits hide each other). Checked: n_predict −1 (request governs);
+n_ctx_slot 65,536 vs ~52k max video cell (~20% margin); CORS-proxy 600s
+not in path. Rule: every limit in the request path must be jointly
+non-binding; any change to clip length, resolution, or cap re-checks
+all margins.
+
+**Classifier extension (Amendment E taxonomy + one new class).** The
+pilot's 28,252-token cell returned `finish_reason=stop` with EMPTY
+content — 83,511 chars of reasoning ending "Let me commit to my final
+answers", then EOS with the answer never serialized. The only
+server-side mechanism producing that signature (reasoning_budget
+grammar forcing the think-close) is verified OFF, so this is the model
+voluntarily terminating with the answer stranded in the reasoning
+channel: **`empty_stop` (finish=stop AND content empty) — a MODEL
+failure, scored as a parse failure (train-mean imputation, unchanged
+scorer), co-reported as its own class; it does NOT count toward the
+truncation/apparatus gate.** Amendment E's test pin of `("", "stop") →
+scoreable` was wrong and is corrected with this dated amendment. Added
+alongside: a per-response channel-separation assertion
+(`reasoning_content` non-empty where thinking is expected) — the
+behavioral replacement for recording `/props reasoning_format`, which
+surfaces a wrong-struct default ('none') rather than the effective
+value (deepseek) and would be a constant masquerading as a check.
+
+**Pre-registered co-reports for the legs (all free — the data is
+already collected):** (a) empty_stop rate by chain-length decile — the
+pilot's single instance was also its longest chain, an n=1
+co-occurrence that must not be read as a length effect until the legs
+test it; (b) slow-decode versus preceded-by-long-text-cell — the
+pilot's one decode outlier (5.29 vs a stable ~12.3 tok/s) followed the
+40-minute 28k generation; (c) prefill rate by index-since-server-start
+— pilot prefill was bimodal (~135 tok/s for the session's first two
+video cells, ~238 steady state, 1.76×, no intermediates), consistent
+with a one-time warm-up but observed over ONE server start; restarts
+correlate with condition boundaries, so without this index a warm-up
+effect could masquerade as a condition effect. Cache records gain a
+per-run request sequence number. (d) **Complete-case MSE alongside the
+imputed MSE, per condition, with the imputation count** — baseline
+imputation pulls affected cells TOWARD the baseline, so it flatters
+cells scoring worse than baseline and penalizes cells scoring better;
+with differing failure rates across conditions the bias differs in
+size and possibly direction between the very conditions H2 compares
+(the pilot instance: excluding the imputed tilt cell RAISED tilt MSE
+2.15→2.69). Reporting both figures as a standing pair makes any
+cross-condition difference checkable against the exclusion without
+retrospective reanalysis.
+
+**Cost (measured ranges, not means).** Essence: chains 4,149–28,252
+tokens, ~6–40 min/cell at 11.9–13.9 tok/s decode. Video: full prefill
+every cell (~18k tokens; no cross-cell media reuse — chunks are
+content-hashed SHA-256), 130–241 tok/s bimodal as above; decode ~12.3;
+percep completions 1,565–2,879 ("percep-short": the outcome is shown,
+so there is less to reason out — held 6/6); wall ~3–11 min/cell.
+Budget legs on the long right tail, not the mean.
+
+**Pilot scoring, smoke-grade (NO verdicts; frozen script runs on legs
+only).** Essence n=15 (1 empty_stop): normalized MSE 0.7702, gain
+0.05×; video_percep n=6 (clean): MSE 0.5912, gain 0.08×. Tilt
+dominates error in both conditions — TESTED against the empty_stop
+artifact hypothesis: excluding that cell RAISES tilt essence MSE to
+2.6897 (imputation had diluted it), so the dominance is real on clean
+cells and independently present in video (1.74). Direction-only, at
+matched instruction conditions (medium = F11 parity, so the comparison
+does not inherit the xhigh confound): pilot essence MSE 0.7702 vs F11
+anchor 1.277 — 5 scenes decide nothing.
+
+**Apparatus verdict.** Video path fully validated: 6/6 cells scoreable,
+parsed, confab-free; tripwire green throughout (the Amendment-D token
+model predicted the first full-size live prompt within 17 tokens and
+held for all six); zero starvation, truncation, or decode failures
+across the entire pilot at medium.
+
 ## 11. Contamination disclosure
 
 All F11 numbers, the Muse run results, F28/F29 outcomes, and the Dyna-2

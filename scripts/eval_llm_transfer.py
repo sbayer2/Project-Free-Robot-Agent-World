@@ -21,6 +21,7 @@ unified-memory pool (docs/HARDWARE.md).
 from __future__ import annotations
 
 import argparse
+import itertools
 import json
 import os
 import sys
@@ -99,12 +100,19 @@ def cached_response(path: str, messages: list[dict], args) -> str:
     return text
 
 
+_RUN_SEQ = itertools.count(1)
+
+
 def cached_usage_response(path: str, messages: list[dict], args,
                           clip_path: str | None = None) -> tuple[str, dict]:
     """F33 usage-capturing path (video legs always; text legs when
     --reasoning-effort is set): captures usage + finish_reason +
     reasoning_content (tripwire, Amendment-E classifier, confab scan).
-    Video caches store the CLIP PATH instead of its base64 payload."""
+    Video caches store the CLIP PATH instead of its base64 payload.
+    Each actually-issued request records a per-run sequence number
+    (Amendment 1 co-report: prefill warm-up is position-in-session
+    dependent, and server restarts correlate with condition boundaries;
+    cache hits do not consume a number)."""
     from f33_video import chat_completion_usage
     if os.path.exists(path):
         d = json.load(open(path))
@@ -115,6 +123,7 @@ def cached_usage_response(path: str, messages: list[dict], args,
         args.base_url, args.model, messages, temperature=args.temperature,
         max_tokens=args.max_tokens, timeout=args.timeout, api_key=args.api_key,
         extra_body=extra)
+    info["run_seq"] = next(_RUN_SEQ)
     if clip_path is not None:
         cached_msgs = [messages[0],
                        {"role": "user",
@@ -187,6 +196,7 @@ def main(argv: list[str]) -> None:
     rows: list[tuple[str, str, dict | None, dict]] = []
     tripwire_failures: list[str] = []
     budget_starved: list[str] = []
+    empty_stops: list[str] = []
     n_truncated = 0
     confab_content = confab_reasoning = 0
     completion_tokens: list[int] = []
@@ -226,7 +236,7 @@ def main(argv: list[str]) -> None:
                 reasoning = info.get("reasoning_content", "")
                 reasoning_lens.append(len(reasoning))
                 cls = classify_response(text, info.get("finish_reason"))
-                if cls != "scoreable":
+                if cls in ("truncated", "budget_starved"):
                     n_truncated += 1  # feeds the frozen truncation gate
                 if cls == "budget_starved":
                     # Amendment E: length + EMPTY content = the whole budget
@@ -237,11 +247,18 @@ def main(argv: list[str]) -> None:
                           f"BUDGET-STARVED (reasoning {len(reasoning)} chars, "
                           f"content empty)")
                     continue
+                if cls == "empty_stop":
+                    # Amendment 1: stop + empty content = MODEL emission
+                    # failure (answer stranded in reasoning_content). Falls
+                    # through to scoring as a parse failure (baseline
+                    # imputation); co-reported; NOT a truncation-gate event.
+                    empty_stops.append(f"{sid}.{kind}")
                 if confab_time_claims(text):
                     confab_content += 1
                 if confab_time_claims(reasoning):
                     confab_reasoning += 1
             else:
+                cls = None
                 text = cached_response(cache,
                                        build_messages(sample, record,
                                                       args.condition,
@@ -249,7 +266,8 @@ def main(argv: list[str]) -> None:
                                        args)
             pred = extract_prediction(text)
             rows.append((sid, kind, pred, truths[kind]))
-            tag = "ok" if pred else "PARSE-FAIL"
+            tag = ("EMPTY-STOP" if cls == "empty_stop"
+                   else "ok" if pred else "PARSE-FAIL")
             print(f"[llm-transfer] {i + 1}/{len(scenes)} {sid}.{kind}: {tag}")
 
     report = {
@@ -257,6 +275,21 @@ def main(argv: list[str]) -> None:
         "model": args.model, "n_scenes": len(scenes),
         **score_predictions(rows, train_mean),
     }
+    # Amendment 1: baseline imputation pulls failed cells TOWARD baseline
+    # (flatters below-baseline conditions, penalizes above-baseline ones),
+    # so differing failure rates bias cross-condition comparisons. Report
+    # the complete-case figures as a standing pair with the imputed ones.
+    complete_rows = [r for r in rows if r[2] is not None]
+    cc = score_predictions(complete_rows, train_mean)
+    report["complete_case"] = {
+        "n_rows": cc["n_rows"], "n_excluded": len(rows) - len(complete_rows),
+        "mse": cc["mse"], "baseline_mse": cc["baseline_mse"],
+        "gain_over_mean": cc["gain_over_mean"], "per_probe": cc["per_probe"],
+    }
+    # Amendment 1: empty_stop co-report (model emission failure; scored via
+    # imputation above, never a truncation-gate event).
+    report["n_empty_stop"] = len(empty_stops)
+    report["empty_stop"] = empty_stops
     if is_video:
         n_attempted = len(rows) + len(tripwire_failures) + len(budget_starved)
         report["video"] = {

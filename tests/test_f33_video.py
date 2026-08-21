@@ -134,16 +134,20 @@ def test_confab_scanner_marker_grid_semantics():
     assert confab_time_claims("around the 3rd or 4th frame") == []
 
 
-def test_classify_response_amendment_e():
-    """Measured hazard: length + empty content = budget starvation
-    (APPARATUS), distinct from ordinary truncation and from scoreable."""
+def test_classify_response_amendment_e_and_1():
+    """Amendment E: length + empty = budget starvation (APPARATUS).
+    Amendment 1: stop + empty = empty_stop (MODEL emission failure --
+    the pilot's 28,252-token cell; the original ("", "stop")->scoreable
+    pin was wrong and is corrected by dated amendment)."""
     from f33_video import classify_response
     assert classify_response("", "length") == "budget_starved"
     assert classify_response("   ", "length") == "budget_starved"
     assert classify_response('{"toppled": 0}', "length") == "truncated"
     assert classify_response('{"toppled": 0}', "stop") == "scoreable"
-    assert classify_response("", "stop") == "scoreable"   # empty but complete
+    assert classify_response("", "stop") == "empty_stop"
+    assert classify_response("   ", "stop") == "empty_stop"
     assert classify_response("x", None) == "scoreable"
+    assert classify_response("", None) == "scoreable"  # no finish_reason info
 
 
 def test_chat_completion_usage_parses_reasoning_fields():
