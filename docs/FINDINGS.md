@@ -1978,6 +1978,113 @@ Reproduce: `runs/f29_retrain.log` (24 disjoint pairs,
 with `--seed 2942 --data-template "data/pm_f29_confirm_{arm}" --out
 runs/f29/f29_confirm_report.json` (confirmatory).
 
+### F34 — ⭐ On a video-trained VLM, chain-of-thought is the miscalibration channel: reasoning carries the only ordinal signal (ranks scenes correctly, one correlation genuinely composite) yet makes outcome MSE ~12× worse on varying-truth fields; no-think retreats to safe probe-level defaults with zero discrimination — complementary failure, with the one conditional-outcome probe (push) inverting the sign
+
+*(Run 2026-08-21 on the F33 apparatus, as an unregistered-but-controlled
+offshoot: the user cancelled the F33 llama.cpp legs mid-run (26/60
+essence cells cached, resumable) and directed a pivot to MLX serving
+with reasoning limited "out of the gate" — the overthinking concern
+that became this finding's design. Model: the same Qwen3.8-27B in
+mlx-community's native affine 4-bit via `mlx_vlm.server` (llama.cpp arm
+= GGUF Q4_K_M), so every cross-arm comparison measures **stack+quant
+jointly** — disclosed on all of it. Scored by the frozen F11 scorer on
+pm_big's 20-scene test split against exact MuJoCo keys. Single model,
+small n throughout; every decision, threshold, and mid-run correction
+is timestamped in `runs/f33/mlx/gates.json`. F33 proper (video legs,
+MME, frozen H1–H4) remains in flight and is untouched by this entry.)*
+
+**The dose ladder** (identical 6 cells, scenes ×3 probes, frozen scorer;
+"reasoned" = the F33 Amendment-1 medium condition):
+
+| condition | MSE | gain vs train-mean | drop | tilt | push |
+|---|---|---|---|---|---|
+| unbounded medium (llama.cpp, 10.8–14k tok/cell) | 1.2849 | 0.035× | 0.076 | 3.765 | 0.014 |
+| bounded medium 6,144 (MLX) | 1.1876 | 0.038× | 0.076 | 3.481 | 0.006 |
+| **direct no-think (MLX)** | **0.1062** | 0.420× | 0.017 | 0.212 | 0.089 |
+
+Full-split direct (60 cells): MSE 0.1215, gain 0.42×, zero parse
+failures. **Nobody beats predict-train-mean** (all gains < 1) — a
+ceiling on every claim here.
+
+- **The gap is real, not a constant-truth artifact (objection tested,
+  refuted).** Class-A fields (truth ~constant across the split — all
+  four drop fields; every drop scene is episode-censored, settle_time
+  = 1.984 on 9/9) contribute **mse 0.0000 in BOTH conditions** — the
+  chains tracked the disclosed 2-s window too. The entire gap lives in
+  Class B where truth varies: **1.5872 vs 0.1312 = 12.1×**.
+- **The discrimination split — reasoning extracts signal and then
+  ruins it.** Spearman(pred, truth) per probe.field: reasoned
+  tilt.settle_time **+1.00** (genuinely composite: the best
+  one-given-parameter sort reaches only 0.67), tilt.slid +0.89
+  (~reducible: restitution alone 0.85), drop.n_bounces +0.58, vs
+  direct ≈ 0.00 on the same fields (near-constant answers discriminate
+  nothing; direct correlates only where the answer is readable off
+  given geometry, max_height +0.84/+0.93 in both conditions). So the
+  chains **rank scenes correctly and overshoot magnitudes** (tilt MSE
+  3.5–3.8); the flat prior wins MSE by never being loudly wrong.
+  **Neither condition understands; they fail complementarily.**
+- **Push inverts — the mechanism in one probe.** Reasoned push MSE
+  0.006–0.014 (toppled Brier 0.00) vs direct 0.089 (Brier 0.25):
+  reasoning **helps exactly where the outcome is conditional** (does
+  the impulse cross the topple threshold?) and hurts where priors
+  suffice. Same run, same model, opposite sign.
+- **The 2×2 control isolates the cause (prompt vs process).** Direct
+  answers are probe-generic (drop always settle 2.0 / 3 bounces / no
+  slide) — but under a format-only prompt (JSON-only clause kept, the
+  reasoning-command clause dropped) with bounded thinking restored,
+  the same cells **differentiate** (n_bounces 9/5/13 vs constant
+  3/3/3), with output shape held constant (~93 content tokens in both
+  conditions). And the control's values nearly equal the
+  original-prompt Stage-1 cells (043: 9 bounces both; 054: 5 both):
+  **prompt wording is ~inert given reasoning; ± reasoning owns the
+  outcome in both directions.** (The no-think "relocation" hazard is
+  part of the record: under the *original* prompt — which commands
+  step-by-step reasoning — disabling the thinking channel just moved
+  the chain into content; the no-computation condition required the
+  prompt change, disclosed.)
+- **The overthinking rate is quantified:** the 6,144 thinking budget
+  bound on **8 of 9** bounded-thinking cells (a prompt-neutral
+  sampling-time cap; per-request `thinking_budget`), and capping cost
+  nothing — bounded ≥ unbounded on every probe.
+- **Cross-stack confirmation (apparatus ruled out):** the xhigh
+  empty-content starvation from the F33 pilot **reproduces on MLX** —
+  different engine, different quantization, same pathology; the
+  effort ladder differentiates cleanly (low 1,743 / medium 2,401 /
+  xhigh starved at cap). Model-level, not llama.cpp.
+
+**Bearing on the program's question** (does video training capture an
+object's post-perturbation essence?): what the weights answer
+*instantly* is coarse and safe — probe-level defaults plus
+geometry read-offs, no per-material discrimination even with the
+material numbers given in text. The dynamics knowledge that exists
+surfaces only through reasoning, as correct *ordering* that the model
+cannot calibrate into magnitudes. Both halves bound below
+predict-the-mean. The F33 anchored comparison (vs AgentWorld etc.)
+stays open — the anchors reasoned unbounded, so a thinking-off anchor
+point is registered as the missing control before any cross-model
+priors claim.
+
+**Caveats, stated at strength:** single model, single seed-equivalent;
+dose-ladder n = 6 cells (the 12.1× rests on 34 field-errors per
+condition), correlations on 8–9 scenes; control n = 3 (clean branch —
+differentiation observed despite reasoning truncated at the budget on
+all three); stack+quant confounded across arms by design (drop MSE
+identical to 3 decimals across arms suggests the confound is small,
+but it is not zero); MSE structurally favors low-variance predictors
+(hence the discrimination co-report); "12× worse" is condition-level
+(direct-no-think required the prompt change the 2×2 licenses).
+
+Reproduce: `runs/f33/mlx/gates.json` (complete timestamped decision
+record), `runs/f33/mlx/run_stage1.sh` (bounded parity cells),
+`scripts/eval_llm_transfer.py --extra-body '{"enable_thinking":
+false}' --system-prompt-file runs/f33/mlx/nothink_system_prompt.txt`
+(direct condition), `runs/f33/mlx/control_2x2_probe.py` (control),
+plus the Class-A/B, Spearman, and censoring one-shots recorded in the
+session log. Server: `mlx_vlm.server --model
+mlx-community/Qwen3.8-27B-4bit` (wire facts in gates.json; top-level
+`enable_thinking`/`reasoning_effort`/`thinking_budget`, silent-ignore
+on nested forms).
+
 ---
 
 ## 4. Next steps — the gap is NOT intrinsic; the fork is resolved
