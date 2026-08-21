@@ -2034,7 +2034,9 @@ ceiling on every claim here.
   reasoning-command clause dropped) with bounded thinking restored,
   the same cells **differentiate** (n_bounces 9/5/13 vs constant
   3/3/3), with output shape held constant (~93 content tokens in both
-  conditions). And the control's values nearly equal the
+  conditions — the control side derived as total minus the bound
+  budget, corroborated by client-side think-space estimates; direct
+  side measured, 86–90 across all 60 cells). And the control's values nearly equal the
   original-prompt Stage-1 cells (043: 9 bounces both; 054: 5 both):
   **prompt wording is ~inert given reasoning; ± reasoning owns the
   outcome in both directions.** (The no-think "relocation" hazard is
@@ -2073,6 +2075,14 @@ identical to 3 decimals across arms suggests the confound is small,
 but it is not zero); MSE structurally favors low-variance predictors
 (hence the discrimination co-report); "12× worse" is condition-level
 (direct-no-think required the prompt change the 2×2 licenses).
+
+*Server-side figures independently fact-checked against the monitoring
+session's llama.cpp/mlx logs (2026-08-21): all confirmed exactly, with
+one range correction incorporated (direct-cell tokens 86–90, not
+87–90 — the narrower range came from a partial live view, the day's
+recurring hazard, caught by the full-log read) and one attribution
+tightened (per-cell token figures are COMPLETION tokens server-side;
+reasoning/content splits are client-side estimates).*
 
 Reproduce: `runs/f33/mlx/gates.json` (complete timestamped decision
 record), `runs/f33/mlx/run_stage1.sh` (bounded parity cells),
