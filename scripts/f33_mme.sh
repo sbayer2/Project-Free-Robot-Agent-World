@@ -65,4 +65,13 @@ OPENAI_API_KEY="${OPENAI_API_KEY:-none}" \
   --output_path "$OUT" 2>&1 | tee "$OUT/mme_run.log"
 
 curl -s -m 5 "${BASE_URL%/v1}/props" | head -c 400 > "$OUT/props_after.json" || true
+
+# lmms-eval catches evaluation errors and still exits 0 (observed live:
+# the 0.7.2 wheel's missing extensionless include files crashed the task
+# indexer, the CLI logged ERROR, exited 0, and the pipeline printed
+# success). Detect the failure from the log instead of the exit code.
+if grep -q "Error during evaluation" "$OUT/mme_run.log"; then
+  echo "MME FAILED (see $OUT/mme_run.log)"
+  exit 1
+fi
 echo "MME DONE -> $OUT (scores go into the F33 report's meta.mme)"
