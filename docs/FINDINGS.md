@@ -2084,31 +2084,42 @@ recurring hazard, caught by the full-log read) and one attribution
 tightened (per-cell token figures are COMPLETION tokens server-side;
 reasoning/content splits are client-side estimates).*
 
-**Instrument flag (2026-08-21, post-entry; found by a peer session,
-independently reproduced, UNDIAGNOSED): the tilt probe's rolling
-dynamics for spheres are ~56× slower than first-principles physics.**
-Verified live on test_000043's material (sphere r=0.18, μ=0.777,
-ρ=6420): at t=2.0s the sim reaches |v|=0.085 m/s vs the ideal
-solid-sphere rolling value (5/7)·g·sin20° · 2s ≈ 4.79 m/s, with
-rolling-without-slipping holding (|v| ≈ r|ω| from ~1.5s) and — the
-diagnostic oddity — the sphere DECELERATING from 0.46 to 0.10 m/s
-while still sliding at t≈0.5–1.0, which friction cannot do on a 20°
-incline and which points at contact compliance (restitution-derived
-solref acting as drag), not friction settings (inertia is ideal to 5
-decimals; condim=3 makes the rolling-friction components inactive).
-Consequence for THIS entry: tilt truth for round shapes sits near the
-shape's minimum displacement regardless of friction, so the reasoned
-chains' large tilt magnitudes are scored against a truth that is
-itself ~60× below textbook physics — **the tilt MSE (3.5–3.8) partly
-measures sim-vs-textbook divergence, not purely model miscalibration,
-and unlike the episode-censoring case this dynamics anomaly is NOT
-disclosed in the prompt.** The ordinal claims survive (rankings are
-within the sim's internally consistent world); the magnitude-
-miscalibration claim is DOWNGRADED for tilt on round shapes pending
-diagnosis. Also bears on F11's and any future run's tilt.slid_distance
-for sphere/cylinder/capsule/ellipsoid. Repro: `build_mjcf("sphere",
-<material>, object_z=0.23, ground_euler=(radians(20),0,0))`, step
-2.0s at dt=0.002, compare |qvel[:3]| with (5/7)·g·sin20°·t.
+**Instrument flag (2026-08-21, post-entry), DIAGNOSED same night — a
+radians/degrees unit bug: the tilt ramp has been ~0.349°, not 20°,
+for the entire project history.** `run_tilt`
+(`generate_mujoco.py:386`) computes `angle = math.radians(20)` and
+passes it into `ground_euler`, which lands in the MJCF `euler`
+attribute — which MuJoCo reads in DEGREES (no
+`<compiler angle="radian"/>` exists in either template). Verified
+three ways: the built scene's ground-plane normal measures exactly
+0.3491° (= radians(20) reread as degrees; passing 20.0 gives a true
+20.0000°); rolling acceleration is mass-independent (peer's
+density-swap test, ruling out contact compliance); measured 0.0417
+m/s² matches (5/7)·g·sin(0.349°) = 0.0427, not the 20° value 2.397.
+*(An earlier version of this flag attributed the anomaly to
+restitution-derived contact compliance — WRONG, retracted: the
+"deceleration while sliding" that seemed unphysical on a 20° incline
+is ordinary friction on the actual ~0.35° incline. Diagnosis credit:
+the peer session's unit trace.)*
+
+**Consequence, sharper than the undiagnosed version: every tilt cell
+in every LLM run tells the model "the ground plane is inclined 20.0
+degrees" (`action_text`) and scores it against a 0.349° world.** The
+task misdescribes the world to the model, and the video_percep tilt
+clips SHOW the near-flat scene while their own text says 20° — an
+internal contradiction in the video prompts. For this entry: tilt
+magnitude error (reasoned 3.5–3.8) is substantially the apparatus's
+misdescription, not model miscalibration — the chains computed
+20°-ramp physics as instructed; the direct condition's near-zero
+defaults accidentally matched the near-flat truth. The tilt
+MAGNITUDE rows of the dose ladder are therefore VOID as
+model-capability measurements (the 12.1× Class-B aggregate includes
+them; recomputed exclusions await the fix decision); ordinal claims
+survive only as within-world consistency. The cross-model "tilt is
+hardest" pattern (F11 → F34) is now largely explained by the bug.
+Fix and regeneration scope (every MuJoCo dataset and answer key the
+project has produced) is an ADC-level decision — flagged, not
+fixed.
 
 Reproduce: `runs/f33/mlx/gates.json` (complete timestamped decision
 record), `runs/f33/mlx/run_stage1.sh` (bounded parity cells),
