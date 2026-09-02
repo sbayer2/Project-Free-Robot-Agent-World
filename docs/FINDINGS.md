@@ -2054,19 +2054,39 @@ Full splits: unbounded 57 cells 0.2927 / gain 0.796×; direct 60 cells
   higher. Muse's real margin over predict-mean is 11.8%. And because
   both models' inversions share the one corrected instrument, the
   inversion is ONE event observed twice, not two replications.
-  **What makes the two-model result nonetheless real:** (a)
-  sign-consistency — Muse essence beats baseline on 11/21 fields and
-  Qwen unbounded on 11/21, with **10 winner fields in common** across
-  unrelated architectures and stacks (the aggregate margins do not
-  sit on a handful of cells); vision and no-think collapse to the
-  geometry fields (3/21 and 5/21, max_height-dominated) in both
-  lineages; (b) an **analytic anchor independent of MuJoCo**: the
-  corrected sim's sphere rolls at 2.389 m/s² against the closed-form
-  (5/7)·g·sin 20° = 2.397 — **99.7%** — so the repaired instrument
-  now agrees with first-principles physics where the broken one
-  missed by 57×. (A hand-derived analytic mini-key for ~5 tilt
-  scenes remains the registered next step for full instrument
-  independence.)
+  **What makes the two-model result nonetheless real — each pillar
+  stated with its own audit:** (a) sign-consistency — Muse essence
+  beats baseline on 11/21 fields and Qwen unbounded on 11/21, with
+  **10 winner fields in common** (hypergeometric expectation 5.76,
+  P(≥10) = 0.00031 — not chance). BUT the difficulty-structure
+  confound test (does baseline-MSE rank predict winner status?) comes
+  back **partially positive**: Spearman +0.609 (Qwen) / +0.401
+  (Muse) — beating predict-mean is easier where the mean is a worse
+  guess, and a substantial share of the overlap rides that shared
+  data structure rather than shared model competence. Not all of it
+  (Muse's winners span difficulty ranks 3–20, including low-variance
+  fields), but the cross-model-agreement claim is accordingly
+  **demoted from load-bearing to suggestive**, pending an analysis
+  that quantifies overlap beyond what difficulty alone predicts.
+  Vision and no-think collapsing to the geometry fields (3/21 and
+  5/21) in both lineages stands. (b) an **analytic anchor
+  independent of MuJoCo**: the corrected sim's sphere rolls at
+  2.389 m/s² against the closed-form (5/7)·g·sin 20° = 2.397 —
+  **99.7%** — where the broken instrument missed by 57×. Scope
+  stated precisely: this validates SPHERE ROLLING ON AN INCLINE
+  only; box/cylinder/ellipsoid/capsule and the toppling, sliding,
+  and settling outcomes have no closed form this check touches, so
+  the ~5-scene hand-derived analytic mini-key is NECESSARY for
+  instrument independence, not a nice-to-have — sphere was the easy
+  case.
+- **Run-provenance annotation:** every MLX-arm cell in this entry
+  was generated while the harness flags that produced it
+  (`--extra-body`, `--system-prompt-file`) were uncommitted working-
+  tree state (committed post-hoc as d5bc699). The code state now
+  matches the cited runs going forward; the original runs are not
+  reproducible from any committed snapshot — their flag effects are
+  asserted from the cached request records, not reconstructable from
+  the repository.
 - **Registered for the video legs (motion-claim accuracy):** under
   the broken keys the tilt clips were near-static, so any motion a
   model described was necessarily confabulated and undetectable as
