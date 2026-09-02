@@ -103,11 +103,14 @@ python scripts/eval_llm_transfer.py --condition essence --max-tokens 32768
 `claude/f33-video-baseline-prereg` (Qwen3.8-27B video baseline,
 preregistered in `docs/VIDEO_BASELINE.md`, Amendments A–E + 1; pilot
 complete, llama.cpp essence leg 26/60 cached and resuming, video legs +
-MME pending). **F34 WRITTEN** (same branch): reasoning-dose ladder on
-the MLX arm — chains carry the only ordinal signal but miscalibrate
-magnitudes ~12× worse on varying-truth fields; no-think = safe
-defaults, zero discrimination; push (conditional outcome) inverts the
-sign; 2×2-controlled, censoring + constant-truth objections tested.
+MME pending). **F34 WRITTEN, then CORRECTED** (same branch): a
+radians/degrees unit bug meant the tilt ramp ran at 0.349° (not 20°)
+for the project's entire history; after the fix (3 call sites) and
+answer-key regeneration (512 scenes), the dose ladder INVERTS —
+unbounded reasoning wins with the program's first gain > 1 (2.30×);
+the chains were computing correct 20°-ramp physics all along, and
+no-think's "safe defaults" had matched the broken world. F11 anchors
+need re-derivation against corrected keys before F33's H1 is read.
 Earlier F29 record below kept for context: preregistered held-out-transfer
 coherence — does joint training buy operational transfer advantage over
 disjoint (renderonly/behavonly) training on a material-extrapolation

@@ -1978,7 +1978,67 @@ Reproduce: `runs/f29_retrain.log` (24 disjoint pairs,
 with `--seed 2942 --data-template "data/pm_f29_confirm_{arm}" --out
 runs/f29/f29_confirm_report.json` (confirmatory).
 
-### F34 — ⭐ On a video-trained VLM, chain-of-thought is the miscalibration channel: reasoning carries the only ordinal signal (ranks scenes correctly, one correlation genuinely composite) yet makes outcome MSE ~12× worse on varying-truth fields; no-think retreats to safe probe-level defaults with zero discrimination — complementary failure, with the one conditional-outcome probe (push) inverting the sign
+### F34 — ⭐ CORRECTED: the "reasoning miscalibrates" verdict was the instrument — on the repaired 20° ramp, reasoning WINS the dose ladder (first gain > 1 in the program's LLM-transfer history) and the no-think "safe defaults" were matching a broken world; what survives the correction: reasoning carries the discriminating signal (ordinal AND, now, magnitude), no-think priors are genuinely poor at dynamics, and every apparatus/behavioral fact stands
+
+*(CORRECTION 2026-08-22, after the tilt unit bug was found, fixed
+(c6db6da), and the answer keys regenerated (512 scenes). The entry
+below is the original 2026-08-21 text (headline preserved in git at
+2f707ba): it measured models against a world whose tilt ramp was
+0.349° while every prompt said 20°. The corrected re-read — same
+cached responses, same frozen scorer, corrected truth — INVERTS the
+headline. Original headline for the record: "chain-of-thought is the
+miscalibration channel … makes outcome MSE ~12× worse."*
+
+**Corrected dose ladder (same 6 cells, same responses, fixed truth):**
+
+| condition | MSE | gain vs train-mean | drop | tilt | push |
+|---|---|---|---|---|---|
+| **unbounded medium (llama.cpp)** | **0.1199** | **2.302×** | 0.076 | 0.270 | 0.014 |
+| bounded medium 6,144 (MLX) | 0.2399 | 1.150× | 0.076 | 0.638 | 0.006 |
+| direct no-think (MLX) | 1.1825 | 0.233× | 0.017 | 3.441 | 0.089 |
+
+Full splits: unbounded 57 cells 0.2927 / gain 0.796×; direct 60 cells
+0.7998 / 0.291×.
+
+- **The reasoning chains were computing correct physics all along.**
+  Unbounded-medium tilt MSE falls 3.77 → 0.27 against the repaired
+  world — the models' "wildly overshooting" magnitudes were near-true
+  answers to the question actually asked (a 20° ramp). The 2.302×
+  gain is the **first above-baseline result in the program's
+  LLM-transfer history** (F11 anchors, Muse, every prior condition
+  sat below 1); the "tilt tar-pit" and "catastrophic ramp failure"
+  lineage (F11 → F34) was an instrument artifact end to end.
+- **The no-think condition's MSE win reverses into its true reading:**
+  its probe-generic near-zero defaults matched the broken near-flat
+  world by accident and score 3.44 on the real one. The priors
+  half of the complementary-failure story SHARPENS: what the weights
+  answer instantly is genuinely poor at dynamics — now shown against
+  a valid instrument.
+- **The dose–response flips sign and becomes monotone:** more
+  reasoning = better (0.12 / 0.24 / 1.18). The bounded-6,144 cap,
+  adopted mid-experiment as the overthinking guard, measurably COST
+  accuracy on corrected truth (tilt 0.638 vs 0.27 unbounded) — the
+  chains it truncated were mid-way through the right computation.
+  The overthinking-rate measurement (cap bound on ~81% of bounded
+  cells) stands as a behavioral fact; its interpretation shifts from
+  "pathological spirals" toward "long division that was earning its
+  tokens." (The xhigh EMPTY-content spiral remains pathological —
+  starving without emitting is a failure at any ramp angle.)
+- **What survives unchanged:** the discrimination result (reasoning
+  extracts real ordinal signal — now validated on magnitude too); the
+  empty_stop class and every apparatus finding; the cross-stack xhigh
+  starvation; push results (push was never affected by the bug — and
+  reasoned push still beats direct, consistent across both truths);
+  the episode-censoring analysis; all cost/serving measurements.
+- **Knock-on obligations, open:** the F11 anchor numbers (essence MSE
+  1.277 etc.) were scored against the broken tilt truth — F33's
+  frozen H1 anchors must be re-derived from the F11 caches against
+  corrected keys before any anchored verdict is read. The two
+  video_percep tilt pilot cells are INVALIDATED (their cached
+  responses describe the old near-flat clips); tilt clips re-rendered
+  under the fixed sim; those cells re-issue when the server returns.
+
+*(Original 2026-08-21 entry follows, uncorrected, for the record.)*
 
 *(Run 2026-08-21 on the F33 apparatus, as an unregistered-but-controlled
 offshoot: the user cancelled the F33 llama.cpp legs mid-run (26/60
