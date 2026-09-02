@@ -2195,15 +2195,44 @@ Full splits: unbounded 57 cells 0.2927 / gain 0.796×; direct 60 cells
   effective fps; cannot produce ghosting), while the MODEL layer
   FUSES adjacent survivors pairwise (superposition; the only
   mechanism that can produce a composite glyph like "90") — so the
-  null hypothesis is licensed by the fusion layer specifically, and
-  the llama.cpp-side "1,026 tokens/pair, odd frame discarded" facts
-  are the discard layer plus the same model-side fusion seen through
-  a different tokenizer. Evidence strength stated honestly: the
-  counter-clip is n=1, single run, corroborated by slot-count
-  arithmetic (16 frames → "7 images", 8 slots expected) —
-  the registered discriminating test (numbered frames, composites vs
-  clean single digits, repeated, two frame counts) upgrades or kills
-  it cheaply. Protocol consequences: never ask the model how many
+  null hypothesis is licensed by the fusion layer specifically.
+  **Discriminator RUN, fusion CONFIRMED (2026-09-02, vllm-mlx
+  session; raw outputs archived at
+  `runs/f33/vllm_mlx_discriminator/`), three independent lines:**
+  (a) token arithmetic needing no model output — video costs exactly
+  HALF the same pixels as stills (16f × 230,400 px → predicted 1,800
+  tokens, measured 1,800; held at 8f): discard would halve the
+  frames and no second digit could remain visible, yet it is; (b)
+  unprompted composite reports with differential rendering ("a '1',
+  white, bright, overlaid on a '2', grayish") under a neutral prompt
+  — text-level merging cannot produce per-digit opacity; (c) pair
+  boundaries stable at (1,2)(3,4)(5,6)(7,8) across runs and lengths
+  → stimulus rule: put the signal on the ODD frame of each pair.
+  **Odd frame counts are ENGINE-SPECIFIC — state per engine:** MLX
+  (`frame_factor=2`) TRUNCATES to even before the model sees
+  anything (measured: 15f → 14 sampled; 9f → 8, byte-identical
+  tokens to a true 8f clip). For llama.cpp, the source now reads as
+  keeping an unpaired tail as a GROUP OF ONE (mtmd.cpp:1195–1215,
+  llama session's corrected read) — but our Amendment-D pilot
+  MEASURED 7f == 6f prompt tokens with cache identity, which
+  contradicts a singleton unless pre-mtmd sampling evened the count
+  first; UNRESOLVED tension, flagged, needs one empirical odd-count
+  probe on that stack before either statement is cited. **The null
+  hypothesis is NARROWED (counterexample accepted):** fusing
+  near-identical frames produces no ghost, yet a verified-static
+  clip still drew "jitters, tilts and translates" under a
+  motion-presupposing prompt — so there are TWO registered sources
+  of fabricated motion: fusion artifacts (moving content only) and
+  prompt presupposition (any content). The video legs' separating
+  design is the 2×2: static/moving × neutral/presupposing prompts.
+  Also measured on vllm-mlx: temp-0 is BYTE-IDENTICAL 3/3 at both
+  frame counts including frame sampling (0.2 varies narrative, same
+  substance, n=2); self-reported frame counts are unreliably wrong
+  in a non-constant way (never ask); and `enable_thinking:false`
+  suppresses the think TAGS, not the thinking-style narration in
+  content — a fresh declared-vs-effective instance for any harness
+  that strips reasoning by tag. n: 3 runs each at 16f/8f, 1 each at
+  15f/9f. Protocol consequences: never ask the model how many
   frames it received; classify pairing-shaped motion claims
   separately from trajectory claims; the numbered counter-clip is
   the calibration instrument of record.*
