@@ -2189,10 +2189,24 @@ Full splits: unbounded 57 cells 0.2927 / gain 0.796×; direct 60 cells
   13, 16; 7 images": "90" is frames 9+10 superimposed), so
   "ghosting"/"double exposure"/"motion blur"/"crossfade" claims can
   be the encoder's own pairing rather than content, and self-reported
-  frame counts are slot counts ~2× low. Protocol consequences: never
-  ask the model how many frames it received; classify pairing-shaped
-  motion claims separately from trajectory claims; the numbered
-  counter-clip is the calibration instrument of record.*
+  frame counts are slot counts ~2× low. The mechanism is TWO-LAYERED
+  and the layers make opposite predictions (vllm-mlx session's
+  refinement): the ENGINE layer samples-and-DISCARDS frames (lowers
+  effective fps; cannot produce ghosting), while the MODEL layer
+  FUSES adjacent survivors pairwise (superposition; the only
+  mechanism that can produce a composite glyph like "90") — so the
+  null hypothesis is licensed by the fusion layer specifically, and
+  the llama.cpp-side "1,026 tokens/pair, odd frame discarded" facts
+  are the discard layer plus the same model-side fusion seen through
+  a different tokenizer. Evidence strength stated honestly: the
+  counter-clip is n=1, single run, corroborated by slot-count
+  arithmetic (16 frames → "7 images", 8 slots expected) —
+  the registered discriminating test (numbered frames, composites vs
+  clean single digits, repeated, two frame counts) upgrades or kills
+  it cheaply. Protocol consequences: never ask the model how many
+  frames it received; classify pairing-shaped motion claims
+  separately from trajectory claims; the numbered counter-clip is
+  the calibration instrument of record.*
 - **What does NOT change on Muse, and that is informative too:**
   `push.toppled` Brier sits at 0.250 (essence) / 0.350 (vision) —
   chance-to-worse-than-chance — identically before and after the
