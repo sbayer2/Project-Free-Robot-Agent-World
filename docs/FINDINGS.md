@@ -2037,21 +2037,45 @@ Full splits: unbounded 57 cells 0.2927 / gain 0.796×; direct 60 cells
   video_percep tilt pilot cells are INVALIDATED (their cached
   responses describe the old near-flat clips); tilt clips re-rendered
   under the fixed sim; those cells re-issue when the server returns.
-- **Second-architecture replication (2026-09-02, user-directed —
-  supersedes the earlier Muse exclusion): the inversion replicates on
-  Muse-Glimmer-30B.** Re-scoring its complete ATEM caches (120/120
-  parsed, an architecturally unrelated dense model on the oMLX stack)
-  against corrected keys: essence MSE 0.666 → **0.2056, gain 0.08× →
-  1.133×** — a second model crossing baseline once the instrument is
-  fixed; its "tilt slid 805×" catastrophe evaporates (tilt MSE
-  0.395, BELOW the 0.612 baseline). And the anomalous
-  vision-beats-essence-via-hedging result dies with the bug: on
-  corrected truth essence properly beats vision (0.206 vs 0.361) —
-  that artifact was also instrument-made. Two unrelated
-  architectures, two serving stacks, same sign flip from the same
-  one-line fix. (Note the corrected baseline itself hardens, 0.045 →
-  0.233 — predicting varied tilt truth is a real task; gains above 1
-  are now meaningful.)
+- **Second model, same corrected instrument (2026-09-02,
+  user-directed — supersedes the earlier Muse exclusion): Muse-
+  Glimmer-30B also crosses baseline on corrected keys.** Re-scoring
+  its complete ATEM caches (120/120 parsed, an architecturally
+  unrelated dense model on the oMLX stack): essence MSE 0.666 →
+  **0.2056, gain 0.08× → 1.133×**; its "tilt slid 805×" catastrophe
+  evaporates (tilt 0.395, below the 0.612 baseline); the anomalous
+  vision-beats-essence-via-hedging result dies with the bug (essence
+  0.206 now properly beats vision 0.361 — that artifact was also
+  instrument-made). **Stated at its honest strength (monitoring
+  session's decomposition, adopted):** the gain move is 58% baseline
+  degradation / 42% model improvement — corrected tilt truth has real
+  variance, so predict-mean stopped being a good guess, which makes
+  gain > 1 *easier*, and the task more *discriminative*, not the bar
+  higher. Muse's real margin over predict-mean is 11.8%. And because
+  both models' inversions share the one corrected instrument, the
+  inversion is ONE event observed twice, not two replications.
+  **What makes the two-model result nonetheless real:** (a)
+  sign-consistency — Muse essence beats baseline on 11/21 fields and
+  Qwen unbounded on 11/21, with **10 winner fields in common** across
+  unrelated architectures and stacks (the aggregate margins do not
+  sit on a handful of cells); vision and no-think collapse to the
+  geometry fields (3/21 and 5/21, max_height-dominated) in both
+  lineages; (b) an **analytic anchor independent of MuJoCo**: the
+  corrected sim's sphere rolls at 2.389 m/s² against the closed-form
+  (5/7)·g·sin 20° = 2.397 — **99.7%** — so the repaired instrument
+  now agrees with first-principles physics where the broken one
+  missed by 57×. (A hand-derived analytic mini-key for ~5 tilt
+  scenes remains the registered next step for full instrument
+  independence.)
+- **Registered for the video legs (motion-claim accuracy):** under
+  the broken keys the tilt clips were near-static, so any motion a
+  model described was necessarily confabulated and undetectable as
+  such. The corrected clips show real rolling and toppling — for the
+  first time a video tilt cell can discriminate motion perception
+  from motion confabulation. The video legs will co-report
+  motion-claim accuracy on tilt cells alongside outcome MSE
+  (monitoring session's observation, adopted as a registered
+  instrument).
 - **What does NOT change on Muse, and that is informative too:**
   `push.toppled` Brier sits at 0.250 (essence) / 0.350 (vision) —
   chance-to-worse-than-chance — identically before and after the
