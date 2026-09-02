@@ -5,6 +5,7 @@ a single geom, and that the XML is well-formed — without requiring the mujoco
 package, which is Apple-silicon-only and not present in generic CI.
 """
 
+import os
 import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -77,10 +78,34 @@ def test_drop_sets_object_height():
 
 
 def test_tilt_rotates_the_ground_plane():
-    xml = build_mjcf("box", M.get("ice"), ground_euler=(0.35, 0.0, 0.0))
+    """ground_euler passes through verbatim, and its unit is DEGREES:
+    MJCF's `euler` default (no <compiler angle="radian"/> in the template).
+    The old version of this test used 0.35 — radians(20), a fossil of the
+    unit bug it never caught (F34 instrument flag)."""
+    xml = build_mjcf("box", M.get("ice"), ground_euler=(20.0, 0.0, 0.0))
     root = ET.fromstring(xml)
     ground = next(g for g in root.iter("geom") if g.get("name") == "ground")
-    assert abs(float(ground.get("euler").split()[0]) - 0.35) < 1e-6
+    assert abs(float(ground.get("euler").split()[0]) - 20.0) < 1e-6
+    assert "compiler" not in xml or 'angle="radian"' not in xml
+
+
+def test_tilt_call_sites_pass_degrees_not_radians():
+    """Regression pin for the F34 unit bug: run_tilt (primitives) and the
+    GSO tilt branch fed math.radians(angle_deg) into MJCF euler, producing a
+    ~0.349 deg ramp instead of 20 for the project's entire history. The fix
+    is call-site-local (pass degrees); this test trips if radians() ever
+    returns to either tilt path."""
+    import inspect
+
+    from pseudomarble.data import generate_mujoco as G
+    src = inspect.getsource(G.run_tilt)
+    assert "math.radians(" not in src, (
+        "run_tilt must pass DEGREES into ground_euler")
+    gso_path = os.path.join(os.path.dirname(G.__file__), "generate_gso.py")
+    gso_src = open(gso_path).read()
+    tilt_block = gso_src.split('spec.kind == "tilt"')[1].split("else:")[0]
+    assert "math.radians(" not in tilt_block, (
+        "GSO tilt branch must pass DEGREES into ground_euler")
 
 
 def test_every_shape_has_half_height():
