@@ -106,6 +106,15 @@ def test_tilt_call_sites_pass_degrees_not_radians():
     tilt_block = gso_src.split('spec.kind == "tilt"')[1].split("else:")[0]
     assert "math.radians(" not in tilt_block, (
         "GSO tilt branch must pass DEGREES into ground_euler")
+    # Third call site (found AFTER the first fix, by the outcome-match gate
+    # excluding every re-rendered tilt clip): the F33 clip renderer mirrors
+    # run_tilt and had mirrored the bug.
+    clips_path = os.path.join(os.path.dirname(__file__), "..", "scripts",
+                              "f33_render_clips.py")
+    clips_src = open(clips_path).read()
+    tilt_clip_block = clips_src.split('kind == "tilt"')[1].split("elif")[0]
+    assert "math.radians(" not in tilt_clip_block, (
+        "clip renderer tilt branch must pass DEGREES into ground_euler")
 
 
 def test_every_shape_has_half_height():

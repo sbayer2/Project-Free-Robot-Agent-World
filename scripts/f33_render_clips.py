@@ -230,7 +230,11 @@ def render_probe(record: dict, probe_rec: dict):
         z = half_height(shape) + spec.get("height", 0.6)
         model = mujoco.MjModel.from_xml_string(build_mjcf(shape, material, object_z=z))
     elif kind == "tilt":
-        angle = math.radians(spec.get("angle_deg", 20.0))
+        # MJCF `euler` is DEGREES (F34 instrument flag) -- this mirror of
+        # run_tilt duplicated the unit bug and was the third call site,
+        # caught by the outcome-match gate refusing to render mismatched
+        # clips after the answer-key regeneration.
+        angle = spec.get("angle_deg", 20.0)
         z = half_height(shape) + 0.05
         model = mujoco.MjModel.from_xml_string(
             build_mjcf(shape, material, object_z=z, ground_euler=(angle, 0.0, 0.0)))
