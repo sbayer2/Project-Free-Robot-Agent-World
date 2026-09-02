@@ -2198,26 +2198,39 @@ Full splits: unbounded 57 cells 0.2927 / gain 0.796×; direct 60 cells
   null hypothesis is licensed by the fusion layer specifically.
   **Discriminator RUN, fusion CONFIRMED (2026-09-02, vllm-mlx
   session; raw outputs archived at
-  `runs/f33/vllm_mlx_discriminator/`), three independent lines:**
-  (a) token arithmetic needing no model output — video costs exactly
-  HALF the same pixels as stills (16f × 230,400 px → predicted 1,800
-  tokens, measured 1,800; held at 8f): discard would halve the
-  frames and no second digit could remain visible, yet it is; (b)
-  unprompted composite reports with differential rendering ("a '1',
-  white, bright, overlaid on a '2', grayish") under a neutral prompt
-  — text-level merging cannot produce per-digit opacity; (c) pair
-  boundaries stable at (1,2)(3,4)(5,6)(7,8) across runs and lengths
-  → stimulus rule: put the signal on the ODD frame of each pair.
-  **Odd frame counts are ENGINE-SPECIFIC — state per engine:** MLX
-  (`frame_factor=2`) TRUNCATES to even before the model sees
-  anything (measured: 15f → 14 sampled; 9f → 8, byte-identical
-  tokens to a true 8f clip). For llama.cpp, the source now reads as
-  keeping an unpaired tail as a GROUP OF ONE (mtmd.cpp:1195–1215,
-  llama session's corrected read) — but our Amendment-D pilot
-  MEASURED 7f == 6f prompt tokens with cache identity, which
-  contradicts a singleton unless pre-mtmd sampling evened the count
-  first; UNRESOLVED tension, flagged, needs one empirical odd-count
-  probe on that stack before either statement is cited. **The null
+  `runs/f33/vllm_mlx_discriminator/`) — with each line's actual
+  discriminating power stated after a same-day correction:** (a)
+  token arithmetic (model-output-free) establishes the MERGE FACTOR
+  IS 2 and excludes no-merge (16f × 230,400 px / 2048 → predicted
+  1,800, measured 1,800; no-merge predicts 3,600) — but it does NOT
+  discriminate fusion from discard: 8 survivors billed at the still
+  rate also give exactly 1,800 (the halved count and doubled rate
+  cancel; the vllm-mlx session caught its own overstatement here
+  before citation). (b) THE DISCRIMINATING EVIDENCE, which leads:
+  unprompted composite reports with an opacity relation whose
+  dominance direction ALTERNATES by slot ("a '1', white, bright,
+  overlaid on a '2', grayish"; next slot gray-on-white), under a
+  neutral prompt, identical across 3 temp-0 runs and two clip
+  lengths — discard cannot show a second digit at all, and
+  text-level merging cannot produce a transparency relation, let
+  alone an alternating one (the objection was raised and withdrawn
+  on exactly this evidence). So the fusion conclusion DOES rest on
+  model output — strong output, honestly labeled. (c) pair
+  boundaries stable at (1,2)(3,4)(5,6)(7,8) → stimulus rule: put the
+  signal on the ODD frame of each pair.
+  **Odd frame counts are ENGINE-SPECIFIC, with asymmetric evidence —
+  state per engine at its own strength:** MLX (`frame_factor=2`)
+  truncates to even — source AND behavior (15f → 14 sampled; 9f → 8,
+  byte-identical tokens to a true 8f clip): CONFIRMED. llama.cpp —
+  source reads as keeping an unpaired tail as a GROUP OF ONE
+  (mtmd.cpp:1195–1215): SOURCE-READ ONLY, unverified behaviorally.
+  Our Amendment-D pilot's 7f == 6f byte-identical tokens is
+  UNDER-DETERMINED rather than contradicting: pre-mtmd fps
+  resampling likely evened the count before grouping, meaning the
+  odd case was never actually tested — the same inference trap that
+  produced the earlier "orphan discarded" reading from a 4f/5f
+  billing identity. Discriminating experiment (a numbered odd-count
+  clip with -lv debug on that stack) is registered, not yet run. **The null
   hypothesis is NARROWED (counterexample accepted):** fusing
   near-identical frames produces no ghost, yet a verified-static
   clip still drew "jitters, tilts and translates" under a
