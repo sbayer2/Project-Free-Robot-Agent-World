@@ -20,11 +20,12 @@ import math
 import sys
 
 sys.path.insert(0, "src")
-import mujoco
-import numpy as np
 
-from pseudomarble.data.generate_mujoco import build_mjcf
-from pseudomarble import materials as M
+import mujoco  # noqa: E402
+import numpy as np  # noqa: E402
+
+from pseudomarble import materials as M  # noqa: E402
+from pseudomarble.data.generate_mujoco import build_mjcf  # noqa: E402
 
 mat = M.Material(
     name="probe",
