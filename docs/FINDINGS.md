@@ -2121,6 +2121,21 @@ Fix and regeneration scope (every MuJoCo dataset and answer key the
 project has produced) is an ADC-level decision — flagged, not
 fixed.
 
+*Addendum (same night, three-session audit): the identical pattern
+exists in the GSO/mesh generator (`generate_gso.py:313`, same `euler`
+sink) — regeneration scope, if chosen, covers primitive AND GSO/ABO
+tilt data. Push is CLEAN in both generators (its `radians(azimuth)`
+feeds Python's cos/sin, never MJCF). Fix guidance on record: drop
+`math.radians()` at the two call sites, passing degrees as MuJoCo's
+default expects — do NOT add `<compiler angle="radian"/>`, which
+would flip every angular attribute in the template at once. And the
+sharpest framing of the stakes: this may not merely rescale tilt
+error, it may INVERT it — a model predicting meters of travel on the
+stated 20° ramp was answering the question asked correctly, so
+"catastrophic failure on ramp contact" (F11 lineage) could become
+"correct physics scored against a broken instrument" on re-read
+against the delivered geometry.*
+
 Reproduce: `runs/f33/mlx/gates.json` (complete timestamped decision
 record), `runs/f33/mlx/run_stage1.sh` (bounded parity cells),
 `scripts/eval_llm_transfer.py --extra-body '{"enable_thinking":
