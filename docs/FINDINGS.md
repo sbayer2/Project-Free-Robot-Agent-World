@@ -2090,6 +2090,32 @@ Full splits: unbounded 57 cells 0.2927 / gain 0.796×; direct 60 cells
   form this check touches, so the ~5-scene hand-derived analytic
   mini-key is NECESSARY for instrument independence, not a
   nice-to-have — sphere was the easy case.
+- **The learned-baseline check (monitoring session's highest-leverage
+  objection, run same day): ridge regression on the same numeric
+  features beats both LLMs by ~4×.** Ridge on 8 features (log
+  density, friction, restitution, shape one-hot; 492 train scenes,
+  same 20-scene test split, same normalizers): **MSE 0.0573, gain
+  4.07×, 16/21 fields beat baseline** — and its winner set contains
+  every field both LLMs won. Alpha-insensitive (4.0–4.1× across
+  0.1–10). Two consequences, both adopted: (1) the honest headline
+  is now **"the LLMs beat predict-mean but lose ~4× to linear
+  regression on the same features"** — "first genuinely positive
+  LLM-physics result" does not survive as a competence claim; the
+  material→outcome map of this world is largely linearly recoverable
+  and the zero-shot LLMs capture only a fraction (~28% of ridge's
+  gain) of that recoverable signal. (2) The field-overlap question
+  is settled from an independent direction: a predictor with no
+  physics knowledge wins a superset of the shared LLM fields, so the
+  cross-model overlap is predominantly the data's predictability
+  structure, not shared physics competence — explanation (b), now
+  confirmed twice. The one asymmetry to keep stated: ridge is
+  SUPERVISED on this world's truth (a skyline for
+  extractable-from-features signal); the LLMs are zero-shot with
+  world priors — so the comparison bounds what those priors are
+  worth here (little, on aggregate MSE), it does not test learning.
+  What survives untouched: the INSTRUMENT findings — the inversion,
+  the bug, the corrected-world validation — which were never
+  competence claims.
 - **Run-provenance annotation:** every MLX-arm cell in this entry
   was generated while the harness flags that produced it
   (`--extra-body`, `--system-prompt-file`) were uncommitted working-
