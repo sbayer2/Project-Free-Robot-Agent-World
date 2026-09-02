@@ -1978,7 +1978,7 @@ Reproduce: `runs/f29_retrain.log` (24 disjoint pairs,
 with `--seed 2942 --data-template "data/pm_f29_confirm_{arm}" --out
 runs/f29/f29_confirm_report.json` (confirmatory).
 
-### F34 — ⭐ CORRECTED: the "reasoning miscalibrates" verdict was the instrument — on the repaired 20° ramp, reasoning WINS the dose ladder (first gain > 1 in the program's LLM-transfer history) and the no-think "safe defaults" were matching a broken world; what survives the correction: reasoning carries the discriminating signal (ordinal AND, now, magnitude), no-think priors are genuinely poor at dynamics, and every apparatus/behavioral fact stands
+### F34 — ⭐ CORRECTED, then FULLY AUDITED: the "reasoning miscalibrates" verdict was the instrument (a 0.349° ramp sold as 20°), and on the repaired world the dose ladder inverts — but the competence story dies under its own audits: ridge on 8 static features beats every LLM condition ~4× (n=57–60), no field on this probe set shows above-trivial LLM physics, and the benchmark is substantially feature regression wearing a physics-reasoning name; what stands is the instrument record and a probe-design principle for F30/F31
 
 *(CORRECTION 2026-08-22, after the tilt unit bug was found, fixed
 (c6db6da), and the answer keys regenerated (512 scenes). The entry
@@ -1989,7 +1989,8 @@ cached responses, same frozen scorer, corrected truth — INVERTS the
 headline. Original headline for the record: "chain-of-thought is the
 miscalibration channel … makes outcome MSE ~12× worse."*
 
-**Corrected dose ladder (same 6 cells, same responses, fixed truth):**
+**Corrected dose ladder (n = 6 cells / 2 scenes — a SUBSET chosen
+for cache overlap, not a split; full-split figures below the table):**
 
 | condition | MSE | gain vs train-mean | drop | tilt | push |
 |---|---|---|---|---|---|
@@ -2000,14 +2001,17 @@ miscalibration channel … makes outcome MSE ~12× worse."*
 Full splits: unbounded 57 cells 0.2927 / gain 0.796×; direct 60 cells
 0.7998 / 0.291×.
 
-- **The reasoning chains were computing correct physics all along.**
-  Unbounded-medium tilt MSE falls 3.77 → 0.27 against the repaired
-  world — the models' "wildly overshooting" magnitudes were near-true
-  answers to the question actually asked (a 20° ramp). The 2.302×
-  gain is the **first above-baseline result in the program's
-  LLM-transfer history** (F11 anchors, Muse, every prior condition
-  sat below 1); the "tilt tar-pit" and "catastrophic ramp failure"
-  lineage (F11 → F34) was an instrument artifact end to end.
+- **The reasoning chains' tilt magnitudes were near-true answers to
+  the question actually asked** (a 20° ramp): unbounded-medium tilt
+  MSE falls 3.77 → 0.27 (n=2 scenes) against the repaired world.
+  The 2.302× gain **(n=6 cells / 2 scenes)** was announced in-session
+  as "the first above-baseline result in the program's LLM-transfer
+  history" and DOES NOT SURVIVE the full split: on all 57 cells the
+  same condition scores 0.796× — below predict-mean, the opposite
+  direction. See the headline-propagation note below; the durable
+  claim in this bullet is only that the "tilt tar-pit" /
+  "catastrophic ramp failure" lineage (F11 → F34) was an instrument
+  artifact end to end.
 - **The no-think condition's MSE win reverses into its true reading:**
   its probe-generic near-zero defaults matched the broken near-flat
   world by accident and score 3.44 on the real one. The priors
@@ -2144,6 +2148,21 @@ Full splits: unbounded 57 cells 0.2927 / gain 0.796×; direct 60 cells
   dynamics (conditional, interaction-dependent, or chaotic-adjacent
   regimes) — that is the only place a physics-competence claim could
   ever be tested on this harness.**
+- **Headline-propagation note (the audit's second process finding,
+  peer-named, adopted):** the 2.302× subset figure was announced as a
+  program-first, propagated through three sessions for hours, and
+  entered a peer's persistent memory before anyone asked for its n —
+  structurally the same failure as the tilt bug: a number that
+  survives every check anyone runs until it is computed on a
+  different footing (there, first principles; here, the full split).
+  Standing rule, this entry forward: **every gain figure carries its
+  n inline, next to the number, so the n travels with the claim when
+  the claim is relayed.** Relatedly, the phrase "correct physics
+  scored against a broken instrument" is RETIRED as a unit: it was
+  right about the instrument and wrong about the models, and welded
+  the two claims together. The instrument half stands on the bug,
+  the inversion, and the closed-form convergence; the competence
+  half is dead by the ridge and resistant-field results above.
 - **Run-provenance annotation:** every MLX-arm cell in this entry
   was generated while the harness flags that produced it
   (`--extra-body`, `--system-prompt-file`) were uncommitted working-
