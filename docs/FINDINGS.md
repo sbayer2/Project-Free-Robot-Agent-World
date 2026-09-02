@@ -2179,7 +2179,20 @@ Full splits: unbounded 57 cells 0.2927 / gain 0.796×; direct 60 cells
   from motion confabulation. The video legs will co-report
   motion-claim accuracy on tilt cells alongside outcome MSE
   (monitoring session's observation, adopted as a registered
-  instrument).
+  instrument). *Addendum (2026-09-02, from the interim vllm-mlx
+  session's measured work; brief archived at
+  `~/vllm-mlx/artifacts/serving-brief-for-pseudo-marble.md`): the
+  co-report gains a MECHANISTIC NULL HYPOTHESIS that must be tested
+  before any motion claim is scored as perception or confabulation —
+  Qwen3.8's `temporal_patch_size=2` means the model perceives FUSED
+  FRAME PAIRS (a numbered counter-clip was read "2, 3, 5, 90, 12,
+  13, 16; 7 images": "90" is frames 9+10 superimposed), so
+  "ghosting"/"double exposure"/"motion blur"/"crossfade" claims can
+  be the encoder's own pairing rather than content, and self-reported
+  frame counts are slot counts ~2× low. Protocol consequences: never
+  ask the model how many frames it received; classify pairing-shaped
+  motion claims separately from trajectory claims; the numbered
+  counter-clip is the calibration instrument of record.*
 - **What does NOT change on Muse, and that is informative too:**
   `push.toppled` Brier sits at 0.250 (essence) / 0.350 (vision) —
   chance-to-worse-than-chance — identically before and after the
