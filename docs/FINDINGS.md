@@ -2070,15 +2070,26 @@ Full splits: unbounded 57 cells 0.2927 / gain 0.796×; direct 60 cells
   that quantifies overlap beyond what difficulty alone predicts.
   Vision and no-think collapsing to the geometry fields (3/21 and
   5/21) in both lineages stands. (b) an **analytic anchor
-  independent of MuJoCo**: the corrected sim's sphere rolls at
-  2.389 m/s² against the closed-form (5/7)·g·sin 20° = 2.397 —
-  **99.7%** — where the broken instrument missed by 57×. Scope
-  stated precisely: this validates SPHERE ROLLING ON AN INCLINE
-  only; box/cylinder/ellipsoid/capsule and the toppling, sliding,
-  and settling outcomes have no closed form this check touches, so
-  the ~5-scene hand-derived analytic mini-key is NECESSARY for
-  instrument independence, not a nice-to-have — sphere was the easy
-  case.
+  independent of MuJoCo — stated with its window sensitivity after a
+  cross-derivation caught it** (the peer session's full-window fit
+  gave 92.7% against my 99.7%; both were right): the acceleration is
+  window-dependent because the sphere spends most of the 2 s episode
+  in a slip-to-roll TRANSITION (slip |v|−rω decaying 0.41 → 0.20 →
+  0.027 → 0.015 m/s at t = 0.5/1.0/1.5/2.0), so the pure-rolling
+  closed form (5/7)·g·sin 20° = 2.397 m/s² is the ASYMPTOTE, not the
+  whole-window law. Measured finite-difference accelerations: 92.2%
+  of closed form on [0.25,0.75]s, 93.4% on [0.5,1.0], 95.7% on
+  [1.0,1.5], **99.7% on [1.5,2.0]** — monotone convergence to first
+  principles as slip dies, where the broken instrument missed by
+  57×. The honest anchor statement: the corrected sim CONVERGES to
+  closed-form rolling; its full-window dynamics are richer than the
+  pure-rolling model (a real slip regime, physically expected at
+  μ=0.78 from rest on 20°). Scope stated precisely: this validates
+  sphere-on-incline dynamics only; box/cylinder/ellipsoid/capsule
+  and the toppling, sliding, and settling outcomes have no closed
+  form this check touches, so the ~5-scene hand-derived analytic
+  mini-key is NECESSARY for instrument independence, not a
+  nice-to-have — sphere was the easy case.
 - **Run-provenance annotation:** every MLX-arm cell in this entry
   was generated while the harness flags that produced it
   (`--extra-body`, `--system-prompt-file`) were uncommitted working-
