@@ -61,6 +61,20 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
                         "Setting this routes ALL conditions through the "
                         "usage-capturing client with the Amendment-E "
                         "classifier (budget starvation != parse failure)")
+    p.add_argument("--system-prompt-file", default=None,
+                   help="replace the F11 system prompt with this file's "
+                        "contents (a DISCLOSED condition change -- e.g. the "
+                        "F33 MLX no-think 'direct answer' probe: the frozen "
+                        "prompt COMMANDS step-by-step reasoning, so a "
+                        "no-computation condition must replace that clause; "
+                        "never use for parity legs)")
+    p.add_argument("--extra-body", default=None,
+                   help="JSON object merged into every request body (e.g. "
+                        "'{\"chat_template_kwargs\": {\"enable_thinking\": "
+                        "true}}' for mlx_vlm.server, whose template DISABLES "
+                        "thinking by default -- the opposite of llama.cpp). "
+                        "Setting this routes ALL conditions through the "
+                        "usage-capturing client, like --reasoning-effort")
     p.add_argument("--base-url", default="http://127.0.0.1:8080/v1",
                    help="OpenAI-compatible server base URL")
     p.add_argument("--model", default="default", help="served model name")
@@ -117,12 +131,14 @@ def cached_usage_response(path: str, messages: list[dict], args,
     if os.path.exists(path):
         d = json.load(open(path))
         return d["response"], d.get("info", {"usage": d.get("usage", {})})
-    extra = ({"reasoning_effort": args.reasoning_effort}
-             if args.reasoning_effort else None)
+    extra = dict({"reasoning_effort": args.reasoning_effort}
+                 if args.reasoning_effort else {})
+    if args.extra_body:
+        extra.update(json.loads(args.extra_body))
     text, info = chat_completion_usage(
         args.base_url, args.model, messages, temperature=args.temperature,
         max_tokens=args.max_tokens, timeout=args.timeout, api_key=args.api_key,
-        extra_body=extra)
+        extra_body=extra or None)
     info["run_seq"] = next(_RUN_SEQ)
     if clip_path is not None:
         cached_msgs = [messages[0],
@@ -134,7 +150,8 @@ def cached_usage_response(path: str, messages: list[dict], args,
         cached_msgs = messages
     with open(path, "w") as fh:
         json.dump({"messages": cached_msgs, "response": text, "info": info,
-                   "reasoning_effort": args.reasoning_effort}, fh, indent=2)
+                   "reasoning_effort": args.reasoning_effort,
+                   "extra_body": args.extra_body}, fh, indent=2)
     return text, info
 
 
@@ -152,6 +169,17 @@ def main(argv: list[str]) -> None:
             return None
         renders = os.path.join(args.data, sid, "renders")
         return [os.path.join(renders, f) for f in scene_view_files(sample, args.views)]
+
+    custom_system = (open(args.system_prompt_file).read()
+                     if args.system_prompt_file else None)
+
+    def apply_system(msgs: list[dict]) -> list[dict]:
+        """Disclosed condition change: swap the F11 system prompt (which
+        COMMANDS step-by-step reasoning) for the file's contents. The
+        frozen module stays untouched; parity legs never pass the flag."""
+        if custom_system is not None:
+            msgs = [{"role": "system", "content": custom_system}] + msgs[1:]
+        return msgs
 
     if args.dry_run:
         sid, sample = scenes[0]
@@ -208,17 +236,19 @@ def main(argv: list[str]) -> None:
             if kind not in PROBE_ORDER:
                 continue
             cache = os.path.join(resp_dir, f"{sid}.{kind}.{args.condition}.json")
-            use_usage = is_video or args.reasoning_effort
+            use_usage = is_video or args.reasoning_effort or args.extra_body
             if use_usage:
                 if is_video:
                     clip = clip_path_for(clips_root, sid, kind, leg_kind)
-                    msgs = build_video_messages(sample, record, clip, leg_kind)
+                    msgs = apply_system(
+                        build_video_messages(sample, record, clip, leg_kind))
                     text, info = cached_usage_response(cache, msgs, args,
                                                        clip_path=clip)
                 else:
                     from f33_video import classify_response, confab_time_claims
-                    msgs = build_messages(sample, record, args.condition,
-                                          images_for(sid, sample))
+                    msgs = apply_system(
+                        build_messages(sample, record, args.condition,
+                                       images_for(sid, sample)))
                     text, info = cached_usage_response(cache, msgs, args)
                 usage = info.get("usage", {})
                 if is_video:

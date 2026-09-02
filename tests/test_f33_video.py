@@ -207,3 +207,7 @@ def test_eval_runner_surface():
     assert ev.parse_args(["--data", "x"]).reasoning_effort is None
     a = ev.parse_args(["--data", "x", "--reasoning-effort", "medium"])
     assert a.reasoning_effort == "medium"
+    assert ev.parse_args(["--data", "x"]).extra_body is None
+    a = ev.parse_args(["--data", "x", "--extra-body",
+                       '{"chat_template_kwargs": {"enable_thinking": true}}'])
+    assert a.extra_body is not None
