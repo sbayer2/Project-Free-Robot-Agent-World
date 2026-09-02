@@ -2218,12 +2218,17 @@ Full splits: unbounded 57 cells 0.2927 / gain 0.796×; direct 60 cells
   model output — strong output, honestly labeled. (c) pair
   boundaries stable at (1,2)(3,4)(5,6)(7,8) → stimulus rule: put the
   signal on the ODD frame of each pair.
-  **Odd frame counts are ENGINE-SPECIFIC, with asymmetric evidence —
-  state per engine at its own strength:** MLX (`frame_factor=2`)
-  truncates to even — source AND behavior (15f → 14 sampled; 9f → 8,
-  byte-identical tokens to a true 8f clip): CONFIRMED. llama.cpp —
-  source reads as keeping an unpaired tail as a GROUP OF ONE
-  (mtmd.cpp:1195–1215): SOURCE-READ ONLY, unverified behaviorally.
+  **Odd frame counts are ENGINE-SPECIFIC — the engines differ in the
+  DIRECTION they resolve an odd tail, not in whether they keep it
+  (final framing, both sessions):** MLX rounds DOWN
+  (`frame_factor=2` truncates at the sampler — source AND
+  measurement, exact to the token: 15f → 14 sampled, 9f → 8):
+  CONFIRMED. llama.cpp rounds UP (ceiling at mtmd.cpp:210–226 plus
+  singleton grouping at 1195–1215; no discard path exists):
+  SOURCE-CONFIRMED TWICE, behaviorally unverified. Falsifiable
+  cross-engine prediction on record: the same 15-frame clip yields 7
+  slots on MLX (measured) and 8 on llama.cpp (predicted) — one slot
+  apart, opposite directions, identical input.
   Our Amendment-D pilot's 7f == 6f byte-identical tokens is
   UNDER-DETERMINED rather than contradicting: pre-mtmd fps
   resampling likely evened the count before grouping, meaning the
