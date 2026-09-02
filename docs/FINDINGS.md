@@ -2052,6 +2052,27 @@ Full splits: unbounded 57 cells 0.2927 / gain 0.796×; direct 60 cells
   one-line fix. (Note the corrected baseline itself hardens, 0.045 →
   0.233 — predicting varied tilt truth is a real task; gains above 1
   are now meaningful.)
+- **What does NOT change on Muse, and that is informative too:**
+  `push.toppled` Brier sits at 0.250 (essence) / 0.350 (vision) —
+  chance-to-worse-than-chance — identically before and after the
+  correction. The push probe never touched the buggy `ground_euler`
+  path, so its truth was never wrong; Muse's topple-calibration
+  weakness (diagnosed same-day, pre-fix, as the one axis where it
+  underperformed AgentWorld's F11 result) is real behavior, not an
+  instrument artifact — the earlier hedging DIAGNOSIS was correct,
+  only the broken TARGET it was hedging against turned out to be
+  wrong. Confirms the fix is surgical: fields outside the tilt path
+  are bit-for-bit unaffected. (2026-09-02, verified via the corrected
+  and pre-correction `transfer_report.json` pair directly.)
+- **Live confirmation, one fresh never-cached cell (2026-09-02):**
+  `train_000000`/tilt against live Muse on the corrected world (not
+  replayed from cache) — 293s wall, parsed clean, `toppled` 1.0 vs
+  truth 1.0, `final_tilt_deg` 87° vs truth 110° (right regime, not
+  exact), `slid_distance`/`settle_time` underestimated but correct
+  order of magnitude. The fix is now verified three ways: offline
+  across two architectures (llama.cpp/MLX Qwen3.8-27B and Muse-Glimmer
+  via oMLX), in the regenerated canonical reports, and live on an
+  uncached request.
 
 *(Original 2026-08-21 entry follows, uncorrected, for the record.)*
 
