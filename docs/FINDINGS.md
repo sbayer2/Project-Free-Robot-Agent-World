@@ -2084,6 +2084,32 @@ recurring hazard, caught by the full-log read) and one attribution
 tightened (per-cell token figures are COMPLETION tokens server-side;
 reasoning/content splits are client-side estimates).*
 
+**Instrument flag (2026-08-21, post-entry; found by a peer session,
+independently reproduced, UNDIAGNOSED): the tilt probe's rolling
+dynamics for spheres are ~56× slower than first-principles physics.**
+Verified live on test_000043's material (sphere r=0.18, μ=0.777,
+ρ=6420): at t=2.0s the sim reaches |v|=0.085 m/s vs the ideal
+solid-sphere rolling value (5/7)·g·sin20° · 2s ≈ 4.79 m/s, with
+rolling-without-slipping holding (|v| ≈ r|ω| from ~1.5s) and — the
+diagnostic oddity — the sphere DECELERATING from 0.46 to 0.10 m/s
+while still sliding at t≈0.5–1.0, which friction cannot do on a 20°
+incline and which points at contact compliance (restitution-derived
+solref acting as drag), not friction settings (inertia is ideal to 5
+decimals; condim=3 makes the rolling-friction components inactive).
+Consequence for THIS entry: tilt truth for round shapes sits near the
+shape's minimum displacement regardless of friction, so the reasoned
+chains' large tilt magnitudes are scored against a truth that is
+itself ~60× below textbook physics — **the tilt MSE (3.5–3.8) partly
+measures sim-vs-textbook divergence, not purely model miscalibration,
+and unlike the episode-censoring case this dynamics anomaly is NOT
+disclosed in the prompt.** The ordinal claims survive (rankings are
+within the sim's internally consistent world); the magnitude-
+miscalibration claim is DOWNGRADED for tilt on round shapes pending
+diagnosis. Also bears on F11's and any future run's tilt.slid_distance
+for sphere/cylinder/capsule/ellipsoid. Repro: `build_mjcf("sphere",
+<material>, object_z=0.23, ground_euler=(radians(20),0,0))`, step
+2.0s at dt=0.002, compare |qvel[:3]| with (5/7)·g·sin20°·t.
+
 Reproduce: `runs/f33/mlx/gates.json` (complete timestamped decision
 record), `runs/f33/mlx/run_stage1.sh` (bounded parity cells),
 `scripts/eval_llm_transfer.py --extra-body '{"enable_thinking":
