@@ -2101,9 +2101,15 @@ Full splits: unbounded 57 cells 0.2927 / gain 0.796×; direct 60 cells
   is now **"the LLMs beat predict-mean but lose ~4× to linear
   regression on the same features"** — "first genuinely positive
   LLM-physics result" does not survive as a competence claim; the
-  material→outcome map of this world is largely linearly recoverable
-  and the zero-shot LLMs capture only a fraction (~28% of ridge's
-  gain) of that recoverable signal. (2) The field-overlap question
+  material→outcome map of this world is largely linearly
+  recoverable, and the LLMs' share of the error ridge removes —
+  computed from raw MSEs on identical rows, stated PER MODEL because
+  the spread is enormous — is: **Muse 15.6%** (60 cells); **Qwen
+  −34.0%** on its 57 cells (worse than predict-mean on the full
+  split) yet **+63.8%** on the favorable 2-scene dose-ladder subset —
+  Qwen's number is subset-unstable and no single figure describes it
+  (an earlier "~28%" collapsed this spread and is retracted).
+  (2) The field-overlap question
   is settled from an independent direction: a predictor with no
   physics knowledge wins a superset of the shared LLM fields, so the
   cross-model overlap is predominantly the data's predictability
@@ -2116,6 +2122,28 @@ Full splits: unbounded 57 cells 0.2927 / gain 0.796×; direct 60 cells
   What survives untouched: the INSTRUMENT findings — the inversion,
   the bug, the corrected-world validation — which were never
   competence claims.
+- **The benchmark indictment (monitoring session's reframe, adopted
+  as the entry's largest implication):** ridge winning 16/21 fields
+  from 8 static features means this benchmark is substantially a
+  feature-regression task wearing a physics-reasoning name — a
+  system can score well on the ridge-winnable fields with no
+  dynamics understanding, by demonstration. The proposed diagnostic
+  — treat the RIDGE-RESISTANT fields as the real physics signal —
+  was tested immediately, and the result closes the last door: the
+  three variance-bearing fields ridge does not win (drop.n_bounces,
+  push.n_bounces, tilt.settle_time) are fields where **both LLMs
+  lose to predict-mean outright** (e.g. drop.n_bounces: Muse 0.962 /
+  Qwen 0.815 vs baseline 0.040 — 20–25× worse; the censoring-window
+  bounce arithmetic defeats everyone). So on the current probe set
+  there is NO field where either LLM demonstrates above-trivial
+  physics: the fields that need more than feature regression are the
+  fields the LLMs fail hardest. **Probe-design consequence,
+  registered for F30/F31: a probe whose outcome ridge predicts from
+  static features is not earning its place as a physics-reasoning
+  instrument; future probes should be designed so outcomes require
+  dynamics (conditional, interaction-dependent, or chaotic-adjacent
+  regimes) — that is the only place a physics-competence claim could
+  ever be tested on this harness.**
 - **Run-provenance annotation:** every MLX-arm cell in this entry
   was generated while the harness flags that produced it
   (`--extra-body`, `--system-prompt-file`) were uncommitted working-
