@@ -2037,6 +2037,21 @@ Full splits: unbounded 57 cells 0.2927 / gain 0.796×; direct 60 cells
   video_percep tilt pilot cells are INVALIDATED (their cached
   responses describe the old near-flat clips); tilt clips re-rendered
   under the fixed sim; those cells re-issue when the server returns.
+- **Second-architecture replication (2026-09-02, user-directed —
+  supersedes the earlier Muse exclusion): the inversion replicates on
+  Muse-Glimmer-30B.** Re-scoring its complete ATEM caches (120/120
+  parsed, an architecturally unrelated dense model on the oMLX stack)
+  against corrected keys: essence MSE 0.666 → **0.2056, gain 0.08× →
+  1.133×** — a second model crossing baseline once the instrument is
+  fixed; its "tilt slid 805×" catastrophe evaporates (tilt MSE
+  0.395, BELOW the 0.612 baseline). And the anomalous
+  vision-beats-essence-via-hedging result dies with the bug: on
+  corrected truth essence properly beats vision (0.206 vs 0.361) —
+  that artifact was also instrument-made. Two unrelated
+  architectures, two serving stacks, same sign flip from the same
+  one-line fix. (Note the corrected baseline itself hardens, 0.045 →
+  0.233 — predicting varied tilt truth is a real task; gains above 1
+  are now meaningful.)
 
 *(Original 2026-08-21 entry follows, uncorrected, for the record.)*
 
