@@ -78,10 +78,14 @@ def sampled_count(n_src: int) -> int:
 
 def pad_to_even(n_src: int, max_pad: int = 4) -> int:
     """Amendment D: source frames to APPEND (duplicates of the final frame)
-    so the sampled count is EVEN. Qwen-VL fuses frames pairwise and the
-    orphan last frame of an odd count is discarded -- for a pre-outcome
-    clip that is the most informative frame. A freeze-pad adds zero new
-    dynamics and cannot leak an outcome."""
+    so the sampled count is EVEN. Qwen-VL fuses frames pairwise; per the
+    2026-09-02 source-level correction, an odd tail is NOT discarded --
+    llama.cpp's mtmd bills it as a singleton slot (ceil division,
+    mtmd.cpp:210-226) with uncharacterized perceptual behavior, and the
+    MLX stack instead truncates to even. The even rule avoids both
+    engine-specific odd-count semantics and keeps the pair-cost tripwire
+    formula exact. A freeze-pad adds zero new dynamics and cannot leak
+    an outcome."""
     if sampled_count(n_src) % 2 == 0:
         return 0
     for k in range(1, max_pad + 1):
@@ -338,7 +342,8 @@ def main() -> None:
                     ("percep", frames),
                     ("pred", frames[:n_prefix])):
                 # Amendment D: freeze-pad so the sampled count is even
-                # (pairwise fusion discards an orphan last frame).
+                # (odd counts hit engine-specific semantics: singleton
+                # slot on llama.cpp, truncation on MLX -- see pad_to_even).
                 pad = pad_to_even(len(clip_frames))
                 clip_frames = clip_frames + [clip_frames[-1]] * pad
                 path = os.path.join(scene_dir, f"{kind}_{clip_kind}.mp4")

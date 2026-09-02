@@ -453,6 +453,32 @@ the true boundary frame — the exact loss the even rule exists to
 prevent. No sampled frame is ever synthetic; the semantic channel never
 opens.
 
+**Correction (2026-09-02, source-level; the discard mechanism was
+wrong, the frozen rule survives with a better justification):**
+llama.cpp's mtmd DISCARDS NOTHING. `mtmd_image_tokens::n_tokens()`
+(mtmd.cpp:210–226) uses a CEILING division for the temporal merge —
+an unpaired tail frame costs a full extra slot — and the grouping
+loop (mtmd.cpp:1195–1215) keeps it as a group of one; no code path
+drops a frame. Our two billing identities (5f ≡ 4f in the original
+fit; 6f ≡ 7f in the pilot "confirmation") were UNDER-DETERMINED, not
+evidence of discard: the ffmpeg `fps=4` resample evened the decoded
+frame count before mtmd ever grouped, so the odd case was never
+actually presented. Error provenance, disclosed: the floor(n/2)
+model came from the monitoring session's fit on even-count points
+(where ceil and floor agree), we inherited "orphan discarded" from
+it, and the monitoring session self-corrected from source. The
+frozen even-frame rule is UNCHANGED and now better-motivated: with
+even counts ceil == floor (the tripwire formula stays exact), and no
+singleton-tail slot — a half-empty fused slot with uncharacterized
+perceptual behavior — ever reaches the model. The "most informative
+frame discarded" motivation is retracted in mechanism (the frame
+would form a singleton, not vanish) while the design consequence
+stands. Behavioral verification (numbered odd-count clip under
+`-lv` debug: "merging 2 frames" vs "no merging" lines) is
+registered, not yet run. Note the MLX stack differs: `frame_factor=2`
+TRUNCATES to even at the sampler — engine-specific semantics, never
+state once for both.
+
 **Throughput datum for §9 budgeting (measured on our clips):** prompt
 processing DEGRADES with length — 291.9 tok/s at 5k tokens → 246.9 at
 17.5k (drop_percep, 71 s wall). Video legs are budgeted at ~250 tok/s
