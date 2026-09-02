@@ -243,6 +243,9 @@ def render_probe(record: dict, probe_rec: dict):
         settle, window = 0.4, 0.1
         force = spec.get("impulse", 1.5) / window
         rz = (spec.get("height_frac", 0.8) - 0.5) * 2.0 * half_height(shape)
+        # radians() is CORRECT here: azimuth feeds Python trig for the force
+        # vector and never reaches MJCF's degree-unit euler attribute. Do not
+        # "fix" this to match the tilt-branch unit repair.
         az = math.radians(spec.get("azimuth_deg", 0.0))
         fx, fy = force * math.cos(az), force * math.sin(az)
         wrench = [fx, fy, 0.0, -rz * fy, rz * fx, 0.0]

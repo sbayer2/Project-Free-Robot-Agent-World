@@ -90,11 +90,17 @@ def test_tilt_rotates_the_ground_plane():
 
 
 def test_tilt_call_sites_pass_degrees_not_radians():
-    """Regression pin for the F34 unit bug: run_tilt (primitives) and the
-    GSO tilt branch fed math.radians(angle_deg) into MJCF euler, producing a
-    ~0.349 deg ramp instead of 20 for the project's entire history. The fix
-    is call-site-local (pass degrees); this test trips if radians() ever
-    returns to either tilt path."""
+    """Regression pin for the F34 unit bug: run_tilt (primitives), the GSO
+    tilt branch, and the F33 clip renderer fed math.radians(angle_deg) into
+    MJCF euler, producing a ~0.349 deg ramp instead of 20 for the project's
+    entire history. The fix is call-site-local (pass degrees); this test
+    trips if radians() ever returns to any tilt path.
+
+    Audit-scope lesson (why the third site was missed at first): MJCF sinks
+    live in BOTH src/pseudomarble/ AND scripts/ — a unit audit scoped to the
+    package reports clean while meaning only "clean within the box drawn."
+    Push-azimuth radians() calls are CORRECT (they feed Python trig, never
+    MJCF) — keep this test scoped to the tilt blocks, never whole files."""
     import inspect
 
     from pseudomarble.data import generate_mujoco as G
