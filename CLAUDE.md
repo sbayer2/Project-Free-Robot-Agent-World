@@ -99,39 +99,22 @@ python scripts/eval_llm_transfer.py --condition essence --max-tokens 32768
   here so a headless `graphify` run fails loudly rather than picking one
   silently.
 
-**Status (2026-08-21):** F1–F29 merged (PR #43). **F33 in flight** on
-`claude/f33-video-baseline-prereg` (Qwen3.8-27B video baseline,
-preregistered in `docs/VIDEO_BASELINE.md`, Amendments A–E + 1; pilot
-complete, llama.cpp essence leg 26/60 cached and resuming, video legs +
-MME pending). **F34 WRITTEN, then CORRECTED** (same branch): a
-radians/degrees unit bug meant the tilt ramp ran at 0.349° (not 20°)
-for the project's entire history; after the fix (3 call sites) and
-answer-key regeneration (512 scenes), the dose ladder INVERTS —
-unbounded reasoning wins with the program's first gain > 1 (2.30×);
-the chains were computing correct 20°-ramp physics all along, and
-no-think's "safe defaults" had matched the broken world. F11 anchors
-need re-derivation against corrected keys before F33's H1 is read.
-Earlier F29 record below kept for context: preregistered held-out-transfer
-coherence — does joint training buy operational transfer advantage over
-disjoint (renderonly/behavonly) training on a material-extrapolation
-holdout? Run with a preregistered pilot (Amendment 1: α\* = 0.40, band
-missed low, limit-on-inference frozen), a gate recalibration (Amendment
-2: two provable freeze-time gate bugs, verdict bars untouched), and a
-fresh-seed confirmatory rerun that reproduced every verdict. Suite
-283/35 (run with `.venv/bin/python -m pytest` — system `python3`
-collects fewer). Knowledge graph current through F27 and #40 (F28/F29
-not yet extracted); vault synced through F28. **Headline:** unity now
-has no internal signature AND no measurable operational signature on
-this axis at this scale. F28: directional coherence reads ZERO at every
-coupling with a valid instrument. F29: held-out-transfer advantage of
-joint over disjoint is NULL or INCONCLUSIVE at every coupling on two
-independent holdouts (loud −0.069/−0.115, t ≤ 0.16; ctrl/base exact
-nulls) — bounded by the frozen caveat that the holdout was gentle (both
-students keep ~89% of gain outside the training hull), so this bounds
-rather than kills operational unity; jointly consistent with the
-scale-bound reading Dyna-2's low-data ablation supports. Side results:
-init-quality variance is synchronized across students sharing only the
-seed (the init, not the objective, sets encoder quality here); F32
-(executive/muscle-memory stack) parked at DESIGN VOID on its own pilot
-gate. Registered successors: F30 render-only data scaling, F31 dynamics
-head. ABO stage 2 stays blocked (F22b).
+**Status (2026-10-23):** F1–F29 merged (PR #43); F33/F34 merged (PR #45).
+**F34 instrument flag:** a radians/degrees unit bug meant the tilt ramp ran
+at 0.349° (not 20°) for the project's entire history; fixed on `main` (3
+call sites, `scripts/repro_tilt_bug.py`); `scripts/regen_tilt_outcomes.py`
+rewrites stored tilt outcomes in place (no trajectories). Any result that
+reads tilt must be re-derived on fixed worlds. F33 (Qwen3.8-27B video
+baseline, `docs/VIDEO_BASELINE.md`) in flight; F11 anchors need
+re-derivation against corrected keys. **PR #44** (`claude/beautiful-dirac-xdzmii`,
+first cloud-compute session, 4 vCPU / 15 GB / no GPU; setup in
+`docs/CLOUD_COMPUTE.md`): torch↔MLX parity PASSED (torch 5.02 vs MLX 5.67,
+−11.5 % disclosed; tilt-independent enough to stand, but run on pre-fix
+worlds); the F31 pilot and **F31a (preregistered, NULL)** were run on the
+BUGGY ramp and are being re-checked on fixed worlds before F31a is closed.
+F31a observations: trajectory supervision delays escape ~12 epochs; the PR
+gate misses non-escape (add an escape gate to future preregs). Standing
+headline from F28/F29: unity has no internal and no measurable operational
+signature at this scale. Knowledge graph current through F27. Open: F30
+render-only data scaling; 256 px oblique legibility world; graded-push
+probe. F32 parked at DESIGN VOID. ABO stage 2 stays blocked (F22b).
