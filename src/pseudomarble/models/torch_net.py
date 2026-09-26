@@ -70,9 +70,9 @@ if _HAVE_TORCH:
                 self.appearance = _MLP(cfg.latent_dim, cfg.appearance_head_width,
                                        cfg.appearance_dim)
             if cfg.trajectory_weight > 0:  # F31 head (mirrors mlx_net; gated)
-                from pseudomarble.probes import trajectory_dim
+                from pseudomarble.config import trajectory_target_dim
                 self.trajectory = _MLP(cfg.latent_dim, cfg.trajectory_head_width,
-                                       trajectory_dim(cfg.trajectory_frames))
+                                       trajectory_target_dim(cfg))
 
             # Render decoder: z -> seed map -> (upsample + conv)*k -> RGB.
             from pseudomarble.config import num_upsample_steps

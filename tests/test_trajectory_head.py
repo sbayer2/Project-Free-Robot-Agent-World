@@ -63,11 +63,40 @@ def test_dataset_adds_trajectory_only_on_request(tmp_path):
 
 
 def test_cli_flags_reach_the_config_and_gate_loading():
-    cfg = train.make_config(train.parse_args(["--trajectory-weight", "0.5",
-                                              "--trajectory-frames", "8"]))
+    cfg = train.make_config(train.parse_args([
+        "--trajectory-weight", "0.5", "--trajectory-frames", "8",
+        "--trajectory-probes", "drop,tilt", "--trajectory-pos-only"]))
     assert (cfg.trajectory_weight, cfg.trajectory_frames) == (0.5, 8)
-    assert train.trajectory_frames_for(cfg) == 8
-    assert train.trajectory_frames_for(ModelConfig()) == 0   # off by default
+    assert cfg.trajectory_probes == ("drop", "tilt") and cfg.trajectory_pos_only
+    assert train.trajectory_kwargs(cfg) == {"trajectory_frames": 8,
+                                            "trajectory_probes": ("drop", "tilt"),
+                                            "trajectory_pos_only": True}
+    assert train.trajectory_kwargs(ModelConfig()) == {}        # off by default
+
+
+def test_probe_and_channel_selection():
+    from pseudomarble.config import trajectory_target_dim
+    v = P.trajectory_vector(_records(dx=0.1), frames=4, probes=("tilt",), pos_only=True)
+    assert len(v) == P.trajectory_dim(4, ("tilt",), pos_only=True) == 4 * 3
+    assert v[-3] == pytest.approx(0.9 / P.TRAJECTORY_POS_SCALE)   # tilt, last frame, x
+    cfg = replace(SMALL, trajectory_probes=("drop", "tilt"), trajectory_pos_only=True)
+    assert trajectory_target_dim(cfg) == 2 * 4 * 3
+    with pytest.raises(ValueError):
+        P.trajectory_vector(_records(), frames=4, probes=("spin",))
+
+
+def test_selected_head_width_matches_target_in_both_backends():
+    torch = pytest.importorskip("torch")
+    np = pytest.importorskip("numpy")
+    from pseudomarble.models.numpy_net import NumpyModel
+    from pseudomarble.models.torch_net import TorchModel
+
+    cfg = replace(SMALL, trajectory_weight=1.0, trajectory_probes=("drop", "tilt"),
+                  trajectory_pos_only=True)
+    want = (2, 2 * 4 * 3)
+    assert TorchModel(cfg)(torch.rand(2, 3, 16, 16, 3))["trajectory"].shape == want
+    x = np.random.default_rng(1).random((2, 3, 16, 16, 3))
+    assert NumpyModel(cfg, seed=0)(x)["trajectory"].shape == want
 
 
 def test_numpy_head_gated_and_shaped():

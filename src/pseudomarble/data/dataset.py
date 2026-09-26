@@ -77,10 +77,11 @@ class Scene:
         ap = self.record.get("material_truth", {}).get("appearance_params", {})
         return appearance_vector(ap)
 
-    def trajectory_target(self, frames: int) -> List[float]:
+    def trajectory_target(self, frames: int, probes: Sequence[str] = P.PROBE_ORDER,
+                          pos_only: bool = False) -> List[float]:
         """F31 target: probes.trajectory_vector (needs --keep-trajectory data)."""
-        probes = self.record.get("behavior", {}).get("probes", [])
-        return P.trajectory_vector(probes, frames)
+        records = self.record.get("behavior", {}).get("probes", [])
+        return P.trajectory_vector(records, frames, probes, pos_only)
 
     def factors_target(self) -> Optional[List[float]]:
         factors = self.record.get("material_truth", {}).get("factors")
@@ -168,6 +169,8 @@ class PseudoMarbleDataset:
         as_mlx: bool = False,
         drop_last: bool = False,
         trajectory_frames: int = 0,
+        trajectory_probes: Sequence[str] = P.PROBE_ORDER,
+        trajectory_pos_only: bool = False,
     ) -> Iterator[Dict]:
         """Yield batches of ``{scene_ids, behavior, essence[, images]}``.
 
@@ -193,8 +196,9 @@ class PseudoMarbleDataset:
                 "appearance": [s.appearance_target() for s in scenes],
             }
             if trajectory_frames > 0:
-                batch["trajectory"] = [s.trajectory_target(trajectory_frames)
-                                       for s in scenes]
+                batch["trajectory"] = [
+                    s.trajectory_target(trajectory_frames, trajectory_probes,
+                                        trajectory_pos_only) for s in scenes]
             if with_images:
                 import numpy as np  # type: ignore
                 batch["images"] = np.stack([self.load_views(s, max_views) for s in scenes])
