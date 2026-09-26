@@ -219,6 +219,51 @@ def behavior_vector(probe_records: Sequence[Dict], normalize: bool = True) -> Li
     return vec
 
 
+# F31 trajectory target: per probe, [pos - pos0 (3), up (3)] at TRAJECTORY_FRAMES
+# evenly spaced samples of the recorded path (generate with --keep-trajectory).
+# Displacement is divided by a fixed physical scale (like OUTCOME_NORMALIZERS) so
+# the target is identical on every machine and needs no train-set statistics.
+TRAJECTORY_POS_SCALE: float = 0.5   # metres; drop falls ~0.5 m, slides reach ~0.4 m
+TRAJECTORY_CHANNELS: int = 6
+
+
+def trajectory_dim(frames: int, probes: Sequence[str] = PROBE_ORDER,
+                   pos_only: bool = False) -> int:
+    return len(probes) * frames * (3 if pos_only else TRAJECTORY_CHANNELS)
+
+
+def trajectory_vector(probe_records: Sequence[Dict], frames: int,
+                      probes: Sequence[str] = PROBE_ORDER,
+                      pos_only: bool = False) -> List[float]:
+    """Flattened F31 trajectory target, probes in the given order (default
+    ``PROBE_ORDER``). ``pos_only`` drops the up-axis channels; the f31 oracle
+    pilot found the essence-determined content in drop/tilt *positions*.
+
+    Unlike ``behavior_vector`` a missing trajectory is an error, not zero-fill:
+    a zero path is a real outcome ("never moved") and must not be faked.
+    """
+    if frames < 2:
+        raise ValueError("frames must be >= 2")
+    unknown = [k for k in probes if k not in PROBE_ORDER]
+    if unknown or not probes:
+        raise ValueError(f"probes must be a non-empty subset of {PROBE_ORDER}")
+    by_kind = {r.get("probe"): r.get("trajectory") for r in probe_records}
+    vec: List[float] = []
+    for kind in probes:
+        traj = by_kind.get(kind)
+        if not traj or len(traj) < 2:
+            raise ValueError(f"probe {kind!r} has no trajectory; regenerate the "
+                             "dataset with --keep-trajectory")
+        last = len(traj) - 1
+        p0 = traj[0]["pos"]
+        for j in range(frames):
+            f = traj[round(j * last / (frames - 1))]
+            vec.extend((f["pos"][c] - p0[c]) / TRAJECTORY_POS_SCALE for c in range(3))
+            if not pos_only:
+                vec.extend(float(u) for u in f["up"])
+    return vec
+
+
 def behavior_field_names() -> List[str]:
     """Human-readable name for each entry of the behavior vector (``probe.field``)."""
     return [f"{kind}.{field}" for kind in PROBE_ORDER for field in OUTCOME_FIELDS]

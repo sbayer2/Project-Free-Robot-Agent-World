@@ -69,6 +69,10 @@ if _HAVE_TORCH:
             if cfg.appearance_weight > 0:  # F20 aux head (mirrors mlx_net; gated)
                 self.appearance = _MLP(cfg.latent_dim, cfg.appearance_head_width,
                                        cfg.appearance_dim)
+            if cfg.trajectory_weight > 0:  # F31 head (mirrors mlx_net; gated)
+                from pseudomarble.config import trajectory_target_dim
+                self.trajectory = _MLP(cfg.latent_dim, cfg.trajectory_head_width,
+                                       trajectory_target_dim(cfg))
 
             # Render decoder: z -> seed map -> (upsample + conv)*k -> RGB.
             from pseudomarble.config import num_upsample_steps
@@ -114,6 +118,8 @@ if _HAVE_TORCH:
                    "essence": self.essence(z), "render": self.decode(z)}
             if self.cfg.appearance_weight > 0:
                 out["appearance"] = self.appearance(z)
+            if self.cfg.trajectory_weight > 0:
+                out["trajectory"] = self.trajectory(z)
             if code is not None:
                 out["code"] = code
             return out
@@ -128,6 +134,9 @@ if _HAVE_TORCH:
         def appearance_from_z(self, z):
             return self.appearance(z)
 
+        def trajectory_from_z(self, z):
+            return self.trajectory(z)
+
         def render_from_z(self, z):
             return self.decode(z)
 
@@ -138,7 +147,7 @@ def build_model(cfg: ModelConfig = ModelConfig()):
 
 
 def loss_fn(out: Dict, behavior_t, essence_t, cfg: ModelConfig, render_t=None,
-            appearance_t=None, model=None):
+            appearance_t=None, model=None, trajectory_t=None):
     """behavior_weight*behavior MSE + essence_weight*essence MSE
     (+ render_weight*recon MSE) (+ appearance_weight*appearance MSE)
     (+ coherence_weight*coherence term).
@@ -158,6 +167,9 @@ def loss_fn(out: Dict, behavior_t, essence_t, cfg: ModelConfig, render_t=None,
     if cfg.appearance_weight > 0 and appearance_t is not None:
         loss = loss + cfg.appearance_weight * torch.mean(
             (out["appearance"] - appearance_t) ** 2)
+    if cfg.trajectory_weight > 0 and trajectory_t is not None:  # F31
+        loss = loss + cfg.trajectory_weight * torch.mean(
+            (out["trajectory"] - trajectory_t) ** 2)
     if cfg.coherence_weight > 0 and model is not None:
         loss = loss + cfg.coherence_weight * coherence_term(model, out, cfg)
     return loss

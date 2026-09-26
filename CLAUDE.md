@@ -99,28 +99,21 @@ python scripts/eval_llm_transfer.py --condition essence --max-tokens 32768
   here so a headless `graphify` run fails loudly rather than picking one
   silently.
 
-**Status (2026-08-12):** F1–F28 merged to `main` (PRs #35–#42); **F29 in
-flight** on `claude/f29-transfer-prereg`: preregistered held-out-transfer
-coherence — does joint training buy operational transfer advantage over
-disjoint (renderonly/behavonly) training on a material-extrapolation
-holdout? Run with a preregistered pilot (Amendment 1: α\* = 0.40, band
-missed low, limit-on-inference frozen), a gate recalibration (Amendment
-2: two provable freeze-time gate bugs, verdict bars untouched), and a
-fresh-seed confirmatory rerun that reproduced every verdict. Suite
-283/35 (run with `.venv/bin/python -m pytest` — system `python3`
-collects fewer). Knowledge graph current through F27 and #40 (F28/F29
-not yet extracted); vault synced through F28. **Headline:** unity now
-has no internal signature AND no measurable operational signature on
-this axis at this scale. F28: directional coherence reads ZERO at every
-coupling with a valid instrument. F29: held-out-transfer advantage of
-joint over disjoint is NULL or INCONCLUSIVE at every coupling on two
-independent holdouts (loud −0.069/−0.115, t ≤ 0.16; ctrl/base exact
-nulls) — bounded by the frozen caveat that the holdout was gentle (both
-students keep ~89% of gain outside the training hull), so this bounds
-rather than kills operational unity; jointly consistent with the
-scale-bound reading Dyna-2's low-data ablation supports. Side results:
-init-quality variance is synchronized across students sharing only the
-seed (the init, not the objective, sets encoder quality here); F32
-(executive/muscle-memory stack) parked at DESIGN VOID on its own pilot
-gate. Registered successors: F30 render-only data scaling, F31 dynamics
-head. ABO stage 2 stays blocked (F22b).
+**Status (2026-09-26):** F1–F29 merged to `main` (PRs #35–#43). **F31
+pilot in flight** on `claude/beautiful-dirac-xdzmii` (PR #44), the first
+cloud-compute session (4 vCPU / 15 GB / no GPU; see
+`docs/CLOUD_COMPUTE.md` for setup — osmesa rendering, torch CPU trainer
+`models/train_torch.py`). Torch↔MLX parity gate PASSED (torch 5.02 vs MLX
+5.67 on f27b loud, −11.5 %, disclosed), so the cloud is a certified second
+training site; label every cloud number with its backend. Pilot results
+(exploratory): recorded probe paths (`--keep-trajectory`) carry friction
+the 21 summaries discard (R² 0.84 vs 0.34); drop + tilt position paths are
+the predictable content; the push probe saturates (density visible only in
+the light tail). F31 trajectory head is wired in all three backends
+(gated, `--trajectory-weight`); F31 itself is not yet preregistered.
+Suite 294/38 (run with `.venv/bin/python -m pytest`). Standing headline
+from F28/F29: unity has no internal and no measurable operational
+signature at this scale. Knowledge graph current through F27 (F28+ not
+extracted; its "coherence_weight INERT" edge is stale). Registered
+successors: F30 render-only data scaling, F31 dynamics head. F32 parked at
+DESIGN VOID. ABO stage 2 stays blocked (F22b).
