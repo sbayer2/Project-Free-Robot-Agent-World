@@ -100,6 +100,11 @@ class NumpyModel:
         if cfg.appearance_weight > 0:  # F20 aux head (mirrors mlx_net; gated)
             self.Wa1, self.ba1 = _he((cfg.latent_dim, cfg.appearance_head_width), rng), np.zeros((cfg.appearance_head_width,), "float32")
             self.Wa2, self.ba2 = _he((cfg.appearance_head_width, cfg.appearance_dim), rng), np.zeros((cfg.appearance_dim,), "float32")
+        if cfg.trajectory_weight > 0:  # F31 head (mirrors mlx_net; gated)
+            from pseudomarble.probes import trajectory_dim
+            td, tw = trajectory_dim(cfg.trajectory_frames), cfg.trajectory_head_width
+            self.Wt1, self.bt1 = _he((cfg.latent_dim, tw), rng), np.zeros((tw,), "float32")
+            self.Wt2, self.bt2 = _he((tw, td), rng), np.zeros((td,), "float32")
 
         # Render decoder: z -> seed feature map -> (upsample + conv)*k -> RGB.
         ch, s = cfg.render_channels, cfg.render_seed
@@ -141,6 +146,10 @@ class NumpyModel:
         np = _np()
         return np.maximum(z @ self.Wa1 + self.ba1, 0.0) @ self.Wa2 + self.ba2
 
+    def trajectory_from_z(self, z):
+        np = _np()
+        return np.maximum(z @ self.Wt1 + self.bt1, 0.0) @ self.Wt2 + self.bt2
+
     def bottleneck(self, z):
         """(code, expanded z); identity when off. Forward-only: no gradient
         trick needed — code = round(tanh(.)) in {-1,0,1} (mirrors mlx_net)."""
@@ -156,6 +165,8 @@ class NumpyModel:
                "essence": self.essence_from_z(z), "render": self.decode(z)}
         if self.cfg.appearance_weight > 0:
             out["appearance"] = self.appearance_from_z(z)
+        if self.cfg.trajectory_weight > 0:
+            out["trajectory"] = self.trajectory_from_z(z)
         if code is not None:
             out["code"] = code
         return out

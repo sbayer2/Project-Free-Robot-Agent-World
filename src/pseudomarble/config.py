@@ -119,6 +119,15 @@ class ModelConfig:
     appearance_head_width: int = 128
     appearance_weight: float = 0.0
 
+    # F31 trajectory head (z -> the recorded probe paths, probes.trajectory_vector:
+    # 3 probes x trajectory_frames x [displacement, up-axis]). A richer behavior
+    # target than the 21 summaries -- the f31 oracle pilot found the paths carry
+    # friction the summaries discard. Gated on trajectory_weight > 0 so the
+    # default model stays byte-identical (the F20 pattern).
+    trajectory_frames: int = 16
+    trajectory_head_width: int = 256
+    trajectory_weight: float = 0.0
+
     # Render head (z -> reconstructed canonical appearance). A lightweight conv
     # decoder (nearest-upsample + conv), NOT a Gaussian splat decoder: simpler,
     # CPU/Metal-portable, and sufficient because the coherence experiment measures

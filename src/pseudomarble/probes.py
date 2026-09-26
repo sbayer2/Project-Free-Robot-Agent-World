@@ -219,6 +219,42 @@ def behavior_vector(probe_records: Sequence[Dict], normalize: bool = True) -> Li
     return vec
 
 
+# F31 trajectory target: per probe, [pos - pos0 (3), up (3)] at TRAJECTORY_FRAMES
+# evenly spaced samples of the recorded path (generate with --keep-trajectory).
+# Displacement is divided by a fixed physical scale (like OUTCOME_NORMALIZERS) so
+# the target is identical on every machine and needs no train-set statistics.
+TRAJECTORY_POS_SCALE: float = 0.5   # metres; drop falls ~0.5 m, slides reach ~0.4 m
+TRAJECTORY_CHANNELS: int = 6
+
+
+def trajectory_dim(frames: int) -> int:
+    return len(PROBE_ORDER) * frames * TRAJECTORY_CHANNELS
+
+
+def trajectory_vector(probe_records: Sequence[Dict], frames: int) -> List[float]:
+    """Flattened F31 trajectory target in ``PROBE_ORDER``.
+
+    Unlike ``behavior_vector`` a missing trajectory is an error, not zero-fill:
+    a zero path is a real outcome ("never moved") and must not be faked.
+    """
+    if frames < 2:
+        raise ValueError("frames must be >= 2")
+    by_kind = {r.get("probe"): r.get("trajectory") for r in probe_records}
+    vec: List[float] = []
+    for kind in PROBE_ORDER:
+        traj = by_kind.get(kind)
+        if not traj or len(traj) < 2:
+            raise ValueError(f"probe {kind!r} has no trajectory; regenerate the "
+                             "dataset with --keep-trajectory")
+        last = len(traj) - 1
+        p0 = traj[0]["pos"]
+        for j in range(frames):
+            f = traj[round(j * last / (frames - 1))]
+            vec.extend((f["pos"][c] - p0[c]) / TRAJECTORY_POS_SCALE for c in range(3))
+            vec.extend(float(u) for u in f["up"])
+    return vec
+
+
 def behavior_field_names() -> List[str]:
     """Human-readable name for each entry of the behavior vector (``probe.field``)."""
     return [f"{kind}.{field}" for kind in PROBE_ORDER for field in OUTCOME_FIELDS]

@@ -90,6 +90,10 @@ if _HAVE_MLX:
             if cfg.appearance_weight > 0:  # F20 aux; gated to keep default identical
                 self.appearance = MLP(cfg.latent_dim, cfg.appearance_head_width,
                                       cfg.appearance_dim)
+            if cfg.trajectory_weight > 0:  # F31 head; gated to keep default identical
+                from pseudomarble.probes import trajectory_dim
+                self.trajectory = MLP(cfg.latent_dim, cfg.trajectory_head_width,
+                                      trajectory_dim(cfg.trajectory_frames))
 
             # Render decoder: z -> seed map -> (upsample + conv)*k -> RGB (NHWC).
             ch, s = cfg.render_channels, cfg.render_seed
@@ -125,6 +129,8 @@ if _HAVE_MLX:
                    "essence": self.essence(z), "render": self.decode(z)}
             if self.cfg.appearance_weight > 0:
                 out["appearance"] = self.appearance(z)
+            if self.cfg.trajectory_weight > 0:
+                out["trajectory"] = self.trajectory(z)
             if code is not None:
                 out["code"] = code
             return out
@@ -138,6 +144,9 @@ if _HAVE_MLX:
 
         def appearance_from_z(self, z):
             return self.appearance(z)
+
+        def trajectory_from_z(self, z):
+            return self.trajectory(z)
 
         def render_from_z(self, z):
             return self.decode(z)
@@ -170,6 +179,9 @@ def loss_fn(model, batch: Dict, cfg: ModelConfig):
     if cfg.appearance_weight > 0:  # F20 aux: force z to retain the material channels
         a = mx.mean((out["appearance"] - batch["appearance"]) ** 2)
         total = total + cfg.appearance_weight * a
+    if cfg.trajectory_weight > 0:  # F31: predict the recorded probe paths
+        t = mx.mean((out["trajectory"] - batch["trajectory"]) ** 2)
+        total = total + cfg.trajectory_weight * t
     if cfg.coherence_weight > 0:  # F25 objective: train the heads to move together
         total = total + cfg.coherence_weight * coherence_term(model, out, cfg)
     return total

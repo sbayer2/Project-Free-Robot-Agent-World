@@ -25,22 +25,33 @@ import os
 from dataclasses import replace
 
 from pseudomarble.data.dataset import PseudoMarbleDataset
-from pseudomarble.models.train import behavior_warmup_scale, make_config, parse_args
+from pseudomarble.models.train import (
+    behavior_warmup_scale,
+    make_config,
+    parse_args,
+    trajectory_frames_for,
+)
 
 
-def load_split(ds: PseudoMarbleDataset, max_views) -> dict:
-    """All of a split as torch tensors: images (S,N,H,W,3), behavior, essence."""
+def load_split(ds: PseudoMarbleDataset, max_views, trajectory_frames: int = 0) -> dict:
+    """All of a split as torch tensors: images (S,N,H,W,3), behavior, essence
+    (+ the F31 trajectory target when ``trajectory_frames > 0``)."""
     import numpy as np
     import torch
 
-    imgs, beh, ess = [], [], []
-    for b in ds.iter_batches(64, shuffle=False, with_images=True, max_views=max_views):
+    imgs, beh, ess, traj = [], [], [], []
+    for b in ds.iter_batches(64, shuffle=False, with_images=True, max_views=max_views,
+                             trajectory_frames=trajectory_frames):
         imgs.append(np.asarray(b["images"], dtype=np.float32))
         beh.extend(b["behavior"])
         ess.extend(b["essence"])
-    return {"images": torch.from_numpy(np.concatenate(imgs)),
-            "behavior": torch.tensor(beh, dtype=torch.float32),
-            "essence": torch.tensor(ess, dtype=torch.float32)}
+        traj.extend(b.get("trajectory", []))
+    out = {"images": torch.from_numpy(np.concatenate(imgs)),
+           "behavior": torch.tensor(beh, dtype=torch.float32),
+           "essence": torch.tensor(ess, dtype=torch.float32)}
+    if trajectory_frames > 0:
+        out["trajectory"] = torch.tensor(traj, dtype=torch.float32)
+    return out
 
 
 def batches(n: int, batch_size: int, shuffle: bool, seed: int) -> list[list[int]]:
@@ -75,6 +86,8 @@ def predict(model, data: dict, batch_size: int) -> dict:
             outs["behavior"].append(o["behavior"])
             outs["essence"].append(o["essence"])
             outs["z"].append(o["z"])
+            if "trajectory" in o:
+                outs.setdefault("trajectory", []).append(o["trajectory"])
             outs["render_mse"].append(((o["render"] - x.mean(dim=1)) ** 2).mean(
                 dim=(1, 2, 3)))
     return {k: torch.cat(v) for k, v in outs.items()}
@@ -97,8 +110,9 @@ def main(argv: list[str]) -> None:
     if res is not None and res != cfg.image_size:
         raise SystemExit(f"dataset rendered at {res}px but model image_size="
                          f"{cfg.image_size}; pass --image-size {res}")
-    train = load_split(train_ds, args.max_views)
-    test = load_split(test_ds, args.max_views) if len(test_ds) else None
+    tf = trajectory_frames_for(cfg)
+    train = load_split(train_ds, args.max_views, tf)
+    test = load_split(test_ds, args.max_views, tf) if len(test_ds) else None
     print(f"[train-torch] {len(train['behavior'])} train / "
           f"{0 if test is None else len(test['behavior'])} test scenes, "
           f"{torch.get_num_threads()} threads")
@@ -117,7 +131,8 @@ def main(argv: list[str]) -> None:
             x = train["images"][idx]
             opt.zero_grad()
             loss = loss_fn(model(x), train["behavior"][idx], train["essence"][idx],
-                           epoch_cfg, render_t=x.mean(dim=1), model=model)
+                           epoch_cfg, render_t=x.mean(dim=1), model=model,
+                           trajectory_t=train["trajectory"][idx] if tf else None)
             loss.backward()
             opt.step()
             running += float(loss.detach())
@@ -133,6 +148,9 @@ def main(argv: list[str]) -> None:
             row["render_mse"] = float(te["render_mse"].mean())
             row["heldout_gain"] = heldout_gain(train["behavior"], test["behavior"],
                                                te["behavior"])
+            if tf:
+                row["heldout_trajectory_gain"] = heldout_gain(
+                    train["trajectory"], test["trajectory"], te["trajectory"])
         if scale < 1.0:
             row["behavior_weight_scale"] = scale
         history.append(row)
