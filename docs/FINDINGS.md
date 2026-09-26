@@ -1980,6 +1980,79 @@ runs/f29/f29_confirm_report.json` (confirmatory).
 
 ---
 
+### F31 pilot — the recorded probe paths carry friction the 21 summaries discard; the push probe saturates; and the cloud is certified as a second training site
+
+*(Run 2026-09-26, the program's first session on cloud compute: 4 vCPU,
+15 GB, no GPU, osmesa rendering. **Exploratory, not preregistered** — its
+job is to set F31's bars before a model exists. The one frozen rule in it,
+the torch↔MLX parity gate, was committed in `docs/CLOUD_COMPUTE.md` and
+`scripts/parity_verdict.py` before any torch gain existed.)*
+
+**Apparatus.** The four f27b worlds (box only; ctrl/base/g2/loud) were
+regenerated in the cloud with `--keep-trajectory` — 125 frames of
+`{t, pos, up}` per probe, a generator option no experiment had used.
+Measured coupling r = 0.008 / 0.263 / 0.809 / 0.992 as published, and
+F27b's appearance-oracle ceilings reproduce **to three decimals on every
+arm** (0.957 / 1.841 / 3.226 / 4.706): physics and labels are identical
+to the Mac's. Checked on the way: at the generator's default seed every
+world has exactly **20** corner (held-out) scenes, so all F27b/F29
+held-out gains rest on 20 scenes.
+
+**1. The summaries throw friction away.** Held-out R² of the essence read
+back out of each target (`scripts/f31_trajectory_oracle.py`, iid split):
+
+| | from 21 summaries | from trajectory (8 / 16 / 32 frames) |
+|---|---|---|
+| friction | 0.340 | 0.796 / 0.835 / 0.796 |
+| restitution | 0.989 | 0.999 / 0.992 / 0.992 |
+| density | 0.068 | ≈ 0 |
+
+Robust to frame count and identical across arms (the physics is shared).
+F31's premise survives: the paths are a strictly richer material target,
+and the gain is concentrated in friction, the channel F28 found
+VOID-by-legibility in pixels.
+
+**2. Which parts of the path the essence determines** (`--blocks`, loud,
+iid; forward gain essence → block): drop position **4.87**, tilt position
+**2.70**, tilt orientation 1.12, push position 1.06, push orientation 1.00,
+drop orientation constant. The aggregate forward gain (1.06, below the
+summaries' 1.49) was an artifact of per-column standardization promoting
+near-zero-variance orientation columns — recorded because that reflex
+reading would have killed F31 on an artifact. **F31 target
+recommendation: drop + tilt position paths.**
+
+**3. The push probe saturates — a concrete mechanism behind F14's
+mass-blindness.** The push is a fixed 1.5 N·s impulse; density spans
+50–8000 kg/m³. 84 % of pushes move the box < 1 cm (median 0.4 mm);
+corr(slide, 1/density) = 0.46 but linear density R² ≈ 0. Density is
+visible only in the light tail. (First reading, corrected within the
+session: "mass cancels under gravity, blind by construction" — false for
+an impulse.) F31 must choose: graded push, log-density target, or scope
+to friction/restitution.
+
+**4. Torch↔MLX parity: PASS** (`docs/CLOUD_COMPUTE.md` §5). Regenerated
+loud world, F27b recipe, three torch seeds: gains 4.893 / 4.619 / 5.551,
+mean **5.021** vs MLX 5.672 — inside the frozen [4.82, 6.52] band, all
+seeds ≥ 3.0, PR 74–89. Disclosed beyond the rule: torch is 11.5 % lower
+(Welch t −1.54, n = 3). Post-hoc observation: every seed sits at
+predict-the-mean for ~20 epochs, then escapes at epoch 25–35; the late
+escaper finished lowest and was still rising at epoch 49 — escape timing
+is one concrete mechanism of the seed spread (F10/F12/F29 init thread),
+and the 50-epoch recipe truncates late escapers.
+
+**What this opens.** F31 now has a validated target (drop + tilt position
+paths), a known blind spot (density), shipped infrastructure (a gated
+trajectory head in all three backends, `--trajectory-weight`), and a
+certified place to run it. Next: preregister F31 against these bars.
+
+Reproduce: regenerate `data/pm_f31_{ctrl,base,g2,loud}` with the F27b
+flags plus `--keep-trajectory`; `python scripts/f31_trajectory_oracle.py
+--data data/pm_f31_* --blocks`; parity: `python -m
+pseudomarble.models.train_torch --data data/pm_f31_loud --epochs 50 --lr
+2e-4 --seed {0,1,2}` then `python scripts/parity_verdict.py`.
+
+---
+
 ## 4. Next steps — the gap is NOT intrinsic; the fork is resolved
 
 *(Rewritten 2026-07-30 after F22a. The previous version concluded the
@@ -2045,6 +2118,6 @@ Reproduce F8: `python tests/batch_probe_stability.py`.
 
 ---
 
-*Tests: 283 across 35 suites, all passing (1 skipped); core imports with no
+*Tests: 294 across 38 suites, all passing (2 skipped with the cloud deps installed); core imports with no
 mujoco/bpy/trimesh/numpy/mlx/torch. Personal research; not affiliated with World
 Labs.*

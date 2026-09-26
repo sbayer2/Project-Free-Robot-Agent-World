@@ -15,7 +15,7 @@ Measured in this session, not assumed:
 | MuJoCo render, 128 px, software GL (`MUJOCO_GL=osmesa`) | 26 ms/frame |
 | 512-scene world, 16 views, trajectories kept | ~3 min (ctrl: 173 s) |
 | torch training step, canonical model (1.0M params, B8, N16, 128 px) | 0.74 s |
-| one canonical training run (≈410 train scenes, 50 epochs, B16) | ~30 min |
+| one canonical training run (492 train scenes, 50 epochs, B16) | ~15 min uncontended (see §5) |
 
 So the cloud's advantage over the Mac is **width, not speed**: independent
 sessions run in parallel, each at roughly the numbers above. Datasets are
@@ -68,3 +68,38 @@ Cloud sessions become a certified second training site for torch-mirrored
 experiments at the f27b scale, and multi-seed arms can be fanned out across
 parallel sessions. Every cloud-trained result is still labeled with its
 backend in FINDINGS.
+
+## 5. Result (2026-09-26) — PASS
+
+Run exactly as frozen in §3 (`scripts/parity_verdict.py`, report
+`runs/parity/verdict.json`).
+
+| | seed 0 | seed 1 | seed 2 | mean |
+|---|---|---|---|---|
+| torch, cloud | 4.893 | 4.619 | 5.551 | **5.021** |
+| MLX, Mac (F27b) | 5.040 | 5.910 | 6.067 | 5.672 |
+
+- Apparatus: r = 0.9922, split 492/20 → PASS. Stronger than the frozen
+  check required: the cloud-regenerated worlds reproduce F27b's published
+  appearance-oracle ceilings **to three decimals on all four arms**
+  (0.957 / 1.841 / 3.226 / 4.706), so physics outcomes and material labels
+  are identical to the Mac's; only rendered pixels could differ.
+- Gate: mean 5.021 ∈ [4.82, 6.52]; min seed 4.619 ≥ 3.0; PR 74.1–89.2 ≥ 8
+  → **PASS**.
+- Disclosed beyond the rule: torch sits **11.5 % below** MLX (−0.651,
+  Welch t −1.54 at n = 3, seed sd 0.48 vs 0.55). Not significant, but the
+  direction is recorded, and torch-trained numbers keep their backend label.
+- Observed (post hoc, labeled): every seed sits at predict-the-mean
+  (gain ≈ 1.0) for ~20 epochs, then escapes — seeds 0 and 2 around epoch
+  25, seed 1 around 35. The late escaper finished lowest and was still
+  rising at epoch 49, so **escape timing is one concrete mechanism of the
+  seed spread**, and the 50-epoch recipe truncates late escapers (cf. F10,
+  F12, F29's init thread).
+- Timing, corrected: an uncontended run takes **~15 min** (875–988 s), not
+  the ~30 min estimated in §1.
+
+**Consequence:** the cloud is a certified second training site for
+torch-mirrored experiments at the f27b scale. Rules that still hold:
+every cloud-trained number carries its backend; cross-backend
+comparisons disclose the −11.5 % offset; all-torch designs remain the
+cleanest.
