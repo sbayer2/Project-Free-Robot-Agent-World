@@ -227,21 +227,29 @@ TRAJECTORY_POS_SCALE: float = 0.5   # metres; drop falls ~0.5 m, slides reach ~0
 TRAJECTORY_CHANNELS: int = 6
 
 
-def trajectory_dim(frames: int) -> int:
-    return len(PROBE_ORDER) * frames * TRAJECTORY_CHANNELS
+def trajectory_dim(frames: int, probes: Sequence[str] = PROBE_ORDER,
+                   pos_only: bool = False) -> int:
+    return len(probes) * frames * (3 if pos_only else TRAJECTORY_CHANNELS)
 
 
-def trajectory_vector(probe_records: Sequence[Dict], frames: int) -> List[float]:
-    """Flattened F31 trajectory target in ``PROBE_ORDER``.
+def trajectory_vector(probe_records: Sequence[Dict], frames: int,
+                      probes: Sequence[str] = PROBE_ORDER,
+                      pos_only: bool = False) -> List[float]:
+    """Flattened F31 trajectory target, probes in the given order (default
+    ``PROBE_ORDER``). ``pos_only`` drops the up-axis channels; the f31 oracle
+    pilot found the essence-determined content in drop/tilt *positions*.
 
     Unlike ``behavior_vector`` a missing trajectory is an error, not zero-fill:
     a zero path is a real outcome ("never moved") and must not be faked.
     """
     if frames < 2:
         raise ValueError("frames must be >= 2")
+    unknown = [k for k in probes if k not in PROBE_ORDER]
+    if unknown or not probes:
+        raise ValueError(f"probes must be a non-empty subset of {PROBE_ORDER}")
     by_kind = {r.get("probe"): r.get("trajectory") for r in probe_records}
     vec: List[float] = []
-    for kind in PROBE_ORDER:
+    for kind in probes:
         traj = by_kind.get(kind)
         if not traj or len(traj) < 2:
             raise ValueError(f"probe {kind!r} has no trajectory; regenerate the "
@@ -251,7 +259,8 @@ def trajectory_vector(probe_records: Sequence[Dict], frames: int) -> List[float]
         for j in range(frames):
             f = traj[round(j * last / (frames - 1))]
             vec.extend((f["pos"][c] - p0[c]) / TRAJECTORY_POS_SCALE for c in range(3))
-            vec.extend(float(u) for u in f["up"])
+            if not pos_only:
+                vec.extend(float(u) for u in f["up"])
     return vec
 
 

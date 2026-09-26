@@ -101,8 +101,8 @@ class NumpyModel:
             self.Wa1, self.ba1 = _he((cfg.latent_dim, cfg.appearance_head_width), rng), np.zeros((cfg.appearance_head_width,), "float32")
             self.Wa2, self.ba2 = _he((cfg.appearance_head_width, cfg.appearance_dim), rng), np.zeros((cfg.appearance_dim,), "float32")
         if cfg.trajectory_weight > 0:  # F31 head (mirrors mlx_net; gated)
-            from pseudomarble.probes import trajectory_dim
-            td, tw = trajectory_dim(cfg.trajectory_frames), cfg.trajectory_head_width
+            from pseudomarble.config import trajectory_target_dim
+            td, tw = trajectory_target_dim(cfg), cfg.trajectory_head_width
             self.Wt1, self.bt1 = _he((cfg.latent_dim, tw), rng), np.zeros((tw,), "float32")
             self.Wt2, self.bt2 = _he((tw, td), rng), np.zeros((td,), "float32")
 

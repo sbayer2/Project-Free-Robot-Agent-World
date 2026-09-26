@@ -29,19 +29,20 @@ from pseudomarble.models.train import (
     behavior_warmup_scale,
     make_config,
     parse_args,
-    trajectory_frames_for,
+    trajectory_kwargs,
 )
 
 
-def load_split(ds: PseudoMarbleDataset, max_views, trajectory_frames: int = 0) -> dict:
+def load_split(ds: PseudoMarbleDataset, max_views, traj_kwargs: dict | None = None) -> dict:
     """All of a split as torch tensors: images (S,N,H,W,3), behavior, essence
-    (+ the F31 trajectory target when ``trajectory_frames > 0``)."""
+    (+ the F31 trajectory target when ``traj_kwargs`` is non-empty)."""
     import numpy as np
     import torch
 
     imgs, beh, ess, traj = [], [], [], []
+    traj_kwargs = traj_kwargs or {}
     for b in ds.iter_batches(64, shuffle=False, with_images=True, max_views=max_views,
-                             trajectory_frames=trajectory_frames):
+                             **traj_kwargs):
         imgs.append(np.asarray(b["images"], dtype=np.float32))
         beh.extend(b["behavior"])
         ess.extend(b["essence"])
@@ -49,7 +50,7 @@ def load_split(ds: PseudoMarbleDataset, max_views, trajectory_frames: int = 0) -
     out = {"images": torch.from_numpy(np.concatenate(imgs)),
            "behavior": torch.tensor(beh, dtype=torch.float32),
            "essence": torch.tensor(ess, dtype=torch.float32)}
-    if trajectory_frames > 0:
+    if traj_kwargs:
         out["trajectory"] = torch.tensor(traj, dtype=torch.float32)
     return out
 
@@ -110,7 +111,7 @@ def main(argv: list[str]) -> None:
     if res is not None and res != cfg.image_size:
         raise SystemExit(f"dataset rendered at {res}px but model image_size="
                          f"{cfg.image_size}; pass --image-size {res}")
-    tf = trajectory_frames_for(cfg)
+    tf = trajectory_kwargs(cfg)
     train = load_split(train_ds, args.max_views, tf)
     test = load_split(test_ds, args.max_views, tf) if len(test_ds) else None
     print(f"[train-torch] {len(train['behavior'])} train / "

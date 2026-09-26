@@ -127,6 +127,8 @@ class ModelConfig:
     trajectory_frames: int = 16
     trajectory_head_width: int = 256
     trajectory_weight: float = 0.0
+    trajectory_probes: Tuple[str, ...] = ("drop", "tilt", "push")
+    trajectory_pos_only: bool = False
 
     # Render head (z -> reconstructed canonical appearance). A lightweight conv
     # decoder (nearest-upsample + conv), NOT a Gaussian splat decoder: simpler,
@@ -148,6 +150,13 @@ class ModelConfig:
     coherence_weight: float = 0.0
     coherence_dirs: int = 4        # perturbation directions per step
     coherence_eps: float = 0.1     # latent perturbation step size
+
+
+def trajectory_target_dim(cfg: "ModelConfig") -> int:
+    """Width of the F31 trajectory target/head implied by the config."""
+    from pseudomarble.probes import trajectory_dim
+    return trajectory_dim(cfg.trajectory_frames, cfg.trajectory_probes,
+                          cfg.trajectory_pos_only)
 
 
 def conv_output_channels(cfg: "ModelConfig") -> int:
