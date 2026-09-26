@@ -65,3 +65,21 @@ def test_iid_split_only_draws_from_train_region():
     tr, te = T.iid_split(sp, seed=0)
     assert not (tr & te).any()
     assert (tr | te).sum() == 50 and not (tr | te)[50:].any()
+
+
+def test_block_columns_partition_the_trajectory():
+    cols = T.block_columns(4)
+    flat = sorted(c for v in cols.values() for c in v)
+    assert flat == list(range(3 * 4 * 6))
+    assert cols["drop.pos"][:3] == [0, 1, 2] and cols["drop.up"][:3] == [3, 4, 5]
+
+
+def test_block_gains_flags_constant_blocks_and_finds_signal():
+    rng = np.random.default_rng(0)
+    E = rng.uniform(size=(200, 3))
+    Yt = np.zeros((200, 3 * 2 * 6))
+    Yt[:, 0] = E[:, 0] * 3.0                      # drop.pos carries essence
+    tr = np.arange(200) < 160
+    g = T.block_gains(E, Yt, tr, ~tr, frames=2)
+    assert g["drop.pos"]["gain"] > 10
+    assert g["push.up"]["gain"] is None           # all-zero block

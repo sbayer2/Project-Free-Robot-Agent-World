@@ -133,6 +133,32 @@ def iid_split(splits: np.ndarray, seed: int):
     return tr, te
 
 
+def block_columns(frames: int) -> dict[str, list[int]]:
+    """Column indices of each probe x {pos, up} block in the trajectory target."""
+    out = {}
+    for pi, k in enumerate(PROBES):
+        for lo, name in ((0, "pos"), (3, "up")):
+            out[f"{k}.{name}"] = [pi * frames * 6 + f * 6 + lo + c
+                                  for f in range(frames) for c in range(3)]
+    return out
+
+
+def block_gains(E, Yt, tr, te, frames: int) -> dict[str, dict]:
+    """essence -> each trajectory block, standardized WITHIN the block. Resolves
+    which parts of the path the essence determines: the aggregate gain is
+    dominated by whatever the per-column standardization promotes."""
+    res = {}
+    for name, cols in block_columns(frames).items():
+        Y = Yt[:, cols]
+        a, b = standardize(Y[tr], Y[te])
+        if a.shape[1] == 0:
+            res[name] = {"gain": None, "note": "constant"}
+            continue
+        g, which, _ = best_oracle(E[tr], a, E[te], b)
+        res[name] = {"gain": g, "regressor": which, "raw_var": float(Y.var(0).sum())}
+    return res
+
+
 def analyze(E, A, Ys, Yt, M, tr, te) -> dict:
     Ys_tr, Ys_te = standardize(Ys[tr], Ys[te])
     Yt_tr, Yt_te = standardize(Yt[tr], Yt[te])
@@ -151,6 +177,8 @@ def main() -> None:
     ap.add_argument("--data", nargs="+", required=True, help="one or more dataset dirs")
     ap.add_argument("--frames", type=int, default=16)
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--blocks", action="store_true",
+                    help="also report essence -> each probe x {pos, up} block (iid)")
     ap.add_argument("--out", default=None)
     args = ap.parse_args()
 
@@ -165,6 +193,8 @@ def main() -> None:
                                    for i, k in enumerate(PROBES)}}
         res["corner"] = analyze(E, A, Ys, Yt, M, sp == "train", sp == "test")
         res["iid"] = analyze(E, A, Ys, Yt, M, *iid_split(sp, args.seed))
+        if args.blocks:
+            res["blocks_iid"] = block_gains(E, Yt, *iid_split(sp, args.seed), args.frames)
         report["worlds"][name] = res
 
         print(f"\n=== {name}: {len(E)} scenes | summary {Ys.shape[1]}d, "
@@ -180,6 +210,9 @@ def main() -> None:
             for tgt, r2 in r["inverse_r2"].items():
                 print(f"    essence R2 from {tgt:10s} " +
                       "  ".join(f"{a} {x:+.3f}" for a, x in r2.items()))
+        for blk, v in res.get("blocks_iid", {}).items():
+            print(f"  [iid block] {blk:10s} " + ("constant" if v["gain"] is None else
+                  f"gain {v['gain']:6.3f} ({v['regressor']}), raw var {v['raw_var']:.4f}"))
 
     if args.out:
         os.makedirs(os.path.dirname(os.path.expanduser(args.out)) or ".", exist_ok=True)
