@@ -309,8 +309,9 @@ def run_probes_mesh(mesh_asset, physics_cfg: PhysicsConfig,
         elif spec.kind == "tilt":
             z = mesh_asset.half_height + 0.05
             model = mujoco.MjModel.from_xml_string(
+                # MJCF `euler` is DEGREES; see the F34 instrument flag.
                 build_mjcf(mesh=mesh_asset, object_z=z,
-                           ground_euler=(math.radians(spec.angle_deg), 0.0, 0.0)))
+                           ground_euler=(spec.angle_deg, 0.0, 0.0)))
             traj = _simulate(model, mujoco.MjData(model),
                              physics_cfg.sim_seconds, physics_cfg.fps)
         else:  # push

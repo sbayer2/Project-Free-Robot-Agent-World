@@ -99,8 +99,19 @@ python scripts/eval_llm_transfer.py --condition essence --max-tokens 32768
   here so a headless `graphify` run fails loudly rather than picking one
   silently.
 
-**Status (2026-08-12):** F1–F28 merged to `main` (PRs #35–#42); **F29 in
-flight** on `claude/f29-transfer-prereg`: preregistered held-out-transfer
+**Status (2026-08-21):** F1–F29 merged (PR #43). **F33 in flight** on
+`claude/f33-video-baseline-prereg` (Qwen3.8-27B video baseline,
+preregistered in `docs/VIDEO_BASELINE.md`, Amendments A–E + 1; pilot
+complete, llama.cpp essence leg 26/60 cached and resuming, video legs +
+MME pending). **F34 WRITTEN, then CORRECTED** (same branch): a
+radians/degrees unit bug meant the tilt ramp ran at 0.349° (not 20°)
+for the project's entire history; after the fix (3 call sites) and
+answer-key regeneration (512 scenes), the dose ladder INVERTS —
+unbounded reasoning wins with the program's first gain > 1 (2.30×);
+the chains were computing correct 20°-ramp physics all along, and
+no-think's "safe defaults" had matched the broken world. F11 anchors
+need re-derivation against corrected keys before F33's H1 is read.
+Earlier F29 record below kept for context: preregistered held-out-transfer
 coherence — does joint training buy operational transfer advantage over
 disjoint (renderonly/behavonly) training on a material-extrapolation
 holdout? Run with a preregistered pilot (Amendment 1: α\* = 0.40, band

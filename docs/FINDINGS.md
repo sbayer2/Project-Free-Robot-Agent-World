@@ -1978,6 +1978,473 @@ Reproduce: `runs/f29_retrain.log` (24 disjoint pairs,
 with `--seed 2942 --data-template "data/pm_f29_confirm_{arm}" --out
 runs/f29/f29_confirm_report.json` (confirmatory).
 
+### F34 — ⭐ CORRECTED, then FULLY AUDITED: the "reasoning miscalibrates" verdict was the instrument (a 0.349° ramp sold as 20°), and on the repaired world the dose ladder inverts — but the competence story dies under its own audits: ridge on 8 static features beats every LLM condition ~4× (n=57–60), no field on this probe set shows above-trivial LLM physics, and the benchmark is substantially feature regression wearing a physics-reasoning name; what stands is the instrument record and a probe-design principle for F30/F31
+
+*(CORRECTION 2026-08-22, after the tilt unit bug was found, fixed
+(c6db6da), and the answer keys regenerated (512 scenes). The entry
+below is the original 2026-08-21 text (headline preserved in git at
+2f707ba): it measured models against a world whose tilt ramp was
+0.349° while every prompt said 20°. The corrected re-read — same
+cached responses, same frozen scorer, corrected truth — INVERTS the
+headline. Original headline for the record: "chain-of-thought is the
+miscalibration channel … makes outcome MSE ~12× worse."*
+
+**Corrected dose ladder (n = 6 cells / 2 scenes — a SUBSET chosen
+for cache overlap, not a split; full-split figures below the table):**
+
+| condition | MSE | gain vs train-mean | drop | tilt | push |
+|---|---|---|---|---|---|
+| **unbounded medium (llama.cpp)** | **0.1199** | **2.302×** | 0.076 | 0.270 | 0.014 |
+| bounded medium 6,144 (MLX) | 0.2399 | 1.150× | 0.076 | 0.638 | 0.006 |
+| direct no-think (MLX) | 1.1825 | 0.233× | 0.017 | 3.441 | 0.089 |
+
+Full splits: unbounded 57 cells 0.2927 / gain 0.796×; direct 60 cells
+0.7998 / 0.291×.
+
+- **The reasoning chains' tilt magnitudes were near-true answers to
+  the question actually asked** (a 20° ramp): unbounded-medium tilt
+  MSE falls 3.77 → 0.27 (n=2 scenes) against the repaired world.
+  The 2.302× gain **(n=6 cells / 2 scenes)** was announced in-session
+  as "the first above-baseline result in the program's LLM-transfer
+  history" and DOES NOT SURVIVE the full split: on all 57 cells the
+  same condition scores 0.796× — below predict-mean, the opposite
+  direction. See the headline-propagation note below; the durable
+  claim in this bullet is only that the "tilt tar-pit" /
+  "catastrophic ramp failure" lineage (F11 → F34) was an instrument
+  artifact end to end.
+- **The no-think condition's MSE win reverses into its true reading:**
+  its probe-generic near-zero defaults matched the broken near-flat
+  world by accident and score 3.44 on the real one. The priors
+  half of the complementary-failure story SHARPENS: what the weights
+  answer instantly is genuinely poor at dynamics — now shown against
+  a valid instrument.
+- **The dose–response flips sign and becomes monotone:** more
+  reasoning = better (0.12 / 0.24 / 1.18). The bounded-6,144 cap,
+  adopted mid-experiment as the overthinking guard, measurably COST
+  accuracy on corrected truth (tilt 0.638 vs 0.27 unbounded) — the
+  chains it truncated were mid-way through the right computation.
+  The overthinking-rate measurement (cap bound on ~81% of bounded
+  cells) stands as a behavioral fact; its interpretation shifts from
+  "pathological spirals" toward "long division that was earning its
+  tokens." (The xhigh EMPTY-content spiral remains pathological —
+  starving without emitting is a failure at any ramp angle.)
+- **What survives unchanged:** the discrimination result (reasoning
+  extracts real ordinal signal — now validated on magnitude too); the
+  empty_stop class and every apparatus finding; the cross-stack xhigh
+  starvation; push results (push was never affected by the bug — and
+  reasoned push still beats direct, consistent across both truths);
+  the episode-censoring analysis; all cost/serving measurements.
+- **Knock-on obligations, open:** the F11 anchor numbers (essence MSE
+  1.277 etc.) were scored against the broken tilt truth — F33's
+  frozen H1 anchors must be re-derived from the F11 caches against
+  corrected keys before any anchored verdict is read. The two
+  video_percep tilt pilot cells are INVALIDATED (their cached
+  responses describe the old near-flat clips); tilt clips re-rendered
+  under the fixed sim; those cells re-issue when the server returns.
+- **Second model, same corrected instrument (2026-09-02,
+  user-directed — supersedes the earlier Muse exclusion): Muse-
+  Glimmer-30B also crosses baseline on corrected keys.** Re-scoring
+  its complete ATEM caches (120/120 parsed, an architecturally
+  unrelated dense model on the oMLX stack): essence MSE 0.666 →
+  **0.2056, gain 0.08× → 1.133×**; its "tilt slid 805×" catastrophe
+  evaporates (tilt 0.395, below the 0.612 baseline); the anomalous
+  vision-beats-essence-via-hedging result dies with the bug (essence
+  0.206 now properly beats vision 0.361 — that artifact was also
+  instrument-made). **Stated at its honest strength (monitoring
+  session's decomposition, adopted):** the gain move is 58% baseline
+  degradation / 42% model improvement — corrected tilt truth has real
+  variance, so predict-mean stopped being a good guess, which makes
+  gain > 1 *easier*, and the task more *discriminative*, not the bar
+  higher. Muse's real margin over predict-mean is 11.8%. And because
+  both models' inversions share the one corrected instrument, the
+  inversion is ONE event observed twice, not two replications.
+  **What makes the two-model result nonetheless real — each pillar
+  stated with its own audit:** (a) sign-consistency — Muse essence
+  beats baseline on 11/21 fields and Qwen unbounded on 11/21, with
+  **10 winner fields in common** (hypergeometric expectation 5.76,
+  P(≥10) = 0.00031 — not chance). BUT the difficulty-structure
+  confound test (does baseline-MSE rank predict winner status?) comes
+  back **partially positive**: Spearman +0.609 (Qwen) / +0.401
+  (Muse) — beating predict-mean is easier where the mean is a worse
+  guess, and a substantial share of the overlap rides that shared
+  data structure rather than shared model competence. Not all of it
+  (Muse's winners span difficulty ranks 3–20, including low-variance
+  fields), but the cross-model-agreement claim is accordingly
+  **demoted from load-bearing to suggestive**, pending an analysis
+  that quantifies overlap beyond what difficulty alone predicts.
+  Vision and no-think collapsing to the geometry fields (3/21 and
+  5/21) in both lineages stands. (b) an **analytic anchor
+  independent of MuJoCo — stated with its window sensitivity after a
+  cross-derivation caught it** (the peer session's full-window fit
+  gave 92.7% against my 99.7%; both were right): the acceleration is
+  window-dependent because the sphere spends most of the 2 s episode
+  in a slip-to-roll TRANSITION (slip |v|−rω decaying 0.41 → 0.20 →
+  0.027 → 0.015 m/s at t = 0.5/1.0/1.5/2.0), so the pure-rolling
+  closed form (5/7)·g·sin 20° = 2.397 m/s² is the ASYMPTOTE, not the
+  whole-window law. Measured finite-difference accelerations: 92.2%
+  of closed form on [0.25,0.75]s, 93.4% on [0.5,1.0], 95.7% on
+  [1.0,1.5], **99.7% on [1.5,2.0]** — monotone convergence to first
+  principles as slip dies, where the broken instrument missed by
+  57×. The honest anchor statement: the corrected sim CONVERGES to
+  closed-form rolling; its full-window dynamics are richer than the
+  pure-rolling model (a real slip regime, physically expected at
+  μ=0.78 from rest on 20°). Scope stated precisely: this validates
+  sphere-on-incline dynamics only; box/cylinder/ellipsoid/capsule
+  and the toppling, sliding, and settling outcomes have no closed
+  form this check touches, so the ~5-scene hand-derived analytic
+  mini-key is NECESSARY for instrument independence, not a
+  nice-to-have — sphere was the easy case.
+- **The learned-baseline check (monitoring session's highest-leverage
+  objection, run same day): ridge regression on the same numeric
+  features beats both LLMs by ~4×.** Ridge on 8 features (log
+  density, friction, restitution, shape one-hot; 492 train scenes,
+  same 20-scene test split, same normalizers): **MSE 0.0573, gain
+  4.07×, 16/21 fields beat baseline** — and its winner set contains
+  every field both LLMs won. Alpha-insensitive (4.0–4.1× across
+  0.1–10). Two consequences, both adopted: (1) the honest headline
+  is now **"the LLMs beat predict-mean but lose ~4× to linear
+  regression on the same features"** — "first genuinely positive
+  LLM-physics result" does not survive as a competence claim; the
+  material→outcome map of this world is largely linearly
+  recoverable, and the LLMs' share of the error ridge removes —
+  computed from raw MSEs on identical rows, stated PER MODEL because
+  the spread is enormous — is: **Muse 15.6%** (60 cells); **Qwen
+  −34.0%** on its 57 cells (worse than predict-mean on the full
+  split) yet **+63.8%** on the favorable 2-scene dose-ladder subset —
+  Qwen's number is subset-unstable and no single figure describes it
+  (an earlier "~28%" collapsed this spread and is retracted).
+  (2) The field-overlap question
+  is settled from an independent direction: a predictor with no
+  physics knowledge wins a superset of the shared LLM fields, so the
+  cross-model overlap is predominantly the data's predictability
+  structure, not shared physics competence — explanation (b), now
+  confirmed twice. The one asymmetry to keep stated: ridge is
+  SUPERVISED on this world's truth (a skyline for
+  extractable-from-features signal); the LLMs are zero-shot with
+  world priors — so the comparison bounds what those priors are
+  worth here (little, on aggregate MSE), it does not test learning.
+  What survives untouched: the INSTRUMENT findings — the inversion,
+  the bug, the corrected-world validation — which were never
+  competence claims.
+- **The benchmark indictment (monitoring session's reframe, adopted
+  as the entry's largest implication):** ridge winning 16/21 fields
+  from 8 static features means this benchmark is substantially a
+  feature-regression task wearing a physics-reasoning name — a
+  system can score well on the ridge-winnable fields with no
+  dynamics understanding, by demonstration. The proposed diagnostic
+  — treat the RIDGE-RESISTANT fields as the real physics signal —
+  was tested immediately, and the result closes the last door: the
+  three variance-bearing fields ridge does not win (drop.n_bounces,
+  push.n_bounces, tilt.settle_time) are fields where **both LLMs
+  lose to predict-mean outright** (e.g. drop.n_bounces: Muse 0.962 /
+  Qwen 0.815 vs baseline 0.040 — 20–25× worse; the censoring-window
+  bounce arithmetic defeats everyone). So on the current probe set
+  there is NO field where either LLM demonstrates above-trivial
+  physics: the fields that need more than feature regression are the
+  fields the LLMs fail hardest. **Probe-design consequence,
+  registered for F30/F31: a probe whose outcome ridge predicts from
+  static features is not earning its place as a physics-reasoning
+  instrument; future probes should be designed so outcomes require
+  dynamics (conditional, interaction-dependent, or chaotic-adjacent
+  regimes) — that is the only place a physics-competence claim could
+  ever be tested on this harness.**
+- **Headline-propagation note (the audit's second process finding,
+  peer-named, adopted):** the 2.302× subset figure was announced as a
+  program-first, propagated through three sessions for hours, and
+  entered a peer's persistent memory before anyone asked for its n —
+  structurally the same failure as the tilt bug: a number that
+  survives every check anyone runs until it is computed on a
+  different footing (there, first principles; here, the full split).
+  Standing rule, this entry forward: **every gain figure carries its
+  n inline, next to the number, so the n travels with the claim when
+  the claim is relayed.** Relatedly, the phrase "correct physics
+  scored against a broken instrument" is RETIRED as a unit: it was
+  right about the instrument and wrong about the models, and welded
+  the two claims together. The instrument half stands on the bug,
+  the inversion, and the closed-form convergence; the competence
+  half is dead by the ridge and resistant-field results above.
+- **Run-provenance annotation:** every MLX-arm cell in this entry
+  was generated while the harness flags that produced it
+  (`--extra-body`, `--system-prompt-file`) were uncommitted working-
+  tree state (committed post-hoc as d5bc699). The code state now
+  matches the cited runs going forward; the original runs are not
+  reproducible from any committed snapshot — their flag effects are
+  asserted from the cached request records, not reconstructable from
+  the repository.
+- **Registered for the video legs (motion-claim accuracy):** under
+  the broken keys the tilt clips were near-static, so any motion a
+  model described was necessarily confabulated and undetectable as
+  such. The corrected clips show real rolling and toppling — for the
+  first time a video tilt cell can discriminate motion perception
+  from motion confabulation. The video legs will co-report
+  motion-claim accuracy on tilt cells alongside outcome MSE
+  (monitoring session's observation, adopted as a registered
+  instrument). *Addendum (2026-09-02, from the interim vllm-mlx
+  session's measured work; brief archived at
+  `~/vllm-mlx/artifacts/serving-brief-for-pseudo-marble.md`): the
+  co-report gains a MECHANISTIC NULL HYPOTHESIS that must be tested
+  before any motion claim is scored as perception or confabulation —
+  Qwen3.8's `temporal_patch_size=2` means the model perceives FUSED
+  FRAME PAIRS (a numbered counter-clip was read "2, 3, 5, 90, 12,
+  13, 16; 7 images": "90" is frames 9+10 superimposed), so
+  "ghosting"/"double exposure"/"motion blur"/"crossfade" claims can
+  be the encoder's own pairing rather than content, and self-reported
+  frame counts are slot counts ~2× low. The mechanism is TWO-LAYERED
+  and the layers make opposite predictions (vllm-mlx session's
+  refinement): the ENGINE layer samples-and-DISCARDS frames (lowers
+  effective fps; cannot produce ghosting), while the MODEL layer
+  FUSES adjacent survivors pairwise (superposition; the only
+  mechanism that can produce a composite glyph like "90") — so the
+  null hypothesis is licensed by the fusion layer specifically.
+  **Discriminator RUN, fusion CONFIRMED (2026-09-02, vllm-mlx
+  session; raw outputs archived at
+  `runs/f33/vllm_mlx_discriminator/`) — with each line's actual
+  discriminating power stated after a same-day correction:** (a)
+  token arithmetic (model-output-free) establishes the MERGE FACTOR
+  IS 2 and excludes no-merge (16f × 230,400 px / 2048 → predicted
+  1,800, measured 1,800; no-merge predicts 3,600) — but it does NOT
+  discriminate fusion from discard: 8 survivors billed at the still
+  rate also give exactly 1,800 (the halved count and doubled rate
+  cancel; the vllm-mlx session caught its own overstatement here
+  before citation). (b) THE DISCRIMINATING EVIDENCE, which leads:
+  unprompted composite reports with an opacity relation whose
+  dominance direction ALTERNATES by slot ("a '1', white, bright,
+  overlaid on a '2', grayish"; next slot gray-on-white), under a
+  neutral prompt, identical across 3 temp-0 runs and two clip
+  lengths — discard cannot show a second digit at all, and
+  text-level merging cannot produce a transparency relation, let
+  alone an alternating one (the objection was raised and withdrawn
+  on exactly this evidence). So the fusion conclusion DOES rest on
+  model output — strong output, honestly labeled. (c) pair
+  boundaries stable at (1,2)(3,4)(5,6)(7,8) → stimulus rule: put the
+  signal on the ODD frame of each pair.
+  **Odd frame counts are ENGINE-SPECIFIC — the engines differ in the
+  DIRECTION they resolve an odd tail, not in whether they keep it
+  (final framing, both sessions):** MLX rounds DOWN
+  (`frame_factor=2` truncates at the sampler — source AND
+  measurement, exact to the token: 15f → 14 sampled, 9f → 8):
+  CONFIRMED. llama.cpp rounds UP (ceiling at mtmd.cpp:210–226 plus
+  singleton grouping at 1195–1215; no discard path exists):
+  SOURCE-CONFIRMED TWICE, behaviorally unverified. Falsifiable
+  cross-engine prediction on record: the same 15-frame clip yields 7
+  slots on MLX (measured) and 8 on llama.cpp (predicted) — one slot
+  apart, opposite directions, identical input.
+  Our Amendment-D pilot's 7f == 6f byte-identical tokens is
+  UNDER-DETERMINED rather than contradicting: pre-mtmd fps
+  resampling likely evened the count before grouping, meaning the
+  odd case was never actually tested — the same inference trap that
+  produced the earlier "orphan discarded" reading from a 4f/5f
+  billing identity. Discriminating experiment (a numbered odd-count
+  clip with -lv debug on that stack) is registered, not yet run. **The null
+  hypothesis is NARROWED (counterexample accepted):** fusing
+  near-identical frames produces no ghost, yet a verified-static
+  clip still drew "jitters, tilts and translates" under a
+  motion-presupposing prompt — so there are TWO registered sources
+  of fabricated motion: fusion artifacts (moving content only) and
+  prompt presupposition (any content). The video legs' separating
+  design is the 2×2: static/moving × neutral/presupposing prompts.
+  Also measured on vllm-mlx: temp-0 is BYTE-IDENTICAL 3/3 at both
+  frame counts including frame sampling (0.2 varies narrative, same
+  substance, n=2); self-reported frame counts are unreliably wrong
+  in a non-constant way (never ask); and `enable_thinking:false`
+  suppresses the think TAGS, not the thinking-style narration in
+  content — a fresh declared-vs-effective instance for any harness
+  that strips reasoning by tag. n: 3 runs each at 16f/8f, 1 each at
+  15f/9f. Protocol consequences: never ask the model how many
+  frames it received; classify pairing-shaped motion claims
+  separately from trajectory claims; the numbered counter-clip is
+  the calibration instrument of record.*
+- **What does NOT change on Muse, and that is informative too:**
+  `push.toppled` Brier sits at 0.250 (essence) / 0.350 (vision) —
+  chance-to-worse-than-chance — identically before and after the
+  correction. The push probe never touched the buggy `ground_euler`
+  path, so its truth was never wrong; Muse's topple-calibration
+  weakness (diagnosed same-day, pre-fix, as the one axis where it
+  underperformed AgentWorld's F11 result) is real behavior, not an
+  instrument artifact — the earlier hedging DIAGNOSIS was correct,
+  only the broken TARGET it was hedging against turned out to be
+  wrong. Confirms the fix is surgical: fields outside the tilt path
+  are bit-for-bit unaffected. (2026-09-02, verified via the corrected
+  and pre-correction `transfer_report.json` pair directly.)
+- **Live confirmation, one fresh never-cached cell (2026-09-02):**
+  `train_000000`/tilt against live Muse on the corrected world (not
+  replayed from cache) — 293s wall, parsed clean, `toppled` 1.0 vs
+  truth 1.0, `final_tilt_deg` 87° vs truth 110° (right regime, not
+  exact), `slid_distance`/`settle_time` underestimated but correct
+  order of magnitude. The fix is now verified three ways: offline
+  across two architectures (llama.cpp/MLX Qwen3.8-27B and Muse-Glimmer
+  via oMLX), in the regenerated canonical reports, and live on an
+  uncached request.
+
+*(Original 2026-08-21 entry follows, uncorrected, for the record.)*
+
+*(Run 2026-08-21 on the F33 apparatus, as an unregistered-but-controlled
+offshoot: the user cancelled the F33 llama.cpp legs mid-run (26/60
+essence cells cached, resumable) and directed a pivot to MLX serving
+with reasoning limited "out of the gate" — the overthinking concern
+that became this finding's design. Model: the same Qwen3.8-27B in
+mlx-community's native affine 4-bit via `mlx_vlm.server` (llama.cpp arm
+= GGUF Q4_K_M), so every cross-arm comparison measures **stack+quant
+jointly** — disclosed on all of it. Scored by the frozen F11 scorer on
+pm_big's 20-scene test split against exact MuJoCo keys. Single model,
+small n throughout; every decision, threshold, and mid-run correction
+is timestamped in `runs/f33/mlx/gates.json`. F33 proper (video legs,
+MME, frozen H1–H4) remains in flight and is untouched by this entry.)*
+
+**The dose ladder** (identical 6 cells, scenes ×3 probes, frozen scorer;
+"reasoned" = the F33 Amendment-1 medium condition):
+
+| condition | MSE | gain vs train-mean | drop | tilt | push |
+|---|---|---|---|---|---|
+| unbounded medium (llama.cpp, 10.8–14k tok/cell) | 1.2849 | 0.035× | 0.076 | 3.765 | 0.014 |
+| bounded medium 6,144 (MLX) | 1.1876 | 0.038× | 0.076 | 3.481 | 0.006 |
+| **direct no-think (MLX)** | **0.1062** | 0.420× | 0.017 | 0.212 | 0.089 |
+
+Full-split direct (60 cells): MSE 0.1215, gain 0.42×, zero parse
+failures. **Nobody beats predict-train-mean** (all gains < 1) — a
+ceiling on every claim here.
+
+- **The gap is real, not a constant-truth artifact (objection tested,
+  refuted).** Class-A fields (truth ~constant across the split — all
+  four drop fields; every drop scene is episode-censored, settle_time
+  = 1.984 on 9/9) contribute **mse 0.0000 in BOTH conditions** — the
+  chains tracked the disclosed 2-s window too. The entire gap lives in
+  Class B where truth varies: **1.5872 vs 0.1312 = 12.1×**.
+- **The discrimination split — reasoning extracts signal and then
+  ruins it.** Spearman(pred, truth) per probe.field: reasoned
+  tilt.settle_time **+1.00** (genuinely composite: the best
+  one-given-parameter sort reaches only 0.67), tilt.slid +0.89
+  (~reducible: restitution alone 0.85), drop.n_bounces +0.58, vs
+  direct ≈ 0.00 on the same fields (near-constant answers discriminate
+  nothing; direct correlates only where the answer is readable off
+  given geometry, max_height +0.84/+0.93 in both conditions). So the
+  chains **rank scenes correctly and overshoot magnitudes** (tilt MSE
+  3.5–3.8); the flat prior wins MSE by never being loudly wrong.
+  **Neither condition understands; they fail complementarily.**
+- **Push inverts — the mechanism in one probe.** Reasoned push MSE
+  0.006–0.014 (toppled Brier 0.00) vs direct 0.089 (Brier 0.25):
+  reasoning **helps exactly where the outcome is conditional** (does
+  the impulse cross the topple threshold?) and hurts where priors
+  suffice. Same run, same model, opposite sign.
+- **The 2×2 control isolates the cause (prompt vs process).** Direct
+  answers are probe-generic (drop always settle 2.0 / 3 bounces / no
+  slide) — but under a format-only prompt (JSON-only clause kept, the
+  reasoning-command clause dropped) with bounded thinking restored,
+  the same cells **differentiate** (n_bounces 9/5/13 vs constant
+  3/3/3), with output shape held constant (~93 content tokens in both
+  conditions — the control side derived as total minus the bound
+  budget, corroborated by client-side think-space estimates; direct
+  side measured, 86–90 across all 60 cells). And the control's values nearly equal the
+  original-prompt Stage-1 cells (043: 9 bounces both; 054: 5 both):
+  **prompt wording is ~inert given reasoning; ± reasoning owns the
+  outcome in both directions.** (The no-think "relocation" hazard is
+  part of the record: under the *original* prompt — which commands
+  step-by-step reasoning — disabling the thinking channel just moved
+  the chain into content; the no-computation condition required the
+  prompt change, disclosed.)
+- **The overthinking rate is quantified:** the 6,144 thinking budget
+  bound on **8 of 9** bounded-thinking cells (a prompt-neutral
+  sampling-time cap; per-request `thinking_budget`), and capping cost
+  nothing — bounded ≥ unbounded on every probe.
+- **Cross-stack confirmation (apparatus ruled out):** the xhigh
+  empty-content starvation from the F33 pilot **reproduces on MLX** —
+  different engine, different quantization, same pathology; the
+  effort ladder differentiates cleanly (low 1,743 / medium 2,401 /
+  xhigh starved at cap). Model-level, not llama.cpp.
+
+**Bearing on the program's question** (does video training capture an
+object's post-perturbation essence?): what the weights answer
+*instantly* is coarse and safe — probe-level defaults plus
+geometry read-offs, no per-material discrimination even with the
+material numbers given in text. The dynamics knowledge that exists
+surfaces only through reasoning, as correct *ordering* that the model
+cannot calibrate into magnitudes. Both halves bound below
+predict-the-mean. The F33 anchored comparison (vs AgentWorld etc.)
+stays open — the anchors reasoned unbounded, so a thinking-off anchor
+point is registered as the missing control before any cross-model
+priors claim.
+
+**Caveats, stated at strength:** single model, single seed-equivalent;
+dose-ladder n = 6 cells (the 12.1× rests on 34 field-errors per
+condition), correlations on 8–9 scenes; control n = 3 (clean branch —
+differentiation observed despite reasoning truncated at the budget on
+all three); stack+quant confounded across arms by design (drop MSE
+identical to 3 decimals across arms suggests the confound is small,
+but it is not zero); MSE structurally favors low-variance predictors
+(hence the discrimination co-report); "12× worse" is condition-level
+(direct-no-think required the prompt change the 2×2 licenses).
+
+*Server-side figures independently fact-checked against the monitoring
+session's llama.cpp/mlx logs (2026-08-21): all confirmed exactly, with
+one range correction incorporated (direct-cell tokens 86–90, not
+87–90 — the narrower range came from a partial live view, the day's
+recurring hazard, caught by the full-log read) and one attribution
+tightened (per-cell token figures are COMPLETION tokens server-side;
+reasoning/content splits are client-side estimates).*
+
+**Instrument flag (2026-08-21, post-entry), DIAGNOSED same night — a
+radians/degrees unit bug: the tilt ramp has been ~0.349°, not 20°,
+for the entire project history.** `run_tilt`
+(`generate_mujoco.py:386`) computes `angle = math.radians(20)` and
+passes it into `ground_euler`, which lands in the MJCF `euler`
+attribute — which MuJoCo reads in DEGREES (no
+`<compiler angle="radian"/>` exists in either template). Verified
+three ways: the built scene's ground-plane normal measures exactly
+0.3491° (= radians(20) reread as degrees; passing 20.0 gives a true
+20.0000°); rolling acceleration is mass-independent (peer's
+density-swap test, ruling out contact compliance); measured 0.0417
+m/s² matches (5/7)·g·sin(0.349°) = 0.0427, not the 20° value 2.397.
+*(An earlier version of this flag attributed the anomaly to
+restitution-derived contact compliance — WRONG, retracted: the
+"deceleration while sliding" that seemed unphysical on a 20° incline
+is ordinary friction on the actual ~0.35° incline. Diagnosis credit:
+the peer session's unit trace.)*
+
+**Consequence, sharper than the undiagnosed version: every tilt cell
+in every LLM run tells the model "the ground plane is inclined 20.0
+degrees" (`action_text`) and scores it against a 0.349° world.** The
+task misdescribes the world to the model, and the video_percep tilt
+clips SHOW the near-flat scene while their own text says 20° — an
+internal contradiction in the video prompts. For this entry: tilt
+magnitude error (reasoned 3.5–3.8) is substantially the apparatus's
+misdescription, not model miscalibration — the chains computed
+20°-ramp physics as instructed; the direct condition's near-zero
+defaults accidentally matched the near-flat truth. The tilt
+MAGNITUDE rows of the dose ladder are therefore VOID as
+model-capability measurements (the 12.1× Class-B aggregate includes
+them; recomputed exclusions await the fix decision); ordinal claims
+survive only as within-world consistency. The cross-model "tilt is
+hardest" pattern (F11 → F34) is now largely explained by the bug.
+Fix and regeneration scope (every MuJoCo dataset and answer key the
+project has produced) is an ADC-level decision — flagged, not
+fixed.
+
+*Addendum (same night, three-session audit): the identical pattern
+exists in the GSO/mesh generator (`generate_gso.py:313`, same `euler`
+sink) — regeneration scope, if chosen, covers primitive AND GSO/ABO
+tilt data. Push is CLEAN in both generators (its `radians(azimuth)`
+feeds Python's cos/sin, never MJCF). Fix guidance on record: drop
+`math.radians()` at the two call sites, passing degrees as MuJoCo's
+default expects — do NOT add `<compiler angle="radian"/>`, which
+would flip every angular attribute in the template at once. And the
+sharpest framing of the stakes: this may not merely rescale tilt
+error, it may INVERT it — a model predicting meters of travel on the
+stated 20° ramp was answering the question asked correctly, so
+"catastrophic failure on ramp contact" (F11 lineage) could become
+"correct physics scored against a broken instrument" on re-read
+against the delivered geometry.*
+
+Reproduce: `runs/f33/mlx/gates.json` (complete timestamped decision
+record), `runs/f33/mlx/run_stage1.sh` (bounded parity cells),
+`scripts/eval_llm_transfer.py --extra-body '{"enable_thinking":
+false}' --system-prompt-file runs/f33/mlx/nothink_system_prompt.txt`
+(direct condition), `runs/f33/mlx/control_2x2_probe.py` (control),
+plus the Class-A/B, Spearman, and censoring one-shots recorded in the
+session log. Server: `mlx_vlm.server --model
+mlx-community/Qwen3.8-27B-4bit` (wire facts in gates.json; top-level
+`enable_thinking`/`reasoning_effort`/`thinking_budget`, silent-ignore
+on nested forms).
+
 ---
 
 ## 4. Next steps — the gap is NOT intrinsic; the fork is resolved

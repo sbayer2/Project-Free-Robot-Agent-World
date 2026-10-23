@@ -383,7 +383,11 @@ def run_drop(shape: str, material: M.Material, spec: P.DropSpec,
 def run_tilt(shape: str, material: M.Material, spec: P.TiltSpec,
              physics_cfg: PhysicsConfig) -> List[Dict]:
     _require_mujoco()
-    angle = math.radians(spec.angle_deg)
+    # MJCF `euler` is DEGREES by default (no <compiler angle="radian"/> in the
+    # template), so ground_euler must receive degrees. Passing radians here
+    # made the ramp ~0.349 deg instead of 20 for the project's entire history
+    # (docs/FINDINGS.md, F34 instrument flag; scripts/repro_tilt_bug.py).
+    angle = spec.angle_deg
     z = half_height(shape) + 0.05
     model = mujoco.MjModel.from_xml_string(
         build_mjcf(shape, material, object_z=z, ground_euler=(angle, 0.0, 0.0))
