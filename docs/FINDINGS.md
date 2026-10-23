@@ -2449,6 +2449,14 @@ on nested forms).
 
 ### F31 pilot — the recorded probe paths carry friction the 21 summaries discard; the push probe saturates; and the cloud is certified as a second training site
 
+> **Instrument flag (dated 2026-10-23, after PR #45 / F34):** this entry was
+> run on worlds generated BEFORE the tilt-ramp fix, so the "tilt" probe here
+> is a 0.349° ramp, not 20°. Drop and push are unaffected; every tilt-derived
+> number below (tilt position path gain 2.70, the friction read-back from the
+> trajectory, the tilt half of the target) is under re-measurement on
+> regenerated worlds. Until that lands, treat the friction claims as
+> provisional and F31a as not closed.
+
 *(Run 2026-09-26, the program's first session on cloud compute: 4 vCPU,
 15 GB, no GPU, osmesa rendering. **Exploratory, not preregistered** — its
 job is to set F31's bars before a model exists. The one frozen rule in it,
@@ -2521,6 +2529,14 @@ pseudomarble.models.train_torch --data data/pm_f31_loud --epochs 50 --lr
 ---
 
 ### F31a — trajectory supervision does not put friction into the latent (NULL); it delays the behavior head's escape by ~12 epochs instead
+
+> **Instrument flag (dated 2026-10-23, after PR #45 / F34):** this entry was
+> run on worlds generated BEFORE the tilt-ramp fix, so the "tilt" probe here
+> is a 0.349° ramp, not 20°. Drop and push are unaffected; every tilt-derived
+> number below (tilt position path gain 2.70, the friction read-back from the
+> trajectory, the tilt half of the target) is under re-measurement on
+> regenerated worlds. Until that lands, treat the friction claims as
+> provisional and F31a as not closed.
 
 *(Run 2026-09-26 in the cloud session, all torch; written up 2026-10-23
 after a container restart; every run and the verdict file had completed
