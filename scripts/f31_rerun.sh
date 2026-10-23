@@ -27,6 +27,23 @@ measure() {  # arm world
     --out $ROOT/$1.json | tail -7
 }
 
+# Step mode: run one unit per invocation, so each call fits a short
+# background-job limit. Units: `run <name> <world> <seed> [traj]`,
+# `stage-a-report`, `stage-b-report`.
+if [ "${1:-}" = "run" ]; then
+  if [ "${5:-}" = "traj" ]; then run "$2" "$3" "$4" $TRAJ; else run "$2" "$3" "$4"; fi
+  exit $?
+elif [ "${1:-}" = "stage-a-report" ]; then
+  measure loud_joint loud
+  $PY scripts/f31_coreport.py --root $ROOT --broken runs/f31 --stage-a
+  exit $?
+elif [ "${1:-}" = "stage-b-report" ]; then
+  measure loud_joint loud; measure loud_traj loud; measure ctrl_joint ctrl; measure ctrl_traj ctrl
+  $PY scripts/f31_verdicts.py --root $ROOT
+  $PY scripts/f31_coreport.py --root $ROOT --broken runs/f31
+  exit $?
+fi
+
 echo "== stage A =="
 for s in 0 1 2 3 4; do run loud_joint loud $s; done
 measure loud_joint loud
