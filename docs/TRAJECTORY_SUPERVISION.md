@@ -133,3 +133,14 @@ loud-joint seeds 3–4, and any ctrl model.
 Reproduce: see §3 for the runs; then `scripts/f31_measure.py` per arm to
 `runs/f31/{loud_joint,loud_traj,ctrl_joint,ctrl_traj}.json`, then
 `python scripts/f31_verdicts.py`.
+
+## 9. Result (runs 2026-09-26; recorded 2026-10-23)
+
+Run as frozen; `runs/f31/f31_verdicts.json`. Gates: G1 PASS (PR 40.6–89.2),
+G2 PASS (ctrl friction z R² −0.165 to −0.065). **H1 NULL** (Δ +0.040,
+t 1.05). **H2 INCONCLUSIVE** (Δ −0.99, t −1.30), driven by loud-traj seed 4,
+which never left predict-the-mean (gain 1.06) despite PR 49. P1–P4 all
+correct. Post-hoc observations (escape delayed by ~12 epochs in every traj
+seed; friction seed sd 0.082 → 0.027; the PR gate does not catch
+non-escape) are recorded in FINDINGS, "F31a". Consequence per §7: F31b on
+this world is not worth building; the next lever is legibility.

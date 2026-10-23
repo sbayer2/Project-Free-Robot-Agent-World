@@ -2520,6 +2520,70 @@ pseudomarble.models.train_torch --data data/pm_f31_loud --epochs 50 --lr
 
 ---
 
+### F31a — trajectory supervision does not put friction into the latent (NULL); it delays the behavior head's escape by ~12 epochs instead
+
+*(Run 2026-09-26 in the cloud session, all torch; written up 2026-10-23
+after a container restart; every run and the verdict file had completed
+and survived on disk. Preregistered in `docs/TRAJECTORY_SUPERVISION.md`
+with `scripts/f31_verdicts.py` frozen before any trajectory-supervised
+model existed. Both gates passed (G1 PR 40.6–89.2; G2 ctrl friction z R²
+−0.165 to −0.065, all < 0.10). Graded: **P1 correct** (H1 NULL),
+**P2 correct** (H2 INCONCLUSIVE), **P3 correct** (G2 pass), **P4 correct**
+(density z R² 0.652 → 0.641, no rise).)*
+
+The question F31a asked is the precondition for any dynamics-head unity
+test: does supervising z with the recorded drop + tilt position paths (the
+F31 pilot's predictable content; weight 7.0, set by an equal-starting-loss
+rule) change **what z contains**, above all friction?
+
+| loud world (r = 0.992) | friction z R² | held-out gain | escape epoch |
+|---|---|---|---|
+| joint, seeds 0–4 | 0.241 / 0.379 / 0.168 / 0.307 / 0.326 (mean 0.284, sd 0.082) | 4.89 / 4.62 / 5.55 / 5.33 / 4.56 | 25 / 33 / 27 / 26 / 29 |
+| + trajectory head, seeds 0–4 | 0.297 / 0.359 / 0.302 / 0.322 / 0.344 (mean 0.325, sd 0.027) | 4.85 / 4.59 / 4.71 / 4.78 / **1.06** | 40 / 43 / 39 / 37 / **never** |
+
+- **H1 → NULL** (Δ friction +0.040, t 1.05; |Δ| < 0.05). By the frozen
+  consequence: supervision does not add material content that the pixels
+  barely carry (linear pixel ceiling 0.167; joint z already at 0.28).
+  **F31b on this world would be measuring nothing.** The next lever is
+  legibility (the noted 256 px oblique regeneration), not targets.
+  The prediction behind P1 ("supervision cannot manufacture legibility")
+  is supported.
+- **H2 → INCONCLUSIVE** (Δ gain −0.99, t −1.30). Driven entirely by seed
+  4, below.
+- **Post-hoc, labeled: the trajectory head delays escape.** Every
+  trajectory seed left the predict-the-mean plateau later than every
+  joint seed: escaped seeds average epoch 39.8 vs 28.0 (+11.8, Welch t
+  6.23 on the four that escaped). Seed 4 never escaped in 50 epochs:
+  both heads stayed at ≈1.0 (behavior 1.06, trajectory 1.08). Among the
+  escaped seeds the behavior gain is slightly lower (4.73 vs 4.99, t
+  −1.27). A second dense target postpones the breakout rather than
+  speeding it, and the 50-epoch recipe then truncates. This is the
+  parity-run escape thread (`docs/CLOUD_COMPUTE.md` §5) with a lever on it.
+- **Post-hoc, labeled: friction becomes more consistent, not higher.**
+  Seed sd falls threefold (0.082 → 0.027) with the mean nearly unchanged.
+  The head seems to pin how much friction z keeps without raising the
+  ceiling. Descriptive at n = 5.
+- **Instrument note, with reach across the program: seed 4 had a healthy
+  PR (49) and learned nothing.** The F10/F12 PR gate catches collapse, a
+  constant z, but not non-escape, where z varies and the heads ignore it.
+  Future preregistrations that read gains should add an escape gate (for
+  example, held-out gain ≥ 2 by the final epoch) beside the PR gate, or
+  report non-escapers separately rather than averaging them in.
+
+**What this closes.** The F31 line on this world ends at its precondition.
+Richer, world-referencing supervision does not change what the latent
+holds about friction, because the pixels hardly carry it. What it changes
+is *when* learning happens. Together with F21 (fidelity levers move
+nothing) and F28 (roughness VOID-by-legibility), the binding constraint
+for friction is legibility at 128 px. The two open levers are the 256 px
+oblique world and a graded-push probe for density (F31 pilot §3).
+
+Reproduce: the run chain in `docs/TRAJECTORY_SUPERVISION.md` §3, then
+`python scripts/f31_measure.py` per arm and `python scripts/f31_verdicts.py
+--root runs/f31`.
+
+---
+
 ## 4. Next steps — the gap is NOT intrinsic; the fork is resolved
 
 *(Rewritten 2026-07-30 after F22a. The previous version concluded the
@@ -2585,6 +2649,6 @@ Reproduce F8: `python tests/batch_probe_stability.py`.
 
 ---
 
-*Tests: 294 across 38 suites, all passing (2 skipped with the cloud deps installed); core imports with no
+*Tests: 299 across 39 suites, all passing (2 skipped with the cloud deps installed); core imports with no
 mujoco/bpy/trimesh/numpy/mlx/torch. Personal research; not affiliated with World
 Labs.*
