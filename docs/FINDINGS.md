@@ -2449,13 +2449,26 @@ on nested forms).
 
 ### F31 pilot — the recorded probe paths carry friction the 21 summaries discard; the push probe saturates; and the cloud is certified as a second training site
 
-> **Instrument flag (dated 2026-10-23, after PR #45 / F34):** this entry was
-> run on worlds generated BEFORE the tilt-ramp fix, so the "tilt" probe here
-> is a 0.349° ramp, not 20°. Drop and push are unaffected; every tilt-derived
-> number below (tilt position path gain 2.70, the friction read-back from the
-> trajectory, the tilt half of the target) is under re-measurement on
-> regenerated worlds. Until that lands, treat the friction claims as
-> provisional and F31a as not closed.
+> **CORRECTED 2026-10-23 (after PR #45 / F34): the headline below was mostly
+> the tilt bug.** This entry ran on worlds generated before the ramp fix, so
+> "tilt" was a 0.349° ramp. Regenerated on the fixed 20° ramp
+> (`data/pm_f31fix_*`; drop, push, friction and renders byte-identical, only
+> tilt changes; median tilt slide 4 mm → 40 cm, corr(slide, friction) −0.37 →
+> −0.79), loud world, iid split:
+>
+> | | buggy ramp | fixed ramp |
+> |---|---|---|
+> | friction R² from the 21 summaries | 0.340 | **0.832** |
+> | friction R² from the trajectory | 0.835 | 0.918 |
+> | tilt position block, forward gain | 2.70 | **16.16** |
+>
+> So "the summaries throw friction away" (finding 1) was the broken ramp
+> making most boxes stick. On the real ramp the summaries already carry
+> friction; the trajectory's extra is ≈ +0.09. Findings 2 (the tilt position
+> path is predictable content, now overwhelmingly so) and 3 (push saturation,
+> tilt-independent) stand; finding 4 (parity) used tilt only inside the
+> behavior target and stands as an apparatus result, with the caveat that it
+> was run on the pre-fix world.
 
 *(Run 2026-09-26, the program's first session on cloud compute: 4 vCPU,
 15 GB, no GPU, osmesa rendering. **Exploratory, not preregistered** — its
@@ -2530,13 +2543,15 @@ pseudomarble.models.train_torch --data data/pm_f31_loud --epochs 50 --lr
 
 ### F31a — trajectory supervision does not put friction into the latent (NULL); it delays the behavior head's escape by ~12 epochs instead
 
-> **Instrument flag (dated 2026-10-23, after PR #45 / F34):** this entry was
-> run on worlds generated BEFORE the tilt-ramp fix, so the "tilt" probe here
-> is a 0.349° ramp, not 20°. Drop and push are unaffected; every tilt-derived
-> number below (tilt position path gain 2.70, the friction read-back from the
-> trajectory, the tilt half of the target) is under re-measurement on
-> regenerated worlds. Until that lands, treat the friction claims as
-> provisional and F31a as not closed.
+> **Instrument flag (dated 2026-10-23, after PR #45 / F34): NOT CLOSED.** All
+> 16 runs used pre-fix worlds (0.349° ramp). H1 read friction in z, which is
+> bounded by the pixels, and the renders are identical before and after the
+> fix (linear pixel ceiling unchanged at 0.167), so the "illegible at 128 px"
+> reasoning still applies. But on the fixed ramp the trajectory target carries
+> far more friction (tilt block gain 2.70 → 16.16), and so does the behavior
+> head's own target (summary friction R² 0.34 → 0.83). Both arms' supervision
+> changed. F31a's NULL therefore cannot be read as closed until it is rerun on
+> `data/pm_f31fix_*` under the same frozen rules.
 
 *(Run 2026-09-26 in the cloud session, all torch; written up 2026-10-23
 after a container restart; every run and the verdict file had completed

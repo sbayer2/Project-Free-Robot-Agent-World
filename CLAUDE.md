@@ -109,9 +109,12 @@ baseline, `docs/VIDEO_BASELINE.md`) in flight; F11 anchors need
 re-derivation against corrected keys. **PR #44** (`claude/beautiful-dirac-xdzmii`,
 first cloud-compute session, 4 vCPU / 15 GB / no GPU; setup in
 `docs/CLOUD_COMPUTE.md`): torch↔MLX parity PASSED (torch 5.02 vs MLX 5.67,
-−11.5 % disclosed; tilt-independent enough to stand, but run on pre-fix
-worlds); the F31 pilot and **F31a (preregistered, NULL)** were run on the
-BUGGY ramp and are being re-checked on fixed worlds before F31a is closed.
+−11.5 % disclosed; apparatus result, run on pre-fix worlds). Re-measured
+on the fixed ramp (`data/pm_f31fix_*`): the F31 pilot's "summaries discard
+friction" headline was mostly the bug (summary friction R² 0.34 → 0.83;
+trajectory 0.84 → 0.92; tilt block gain 2.70 → 16.16). **F31a
+(preregistered, NULL on pre-fix worlds) is NOT closed**: rerun on the fixed
+worlds under the same frozen rules is pending.
 F31a observations: trajectory supervision delays escape ~12 epochs; the PR
 gate misses non-escape (add an escape gate to future preregs). Standing
 headline from F28/F29: unity has no internal and no measurable operational
