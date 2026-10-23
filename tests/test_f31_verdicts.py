@@ -42,3 +42,17 @@ def test_h1_rises_null_and_gate_withholding():
 def test_h2_falls():
     v = V.verdicts(_reps([0.25, 0.26, 0.24], loud_traj_g=(4.0, 4.1, 3.9)))
     assert v["H2_gain"]["verdict"] == "FALLS"
+
+
+def test_coreport_c1_and_escape_split():
+    import f31_coreport as C
+
+    broken = _rep([0.24, 0.38, 0.17, 0.31, 0.33], [5, 5, 5, 5, 5])
+    risen = _rep([0.50, 0.52, 0.48, 0.51, 0.49], [5, 5, 5, 5, 5])
+    assert C.c1(risen, broken)["verdict"] == "RISES"
+    assert C.c1(broken, broken)["verdict"] == "NULL"
+    kept, dropped = C.split_escape(_rep([0.3, 0.3, 0.3], [4.8, 1.06, 5.0]))
+    assert dropped == ["s1"] and len(kept["runs"]) == 2
+    eo = C.escaped_only(_reps([0.40, 0.41, 0.39], loud_traj_g=(5.0, 1.0, 4.9)))
+    assert eo["non_escapers"]["loud_traj"] == ["s1"]
+    assert eo["H1_friction"]["n"] == [3, 2]

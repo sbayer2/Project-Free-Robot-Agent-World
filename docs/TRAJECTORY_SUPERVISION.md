@@ -144,3 +144,62 @@ correct. Post-hoc observations (escape delayed by ~12 epochs in every traj
 seed; friction seed sd 0.082 → 0.027; the PR gate does not catch
 non-escape) are recorded in FINDINGS, "F31a". Consequence per §7: F31b on
 this world is not worth building; the next lever is legibility.
+
+## 10. Amendment 1 (2026-10-23, before any fixed-world run): rerun on the repaired ramp
+
+**Why.** PR #45 (F34) found the tilt ramp ran at 0.349°, not 20°. Every run
+in §9 used pre-fix worlds. On the fixed ramp (`data/pm_f31fix_*`, same seed
+and flags; drop, push, friction and renders byte-identical, only tilt
+changes) both arms' supervision carries far more friction. Friction R² from
+the 21 summaries is 0.34 → 0.83, and the tilt position block gain is 2.70 →
+16.16. §9's NULL therefore cannot separate two explanations:
+(a) **pixel limit**: the renders barely show friction (linear pixel
+ceiling 0.167; the appearance *parameters* determine friction at 5-fold R²
+0.998, so the loss is all in rendering legibility at 128 px), versus
+(b) **weak target**: on the broken ramp neither head's target asked for
+much friction.
+
+**Unchanged (every frozen rule in §§3–6 holds):** arms, seeds, recipe,
+the trajectory head (weight 7.0, drop+tilt positions, 16 frames), gates G1
+and G2, H1 and H2 thresholds, and `scripts/f31_verdicts.py` as frozen. The
+weight rule is not re-derived on the fixed world; 7.0 stays.
+
+**Data.** `data/pm_f31fix_{loud,ctrl}`; runs under `runs/f31fix/`.
+
+**Staging.** Stage A: loud-joint seeds 0–4, then report. Stage B:
+loud-traj seeds 0–4, then ctrl-joint and ctrl-traj seeds 0–2.
+
+**New registered co-report C1 (the pixel-limit-vs-weak-target test).**
+Δ_C1 = mean friction z R²(loud-joint, fixed world, 5 seeds) − 0.284 (the
+§9 loud-joint mean on the broken world), with Welch t against those 5 §9
+values, classified on H1's thresholds: RISES (Δ ≥ +0.10 and t ≥ 2.5), NULL
+(|Δ| < 0.05), FALLS, or INCONCLUSIVE.
+- C1 RISES → (b) was binding: a target that asks for friction pulls more
+  of it out of the same pixels, so §9's NULL was partly the broken ramp.
+- C1 NULL → (a) is binding: even a strongly friction-bearing behavior
+  target leaves z's friction where the pixels put it.
+
+**Non-escapers reported separately.** A run is a non-escaper if its final
+held-out gain is < 2.0 (§4's escape threshold). H1 and H2 are read as
+frozen over all seeds (primary). They are also reported over escaped seeds
+only (secondary, labeled), with each non-escaper listed by seed. A
+non-escaper's friction z R² is still reported.
+
+**Predictions (stated now, at real odds):**
+- **P5 (C1): NULL or INCONCLUSIVE, 60 / 40 against RISES.** The pixel
+  legibility gap (0.998 in the parameters vs 0.167 linearly in the
+  pixels) looks like the binding constraint. But joint z already exceeded
+  the linear pixel ceiling (0.284), so some nonlinearly readable friction
+  exists, and a stronger target could pull more of it.
+- **P6 (H1 on fixed worlds): NULL or INCONCLUSIVE, 65 / 35**, unchanged
+  from P1. The trajectory target's extra friction (0.92 vs 0.83 from
+  summaries) is small once the behavior target already carries it.
+- **P7:** the trajectory arm's escape is still delayed relative to joint
+  (descriptive, 60 / 40).
+
+**Contamination disclosure.** Seen before this amendment: every §9
+number; the fixed-vs-broken oracle table above; the appearance-parameter
+ceiling (0.998). Not seen: any model trained on a fixed world.
+
+Reproduce: `scripts/f31_rerun.sh`, then `python scripts/f31_coreport.py
+--root runs/f31fix --broken runs/f31`.
