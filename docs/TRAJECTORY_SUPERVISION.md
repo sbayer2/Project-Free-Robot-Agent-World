@@ -203,3 +203,53 @@ ceiling (0.998). Not seen: any model trained on a fixed world.
 
 Reproduce: `scripts/f31_rerun.sh`, then `python scripts/f31_coreport.py
 --root runs/f31fix --broken runs/f31`.
+
+## 11. Amendment 2 (2026-10-24 01:2x UTC; before any ctrl-traj run had started)
+
+**Disclosure: H1 was read before G2.** The loud-traj arm was measured as
+soon as its five seeds finished, before any ctrl run completed:
+friction z R² 0.308 / 0.458 / 0.389 / 0.385 / 0.374 (mean 0.383) against
+loud-joint 0.236. That gives Δ +0.150, Welch t 3.36, df 6.8, 95 % CI
+[+0.044, +0.256]. It would read RISES if the gates pass, and **P6 would
+then be wrong** and must be reported as such at equal prominence. Only
+ctrl-joint seeds 0–2 had finished when this was written; no ctrl-traj
+run existed.
+
+**Unchanged:** every gate, bar and verdict rule in §§5 and 10, and
+`scripts/f31_verdicts.py`. The co-reports below are **descriptive only**.
+
+**(a) Leakage-adjusted difference.** Δ_L = (loud-traj − loud-joint) −
+(ctrl-traj − ctrl-joint) on mean friction z R², with SE = √(Σ var/n) over
+the four arms. If G2 passes and Δ_L stays ≥ +0.10, the RISES reading
+stands. If Δ_L shrinks toward 0, the loud difference was leakage: the head
+teaching z friction-correlated structure that the ctrl world shares.
+
+**(b) Held-out friction readout.** A ridge is fit on training-scene z and
+scored on the 20 held-out corner scenes, per run, in all four arms
+(`f31_measure.py`, `z_r2_heldout`). It is post hoc for the loud arms and is
+labelled that way. It guards against the 5-fold all-scene R² rewarding
+memorized training geometry.
+
+**(c) Target scale on the fixed world (measured before this amendment;
+data only, no model involved).** Predict-the-mean MSE on the loud train
+split:
+
+| | behavior (21) | trajectory (96, drop+tilt positions) | effective trajectory : behavior loss at w = 7.0 |
+|---|---|---|---|
+| broken world | 0.01662 | 0.00239 | 1.005 |
+| fixed world | 0.13741 | 0.37900 | **19.3** |
+
+The weight rule (§3) equalized the two heads' starting losses *on the
+broken world*. On the fixed world the trajectory head starts with about
+19× the behavior head's loss. So the fixed-world traj arm asks for the
+trajectory roughly 19 times harder than the joint arm asks for the
+summaries. **No claim of the form "how the target asks, not how much" can
+be made from this design.** A RISES is compatible with "more friction
+pressure" just as well as with "denser, time-resolved friction pressure".
+Separating the two would need a fixed-world arm at w ≈ 0.36 (equalized), not
+run here.
+
+**H2 is degenerate on the fixed world.** All arms, ctrl included, sit at
+held-out gain 1.03–1.05: the gain metric is saturated by the
+friction-driven tilt slide (79 % of target variance). H2 is reported as
+**metric saturation, not "no cost to prediction"**.

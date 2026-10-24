@@ -63,6 +63,25 @@ def escaped_only(reps: dict[str, dict]) -> dict:
     return out
 
 
+def leakage_adjusted(reps: dict[str, dict]) -> dict:
+    """Amendment 2 (a): D_L = (loud_traj - loud_joint) - (ctrl_traj - ctrl_joint)
+    on friction z R^2, SE = sqrt(sum of var/n over the four arms)."""
+    import math
+    f = {a: friction(reps[a]) for a in V.ARMS}
+    m = {a: st.mean(v) for a, v in f.items()}
+    d = (m["loud_traj"] - m["loud_joint"]) - (m["ctrl_traj"] - m["ctrl_joint"])
+    se = math.sqrt(sum(st.variance(v) / len(v) for v in f.values()))
+    return {"delta_L": d, "se": se, "t": d / se if se > 0 else float("inf"),
+            "loud_diff": m["loud_traj"] - m["loud_joint"],
+            "ctrl_diff": m["ctrl_traj"] - m["ctrl_joint"]}
+
+
+def heldout_readout(reps: dict[str, dict]) -> dict:
+    """Amendment 2 (b): per-run friction R^2 on the held-out corner scenes."""
+    return {a: {name: row.get("z_r2_heldout", {}).get("friction")
+                for name, row in reps[a]["runs"].items()} for a in V.ARMS}
+
+
 def load(root: str, arm: str) -> dict:
     return json.load(open(os.path.join(root, f"{arm}.json")))
 
@@ -85,6 +104,14 @@ def main() -> None:
         reps = {a: load(args.root, a) for a in V.ARMS}
         report["frozen"] = V.verdicts(reps)
         report["escaped_only"] = escaped_only(reps)
+        report["leakage_adjusted"] = leakage_adjusted(reps)
+        report["heldout_friction"] = heldout_readout(reps)
+        la = report["leakage_adjusted"]
+        print(f"[f31-A2a] D_L {la['delta_L']:+.4f} (loud {la['loud_diff']:+.4f} - ctrl "
+              f"{la['ctrl_diff']:+.4f}), SE {la['se']:.4f}, t {la['t']:+.2f}")
+        for a, runs in report["heldout_friction"].items():
+            print(f"[f31-A2b] held-out friction R2 {a}: "
+                  + " ".join(f"{v:+.3f}" if v is not None else "n/a" for v in runs.values()))
         for h in ("H1_friction", "H2_gain"):
             f, e = report["frozen"][h], report["escaped_only"][h]
             print(f"[f31] {h:12s} frozen (all seeds): {f['delta']:+.4f} t {f['t']:+.2f} "

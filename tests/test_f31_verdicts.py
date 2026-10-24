@@ -56,3 +56,24 @@ def test_coreport_c1_and_escape_split():
     eo = C.escaped_only(_reps([0.40, 0.41, 0.39], loud_traj_g=(5.0, 1.0, 4.9)))
     assert eo["non_escapers"]["loud_traj"] == ["s1"]
     assert eo["H1_friction"]["n"] == [3, 2]
+
+
+def test_amendment2_leakage_adjusted_delta():
+    import f31_coreport as C
+
+    reps = _reps([0.40, 0.41, 0.39], ctrl_f=(0.0, 0.01, -0.02))
+    la = C.leakage_adjusted(reps)
+    assert abs(la["delta_L"] - (0.40 - 0.25)) < 1e-9      # ctrl arms identical -> no adjustment
+    assert la["se"] > 0 and la["t"] > 0
+
+
+def test_amendment2_heldout_r2():
+    np = __import__("pytest").importorskip("numpy")
+    import f31_measure as M
+
+    rng = np.random.default_rng(0)
+    E = rng.uniform(size=(120, 3))
+    X = np.concatenate([E, rng.normal(size=(120, 2)) * 0.01], 1)
+    sp = np.array(["train"] * 100 + ["test"] * 20)
+    r = M.heldout_r2(X, E, sp)
+    assert min(r.values()) > 0.95

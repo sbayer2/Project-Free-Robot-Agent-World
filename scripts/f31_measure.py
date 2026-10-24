@@ -35,7 +35,20 @@ def load_world(data: str, max_views: int = 16):
     for b in ds.iter_batches(64, shuffle=False, with_images=True, max_views=max_views):
         imgs.append(np.asarray(b["images"], dtype=np.float32))
         ess.extend(b["essence"])
-    return np.concatenate(imgs), np.asarray(ess, dtype=float)
+    splits = np.array([s.split for s in ds.scenes])
+    return np.concatenate(imgs), np.asarray(ess, dtype=float), splits
+
+
+def heldout_r2(X: np.ndarray, E: np.ndarray, splits: np.ndarray) -> dict[str, float]:
+    """Amendment 2 (b): ridge fit on TRAINING-scene z, R^2 on the held-out
+    (corner) scenes, per essence axis."""
+    from oracle_ceiling import ridge_fit_predict
+    tr, te = splits == "train", splits == "test"
+    P = ridge_fit_predict(X[tr], E[tr], X[te])
+    ss = ((E[te] - P) ** 2).sum(0)
+    tot = ((E[te] - E[te].mean(0)) ** 2).sum(0)
+    r2 = 1.0 - ss / np.where(tot > 1e-12, tot, 1.0)
+    return {a: float(v) for a, v in zip(AXES, r2, strict=True)}
 
 
 def escape_epoch(history: list[dict], threshold: float = ESCAPE_GAIN) -> int | None:
@@ -79,7 +92,7 @@ def main() -> None:
     ap.add_argument("--out", default=None)
     args = ap.parse_args()
 
-    imgs, E = load_world(args.data)
+    imgs, E, splits = load_world(args.data)
     report = {"data": args.data, "pixel_ceiling_r2": r2_dict(pixel_features(imgs), E),
               "runs": {}}
     print(f"[f31-measure] {args.data}: {len(E)} scenes")
@@ -88,7 +101,8 @@ def main() -> None:
     for r in args.runs:
         z, meta = encode(r, imgs)
         final = meta["final"]
-        row = {"z_r2": r2_dict(z, E), "heldout_gain": final.get("heldout_gain"),
+        row = {"z_r2": r2_dict(z, E), "z_r2_heldout": heldout_r2(z, E, splits),
+               "heldout_gain": final.get("heldout_gain"),
                "heldout_trajectory_gain": final.get("heldout_trajectory_gain"),
                "latent_pr": final.get("latent_pr"),
                "escape_epoch": escape_epoch(meta["history"])}
