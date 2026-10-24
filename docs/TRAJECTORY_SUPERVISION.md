@@ -278,3 +278,22 @@ Consequence per §§7 and 10: on the repaired world, trajectory supervision
 does change what z contains (friction), and a friction-heavy summary target
 does not. F31b is worth designing, alongside an equal-starting-loss arm
 (w ≈ 0.36 on the fixed world) to separate density from strength.
+
+**Wording corrections to §12 (2026-10-24, no verdict changes):**
+- (a) clears +0.10 by only 0.011 (Δ_L +0.111, ≈95 % CI [+0.01, +0.21]). The
+  ctrl difference (+0.035) is about a quarter of the raw gap. (b) is
+  +0.239, Welch t 2.46, df 4.8, on 20 scenes, post hoc for the loud arms.
+  The leakage and held-out checks both point against memorization, but the
+  adjusted effect's lower bound is near zero.
+- **H1 RISES refutes §10's committed reading "C1 NULL → (a) pixel limit
+  binding".** The photos support at least 0.38 friction z R² (0.66 held
+  out), so the pixels are not the binding limit at the joint arm's 0.24.
+  C1 NULL only shows that the summary target does not extract that
+  friction.
+- The ramp fix moved the effective head-loss ratio from 1.0× to 19.3× as
+  well as the target's friction content, so the §9 → §12 reversal carries
+  the same content-versus-loudness confound as (c).
+- Source of §11's "79 %": `tilt.slid_distance` alone is 78.8 % of the
+  behavior target's variance on the `pm_f31fix_loud` train split
+  (2.273 / 2.886); the whole tilt block is 94 %. On the 5-shape `pm_big`
+  the same field is 63 %.

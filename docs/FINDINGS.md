@@ -2637,23 +2637,35 @@ run: leakage-adjusted Δ_L, held-out readout, target-scale disclosure).
 | held-out behavior gain | 1.045–1.051 (ctrl 1.034–1.035) | 1.040–1.044 (ctrl 1.043–1.046) |
 
 - **Gates:** G1 PASS (PR 43.7–98.8); G2 PASS (every ctrl friction z R²
-  < 0; no leakage).
+  < 0, so below the frozen 0.10 leakage bar).
 - **H1 → RISES:** Δ +0.147, t 3.31 (CI about [+0.04, +0.26]). On the repaired
   ramp, supervising z with the drop + tilt position paths raises how much
   friction z holds, well above the linear pixel ceiling (0.167).
 - **Co-report (a), leakage-adjusted:** Δ_L = (+0.147) − (+0.035) = **+0.111**,
-  SE 0.050, t 2.25. It stays at or above +0.10 after subtracting the ctrl
-  difference.
+  SE 0.050, t 2.25, ≈95 % CI **[+0.01, +0.21]**. It clears +0.10 by only
+  0.011. The ctrl-traj arm sits 0.035 above ctrl-joint, so about a quarter
+  of the raw gap shows up in the world whose photos carry nothing.
 - **Co-report (b), held out (post hoc for the loud arms, labeled):** the
   trajectory arm beats the joint arm on the 20 corner scenes no ridge saw
-  (0.660 vs 0.421; every traj seed ≥ 0.60, joint seeds 0.09–0.61). The rise
-  is friction read from the images, not memorized training geometry.
+  (0.660 vs 0.421, Δ +0.239, Welch t 2.46, df 4.8; every traj seed ≥ 0.60,
+  joint seeds 0.09–0.61). It rests on 20 scenes and was not preregistered
+  for the loud arms.
+- **Reading of (a) and (b) together:** the leakage and held-out checks both
+  point against memorization. The leakage-adjusted effect is smaller than
+  the raw one, and its lower bound is near zero.
 - **C1 → NULL:** joint friction on the fixed world 0.236 vs 0.284 on the
-  broken world (Δ −0.048, t −0.92). A behavior target that is 79 %
-  friction-driven tilt slide does not raise friction in z.
-- **Together:** the photos hold more friction than a linear readout finds.
-  The 21-number summary target, even when dominated by friction, does not
-  pull it out; the time-resolved path target does.
+  broken world (Δ −0.048, t −0.92). A behavior target dominated by tilt
+  slide distance (`tilt.slid_distance` alone is 78.8 % of the behavior
+  target's variance on the `pm_f31fix_loud` train split, 2.273 / 2.886; the
+  whole tilt block is 94 %; on the 5-shape `pm_big` the same field is 63 %)
+  does not raise friction in z.
+- **H1 RISES refutes Amendment 1's preregistered reading of C1.** §10 said
+  "C1 NULL → (a), the pixel limit, is binding". H1 shows the photos support
+  at least 0.38 friction z R² (0.66 on held-out scenes), so on this world
+  the pixels are **not** the binding limit at the joint arm's 0.24. That
+  committed interpretation was wrong. What C1 NULL shows is narrower: the
+  summary target, even when dominated by slide distance, does not pull out
+  friction the photos do carry.
 - **Co-report (c), the caveat that bounds the claim:** at weight 7.0 the
   trajectory head starts with **19.3×** the behavior head's
   predict-the-mean loss on the fixed world (1.0× on the broken world,
@@ -2663,21 +2675,32 @@ run: leakage-adjusted Δ_L, held-out readout, target-scale disclosure).
   them; it was not run.
 - **H2 → NULL by the frozen rule (Δ −0.007, t −4.40), reported as metric
   saturation, not "no cost to prediction".** Every arm, ctrl included, sits
-  at gain 1.03–1.05, because the friction-driven tilt slide is 79 % of the
-  behavior target's variance and the photos barely show friction.
+  at gain 1.03–1.05, because one field (tilt slide distance, 78.8 % of the
+  target variance on this world, normalized by a 1 m scale that slides of up
+  to 5.4 m overrun) dominates the score.
 - **Non-escape:** all 16 runs end below gain 2.0, so the escaped-only
   secondary readings and P7 are unreadable. The escape threshold was set
   on the broken world. On a target dominated by an invisible channel it is
   unreachable, and the runs still learn the visible channels (density z R²
   about 0.65, restitution about 0.98).
 
-**What this changes.** F31a's original NULL was a broken-ramp result. On
-the real ramp the precondition for F31b holds: trajectory supervision
-changes what the latent contains. Bounded by (c), the honest statement is
-"trajectory supervision at this weight raises friction in z". Whether the
-time structure or the extra loss does the work is open. F31b (unity
-instruments ported to torch) is now worth designing, together with the
-equal-weight arm.
+**What this changes.** F31a's original NULL was a broken-ramp result. But
+the ramp fix changed two things at once: the friction content of the
+target, and the effective head-loss ratio (1.0× on the broken world, 19.3×
+on the fixed one). So the §9 → §12 reversal carries the same
+content-versus-loudness confound as (c), and "the broken ramp hid a real
+effect" cannot be credited to content alone either. Bounded that way, the
+honest statement is "on the repaired world, trajectory supervision at this
+weight raises friction in z". Whether the time structure or the extra loss
+does the work is open.
+
+**For F31b.** The latent now holds friction (0.66 on held-out scenes), but
+the behavior head stays at gain about 1.04 because the 1 m slide normalizer
+lets one field dominate. Gain-based unity instruments (F29's transfer
+advantage) would measure nothing on this target. F31b's preregistration
+needs a target-scale fix first (per-field standardization, or log slide).
+The equal-weight arm (w ≈ 0.36) comes first: it is the cheapest experiment
+that separates "better target" from "louder target".
 
 Reproduce: `bash scripts/f31_rerun.sh run <arm> <world> <seed> [traj]` for
 the 16 runs, then `bash scripts/f31_rerun.sh stage-b-report`.
