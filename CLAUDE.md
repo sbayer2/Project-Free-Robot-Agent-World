@@ -112,11 +112,14 @@ first cloud-compute session, 4 vCPU / 15 GB / no GPU; setup in
 −11.5 % disclosed; apparatus result, run on pre-fix worlds). Re-measured
 on the fixed ramp (`data/pm_f31fix_*`): the F31 pilot's "summaries discard
 friction" headline was mostly the bug (summary friction R² 0.34 → 0.83;
-trajectory 0.84 → 0.92; tilt block gain 2.70 → 16.16). **F31a
-(preregistered, NULL on pre-fix worlds) is NOT closed**: rerun on the fixed
-worlds under the same frozen rules is pending.
-F31a observations: trajectory supervision delays escape ~12 epochs; the PR
-gate misses non-escape (add an escape gate to future preregs). Standing
+trajectory 0.84 → 0.92; tilt block gain 2.70 → 16.16). **F31a rerun on
+the fixed worlds (Amendments 1–2): H1 RISES** (friction in z 0.236 → 0.383,
+t 3.31; leakage-adjusted +0.111; held-out 0.42 → 0.66; G1/G2 pass) while a
+friction-heavy summary target does not raise it (C1 NULL). Bounded: the
+traj head started at 19× the behavior loss, so a denser target and a
+stronger one can't be told apart. H2 is saturated (all arms gain ≈ 1.04;
+the escape gate set on the broken world is unreachable on the fixed one).
+Next: F31b plus an equal-starting-loss arm (w ≈ 0.36). Standing
 headline from F28/F29: unity has no internal and no measurable operational
 signature at this scale. Knowledge graph current through F27. Open: F30
 render-only data scaling; 256 px oblique legibility world; graded-push

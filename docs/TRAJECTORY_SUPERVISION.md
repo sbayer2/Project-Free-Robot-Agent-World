@@ -253,3 +253,28 @@ run here.
 held-out gain 1.03–1.05: the gain metric is saturated by the
 friction-driven tilt slide (79 % of target variance). H2 is reported as
 **metric saturation, not "no cost to prediction"**.
+
+## 12. Result on the repaired ramp (runs 2026-10-23/24)
+
+Read under §§5, 10 and 11 as frozen (`runs/f31fix/f31_verdicts.json`,
+`runs/f31fix/coreport.json`). H1 was read before G2, as disclosed in §11.
+
+- **G1 PASS** (PR 43.7–98.8). **G2 PASS** (ctrl friction z R² −0.126 to
+  −0.050).
+- **H1 RISES:** Δ +0.147, t 3.31 (loud-traj 0.383 vs loud-joint 0.236).
+  **P6 is wrong.**
+- **H2 NULL** by the rule (Δ −0.007, t −4.40). Per §11 this is metric
+  saturation: all arms sit at gain 1.03–1.05.
+- **C1 NULL** (Δ −0.048, t −0.92). **P5 is correct.**
+- **(a) Δ_L +0.111** (SE 0.050, t 2.25). **(b)** Held-out friction R² is
+  traj 0.602 / 0.623 / 0.765 / 0.630 / 0.682 against joint
+  0.092 / 0.397 / 0.609 / 0.420 / 0.588; ctrl arms are all ≤ −0.005.
+  **(c)** The effective loss ratio is 19.3× (§11), so a denser target and a
+  stronger one cannot be told apart.
+- **Non-escapers:** all 16 runs (gain < 2.0). The escaped-only readings and
+  **P7 are unreadable.**
+
+Consequence per §§7 and 10: on the repaired world, trajectory supervision
+does change what z contains (friction), and a friction-heavy summary target
+does not. F31b is worth designing, alongside an equal-starting-loss arm
+(w ≈ 0.36 on the fixed world) to separate density from strength.
