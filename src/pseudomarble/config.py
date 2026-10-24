@@ -119,6 +119,17 @@ class ModelConfig:
     appearance_head_width: int = 128
     appearance_weight: float = 0.0
 
+    # F31 trajectory head (z -> the recorded probe paths, probes.trajectory_vector:
+    # 3 probes x trajectory_frames x [displacement, up-axis]). A richer behavior
+    # target than the 21 summaries -- the f31 oracle pilot found the paths carry
+    # friction the summaries discard. Gated on trajectory_weight > 0 so the
+    # default model stays byte-identical (the F20 pattern).
+    trajectory_frames: int = 16
+    trajectory_head_width: int = 256
+    trajectory_weight: float = 0.0
+    trajectory_probes: Tuple[str, ...] = ("drop", "tilt", "push")
+    trajectory_pos_only: bool = False
+
     # Render head (z -> reconstructed canonical appearance). A lightweight conv
     # decoder (nearest-upsample + conv), NOT a Gaussian splat decoder: simpler,
     # CPU/Metal-portable, and sufficient because the coherence experiment measures
@@ -139,6 +150,13 @@ class ModelConfig:
     coherence_weight: float = 0.0
     coherence_dirs: int = 4        # perturbation directions per step
     coherence_eps: float = 0.1     # latent perturbation step size
+
+
+def trajectory_target_dim(cfg: "ModelConfig") -> int:
+    """Width of the F31 trajectory target/head implied by the config."""
+    from pseudomarble.probes import trajectory_dim
+    return trajectory_dim(cfg.trajectory_frames, cfg.trajectory_probes,
+                          cfg.trajectory_pos_only)
 
 
 def conv_output_channels(cfg: "ModelConfig") -> int:

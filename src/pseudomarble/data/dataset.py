@@ -77,6 +77,12 @@ class Scene:
         ap = self.record.get("material_truth", {}).get("appearance_params", {})
         return appearance_vector(ap)
 
+    def trajectory_target(self, frames: int, probes: Sequence[str] = P.PROBE_ORDER,
+                          pos_only: bool = False) -> List[float]:
+        """F31 target: probes.trajectory_vector (needs --keep-trajectory data)."""
+        records = self.record.get("behavior", {}).get("probes", [])
+        return P.trajectory_vector(records, frames, probes, pos_only)
+
     def factors_target(self) -> Optional[List[float]]:
         factors = self.record.get("material_truth", {}).get("factors")
         if not factors:
@@ -162,10 +168,15 @@ class PseudoMarbleDataset:
         max_views: Optional[int] = None,
         as_mlx: bool = False,
         drop_last: bool = False,
+        trajectory_frames: int = 0,
+        trajectory_probes: Sequence[str] = P.PROBE_ORDER,
+        trajectory_pos_only: bool = False,
     ) -> Iterator[Dict]:
         """Yield batches of ``{scene_ids, behavior, essence[, images]}``.
 
         Targets are always provided. Images are loaded only if ``with_images``.
+        ``trajectory_frames > 0`` adds the F31 ``trajectory`` target (off by
+        default: most datasets were generated without trajectories).
         ``as_mlx`` converts arrays to ``mlx.core.array`` (Apple silicon); without
         it, targets are Python lists and images are numpy arrays.
         """
@@ -184,6 +195,10 @@ class PseudoMarbleDataset:
                 "essence": [s.essence_target() for s in scenes],
                 "appearance": [s.appearance_target() for s in scenes],
             }
+            if trajectory_frames > 0:
+                batch["trajectory"] = [
+                    s.trajectory_target(trajectory_frames, trajectory_probes,
+                                        trajectory_pos_only) for s in scenes]
             if with_images:
                 import numpy as np  # type: ignore
                 batch["images"] = np.stack([self.load_views(s, max_views) for s in scenes])
@@ -219,6 +234,8 @@ def _to_mlx(batch: Dict) -> Dict:
     out["essence"] = mx.array(batch["essence"])
     if "appearance" in batch:
         out["appearance"] = mx.array(batch["appearance"])
+    if "trajectory" in batch:
+        out["trajectory"] = mx.array(batch["trajectory"])
     if "images" in batch:
         out["images"] = mx.array(batch["images"])
     return out

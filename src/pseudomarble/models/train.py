@@ -56,6 +56,15 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
                    help="loss weight on the F25 coherence objective (train the "
                         "render and behavior heads to respond TOGETHER to latent "
                         "perturbations; default 0/off — see docs/ARCHITECTED_UNITY.md)")
+    p.add_argument("--trajectory-weight", type=float, default=None,
+                   help="loss weight on the F31 trajectory head (z -> recorded probe "
+                        "paths; needs a --keep-trajectory dataset; default 0/off)")
+    p.add_argument("--trajectory-frames", type=int, default=None,
+                   help="samples per probe path for the F31 target (default 16)")
+    p.add_argument("--trajectory-probes", default=None,
+                   help="comma list of probes in the F31 target (default drop,tilt,push)")
+    p.add_argument("--trajectory-pos-only", action="store_true",
+                   help="F31 target keeps position channels only (drops the up-axis)")
     p.add_argument("--behavior-warmup-epochs", type=int, default=0,
                    help="ramp the behavior-head loss weight linearly from 0 to its "
                         "full value over the first K epochs (basin-selection lever: "
@@ -94,7 +103,25 @@ def make_config(args: argparse.Namespace) -> ModelConfig:
         cfg = replace(cfg, appearance_weight=args.appearance_weight)
     if args.coherence_weight is not None:
         cfg = replace(cfg, coherence_weight=args.coherence_weight)
+    if args.trajectory_weight is not None:
+        cfg = replace(cfg, trajectory_weight=args.trajectory_weight)
+    if args.trajectory_frames is not None:
+        cfg = replace(cfg, trajectory_frames=args.trajectory_frames)
+    if args.trajectory_probes is not None:
+        probes = tuple(k.strip() for k in args.trajectory_probes.split(",") if k.strip())
+        cfg = replace(cfg, trajectory_probes=probes)
+    if args.trajectory_pos_only:
+        cfg = replace(cfg, trajectory_pos_only=True)
     return cfg
+
+
+def trajectory_kwargs(cfg: ModelConfig) -> Dict:
+    """iter_batches kwargs for the F31 target: loaded only when its head is on."""
+    if cfg.trajectory_weight <= 0:
+        return {}
+    return {"trajectory_frames": cfg.trajectory_frames,
+            "trajectory_probes": cfg.trajectory_probes,
+            "trajectory_pos_only": cfg.trajectory_pos_only}
 
 
 def latent_pr(model, dataset: PseudoMarbleDataset, batch_size: int, max_views,
@@ -181,7 +208,7 @@ def main(argv: List[str]) -> None:
         running, steps = 0.0, 0
         for batch in train.iter_batches(args.batch_size, shuffle=True, seed=epoch,
                                         with_images=True, max_views=args.max_views,
-                                        as_mlx=True):
+                                        as_mlx=True, **trajectory_kwargs(cfg)):
             loss, grads = nn.value_and_grad(model, batch_loss)(model)
             optimizer.update(model, grads)
             mx.eval(model.parameters(), optimizer.state)

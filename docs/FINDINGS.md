@@ -2447,6 +2447,266 @@ on nested forms).
 
 ---
 
+### F31 pilot — the recorded probe paths carry friction the 21 summaries discard; the push probe saturates; and the cloud is certified as a second training site
+
+> **CORRECTED 2026-10-23 (after PR #45 / F34): the headline below was mostly
+> the tilt bug.** This entry ran on worlds generated before the ramp fix, so
+> "tilt" was a 0.349° ramp. Regenerated on the fixed 20° ramp
+> (`data/pm_f31fix_*`; drop, push, friction and renders byte-identical, only
+> tilt changes; median tilt slide 4 mm → 40 cm, corr(slide, friction) −0.37 →
+> −0.79), loud world, iid split:
+>
+> | | buggy ramp | fixed ramp |
+> |---|---|---|
+> | friction R² from the 21 summaries | 0.340 | **0.832** |
+> | friction R² from the trajectory | 0.835 | 0.918 |
+> | tilt position block, forward gain | 2.70 | **16.16** |
+>
+> So "the summaries throw friction away" (finding 1) was the broken ramp
+> making most boxes stick. On the real ramp the summaries already carry
+> friction; the trajectory's extra is ≈ +0.09. Findings 2 (the tilt position
+> path is predictable content, now overwhelmingly so) and 3 (push saturation,
+> tilt-independent) stand; finding 4 (parity) used tilt only inside the
+> behavior target and stands as an apparatus result, with the caveat that it
+> was run on the pre-fix world.
+
+*(Run 2026-09-26, the program's first session on cloud compute: 4 vCPU,
+15 GB, no GPU, osmesa rendering. **Exploratory, not preregistered** — its
+job is to set F31's bars before a model exists. The one frozen rule in it,
+the torch↔MLX parity gate, was committed in `docs/CLOUD_COMPUTE.md` and
+`scripts/parity_verdict.py` before any torch gain existed.)*
+
+**Apparatus.** The four f27b worlds (box only; ctrl/base/g2/loud) were
+regenerated in the cloud with `--keep-trajectory` — 125 frames of
+`{t, pos, up}` per probe, a generator option no experiment had used.
+Measured coupling r = 0.008 / 0.263 / 0.809 / 0.992 as published, and
+F27b's appearance-oracle ceilings reproduce **to three decimals on every
+arm** (0.957 / 1.841 / 3.226 / 4.706): physics and labels are identical
+to the Mac's. Checked on the way: at the generator's default seed every
+world has exactly **20** corner (held-out) scenes, so all F27b/F29
+held-out gains rest on 20 scenes.
+
+**1. The summaries throw friction away.** Held-out R² of the essence read
+back out of each target (`scripts/f31_trajectory_oracle.py`, iid split):
+
+| | from 21 summaries | from trajectory (8 / 16 / 32 frames) |
+|---|---|---|
+| friction | 0.340 | 0.796 / 0.835 / 0.796 |
+| restitution | 0.989 | 0.999 / 0.992 / 0.992 |
+| density | 0.068 | ≈ 0 |
+
+Robust to frame count and identical across arms (the physics is shared).
+F31's premise survives: the paths are a strictly richer material target,
+and the gain is concentrated in friction, the channel F28 found
+VOID-by-legibility in pixels.
+
+**2. Which parts of the path the essence determines** (`--blocks`, loud,
+iid; forward gain essence → block): drop position **4.87**, tilt position
+**2.70**, tilt orientation 1.12, push position 1.06, push orientation 1.00,
+drop orientation constant. The aggregate forward gain (1.06, below the
+summaries' 1.49) was an artifact of per-column standardization promoting
+near-zero-variance orientation columns — recorded because that reflex
+reading would have killed F31 on an artifact. **F31 target
+recommendation: drop + tilt position paths.**
+
+**3. The push probe saturates — a concrete mechanism behind F14's
+mass-blindness.** The push is a fixed 1.5 N·s impulse; density spans
+50–8000 kg/m³. 84 % of pushes move the box < 1 cm (median 0.4 mm);
+corr(slide, 1/density) = 0.46 but linear density R² ≈ 0. Density is
+visible only in the light tail. (First reading, corrected within the
+session: "mass cancels under gravity, blind by construction" — false for
+an impulse.) F31 must choose: graded push, log-density target, or scope
+to friction/restitution.
+
+**4. Torch↔MLX parity: PASS** (`docs/CLOUD_COMPUTE.md` §5). Regenerated
+loud world, F27b recipe, three torch seeds: gains 4.893 / 4.619 / 5.551,
+mean **5.021** vs MLX 5.672 — inside the frozen [4.82, 6.52] band, all
+seeds ≥ 3.0, PR 74–89. Disclosed beyond the rule: torch is 11.5 % lower
+(Welch t −1.54, n = 3). Post-hoc observation: every seed sits at
+predict-the-mean for ~20 epochs, then escapes at epoch 25–35; the late
+escaper finished lowest and was still rising at epoch 49 — escape timing
+is one concrete mechanism of the seed spread (F10/F12/F29 init thread),
+and the 50-epoch recipe truncates late escapers.
+
+**What this opens.** F31 now has a validated target (drop + tilt position
+paths), a known blind spot (density), shipped infrastructure (a gated
+trajectory head in all three backends, `--trajectory-weight`), and a
+certified place to run it. Next: preregister F31 against these bars.
+
+Reproduce: regenerate `data/pm_f31_{ctrl,base,g2,loud}` with the F27b
+flags plus `--keep-trajectory`; `python scripts/f31_trajectory_oracle.py
+--data data/pm_f31_* --blocks`; parity: `python -m
+pseudomarble.models.train_torch --data data/pm_f31_loud --epochs 50 --lr
+2e-4 --seed {0,1,2}` then `python scripts/parity_verdict.py`.
+
+---
+
+### F31a — trajectory supervision does not put friction into the latent (NULL); it delays the behavior head's escape by ~12 epochs instead
+
+> **Instrument flag (dated 2026-10-23, after PR #45 / F34): NOT CLOSED.** All
+> 16 runs used pre-fix worlds (0.349° ramp). H1 read friction in z, which is
+> bounded by the pixels, and the renders are identical before and after the
+> fix (linear pixel ceiling unchanged at 0.167), so the "illegible at 128 px"
+> reasoning still applies. But on the fixed ramp the trajectory target carries
+> far more friction (tilt block gain 2.70 → 16.16), and so does the behavior
+> head's own target (summary friction R² 0.34 → 0.83). Both arms' supervision
+> changed. F31a's NULL therefore cannot be read as closed until it is rerun on
+> `data/pm_f31fix_*` under the same frozen rules.
+> **Rerun done 2026-10-24: see "F31a on the repaired ramp" below. On fixed
+> worlds H1 reads RISES (P6 wrong); the NULL below is a broken-ramp result.**
+
+*(Run 2026-09-26 in the cloud session, all torch; written up 2026-10-23
+after a container restart; every run and the verdict file had completed
+and survived on disk. Preregistered in `docs/TRAJECTORY_SUPERVISION.md`
+with `scripts/f31_verdicts.py` frozen before any trajectory-supervised
+model existed. Both gates passed (G1 PR 40.6–89.2; G2 ctrl friction z R²
+−0.165 to −0.065, all < 0.10). Graded: **P1 correct** (H1 NULL),
+**P2 correct** (H2 INCONCLUSIVE), **P3 correct** (G2 pass), **P4 correct**
+(density z R² 0.652 → 0.641, no rise).)*
+
+The question F31a asked is the precondition for any dynamics-head unity
+test: does supervising z with the recorded drop + tilt position paths (the
+F31 pilot's predictable content; weight 7.0, set by an equal-starting-loss
+rule) change **what z contains**, above all friction?
+
+| loud world (r = 0.992) | friction z R² | held-out gain | escape epoch |
+|---|---|---|---|
+| joint, seeds 0–4 | 0.241 / 0.379 / 0.168 / 0.307 / 0.326 (mean 0.284, sd 0.082) | 4.89 / 4.62 / 5.55 / 5.33 / 4.56 | 25 / 33 / 27 / 26 / 29 |
+| + trajectory head, seeds 0–4 | 0.297 / 0.359 / 0.302 / 0.322 / 0.344 (mean 0.325, sd 0.027) | 4.85 / 4.59 / 4.71 / 4.78 / **1.06** | 40 / 43 / 39 / 37 / **never** |
+
+- **H1 → NULL** (Δ friction +0.040, t 1.05; |Δ| < 0.05). By the frozen
+  consequence: supervision does not add material content that the pixels
+  barely carry (linear pixel ceiling 0.167; joint z already at 0.28).
+  **F31b on this world would be measuring nothing.** The next lever is
+  legibility (the noted 256 px oblique regeneration), not targets.
+  The prediction behind P1 ("supervision cannot manufacture legibility")
+  is supported.
+- **H2 → INCONCLUSIVE** (Δ gain −0.99, t −1.30). Driven entirely by seed
+  4, below.
+- **Post-hoc, labeled: the trajectory head delays escape.** Every
+  trajectory seed left the predict-the-mean plateau later than every
+  joint seed: escaped seeds average epoch 39.8 vs 28.0 (+11.8, Welch t
+  6.23 on the four that escaped). Seed 4 never escaped in 50 epochs:
+  both heads stayed at ≈1.0 (behavior 1.06, trajectory 1.08). Among the
+  escaped seeds the behavior gain is slightly lower (4.73 vs 4.99, t
+  −1.27). A second dense target postpones the breakout rather than
+  speeding it, and the 50-epoch recipe then truncates. This is the
+  parity-run escape thread (`docs/CLOUD_COMPUTE.md` §5) with a lever on it.
+- **Post-hoc, labeled: friction becomes more consistent, not higher.**
+  Seed sd falls threefold (0.082 → 0.027) with the mean nearly unchanged.
+  The head seems to pin how much friction z keeps without raising the
+  ceiling. Descriptive at n = 5.
+- **Instrument note, with reach across the program: seed 4 had a healthy
+  PR (49) and learned nothing.** The F10/F12 PR gate catches collapse, a
+  constant z, but not non-escape, where z varies and the heads ignore it.
+  Future preregistrations that read gains should add an escape gate (for
+  example, held-out gain ≥ 2 by the final epoch) beside the PR gate, or
+  report non-escapers separately rather than averaging them in.
+
+**What this closes.** The F31 line on this world ends at its precondition.
+Richer, world-referencing supervision does not change what the latent
+holds about friction, because the pixels hardly carry it. What it changes
+is *when* learning happens. Together with F21 (fidelity levers move
+nothing) and F28 (roughness VOID-by-legibility), the binding constraint
+for friction is legibility at 128 px. The two open levers are the 256 px
+oblique world and a graded-push probe for density (F31 pilot §3).
+
+Reproduce: the run chain in `docs/TRAJECTORY_SUPERVISION.md` §3, then
+`python scripts/f31_measure.py` per arm and `python scripts/f31_verdicts.py
+--root runs/f31`.
+
+---
+
+### F31a on the repaired ramp — trajectory supervision DOES raise friction in the latent (H1 RISES, P6 wrong); a friction-heavy summary target does not (C1 NULL)
+
+*(Runs 2026-10-23/24 in the cloud session, all torch, on `data/pm_f31fix_*`:
+the f27b worlds regenerated after PR #45's tilt fix, with drop, push,
+friction and renders byte-identical and only tilt changed. Run under the
+frozen F31a rules plus Amendment 1 (`bb3c851`: co-report C1, non-escapers
+reported separately) and Amendment 2 (`166e882`, frozen before any ctrl-traj
+run: leakage-adjusted Δ_L, held-out readout, target-scale disclosure).
+**Disclosure: H1 was read before G2**, and Amendment 2 records it. Graded:
+**P5 correct** (C1 NULL), **P6 WRONG** (H1 RISES; I gave NULL/INCONCLUSIVE
+65 %), **P7 unreadable** (no run escaped under the gain ≥ 2 rule).)*
+
+| fixed world | joint | + trajectory head |
+|---|---|---|
+| loud friction z R², 5-fold (5 seeds) | 0.103 / 0.223 / 0.301 / 0.241 / 0.312 (0.236) | 0.308 / 0.458 / 0.389 / 0.385 / 0.374 (**0.383**) |
+| loud friction R², ridge fit on train z → 20 held-out scenes | 0.092 / 0.397 / 0.609 / 0.420 / 0.588 (0.421) | 0.602 / 0.623 / 0.765 / 0.630 / 0.682 (**0.660**) |
+| ctrl friction z R² (3 seeds) | −0.109 / −0.126 / −0.077 | −0.053 / −0.050 / −0.102 |
+| held-out behavior gain | 1.045–1.051 (ctrl 1.034–1.035) | 1.040–1.044 (ctrl 1.043–1.046) |
+
+- **Gates:** G1 PASS (PR 43.7–98.8); G2 PASS (every ctrl friction z R²
+  < 0, so below the frozen 0.10 leakage bar).
+- **H1 → RISES:** Δ +0.147, t 3.31 (CI about [+0.04, +0.26]). On the repaired
+  ramp, supervising z with the drop + tilt position paths raises how much
+  friction z holds, well above the linear pixel ceiling (0.167).
+- **Co-report (a), leakage-adjusted:** Δ_L = (+0.147) − (+0.035) = **+0.111**,
+  SE 0.050, t 2.25, ≈95 % CI **[+0.01, +0.21]**. It clears +0.10 by only
+  0.011. The ctrl-traj arm sits 0.035 above ctrl-joint, so about a quarter
+  of the raw gap shows up in the world whose photos carry nothing.
+- **Co-report (b), held out (post hoc for the loud arms, labeled):** the
+  trajectory arm beats the joint arm on the 20 corner scenes no ridge saw
+  (0.660 vs 0.421, Δ +0.239, Welch t 2.46, df 4.8; every traj seed ≥ 0.60,
+  joint seeds 0.09–0.61). It rests on 20 scenes and was not preregistered
+  for the loud arms.
+- **Reading of (a) and (b) together:** the leakage and held-out checks both
+  point against memorization. The leakage-adjusted effect is smaller than
+  the raw one, and its lower bound is near zero.
+- **C1 → NULL:** joint friction on the fixed world 0.236 vs 0.284 on the
+  broken world (Δ −0.048, t −0.92). A behavior target dominated by tilt
+  slide distance (`tilt.slid_distance` alone is 78.8 % of the behavior
+  target's variance on the `pm_f31fix_loud` train split, 2.273 / 2.886; the
+  whole tilt block is 94 %; on the 5-shape `pm_big` the same field is 63 %)
+  does not raise friction in z.
+- **H1 RISES refutes Amendment 1's preregistered reading of C1.** §10 said
+  "C1 NULL → (a), the pixel limit, is binding". H1 shows the photos support
+  at least 0.38 friction z R² (0.66 on held-out scenes), so on this world
+  the pixels are **not** the binding limit at the joint arm's 0.24. That
+  committed interpretation was wrong. What C1 NULL shows is narrower: the
+  summary target, even when dominated by slide distance, does not pull out
+  friction the photos do carry.
+- **Co-report (c), the caveat that bounds the claim:** at weight 7.0 the
+  trajectory head starts with **19.3×** the behavior head's
+  predict-the-mean loss on the fixed world (1.0× on the broken world,
+  where the rule was set). The traj arm asked both *differently* and
+  *harder*. **This design cannot tell a denser target from a stronger
+  one.** A fixed-world arm at w ≈ 0.36 (equal starting loss) would separate
+  them; it was not run.
+- **H2 → NULL by the frozen rule (Δ −0.007, t −4.40), reported as metric
+  saturation, not "no cost to prediction".** Every arm, ctrl included, sits
+  at gain 1.03–1.05, because one field (tilt slide distance, 78.8 % of the
+  target variance on this world, normalized by a 1 m scale that slides of up
+  to 5.4 m overrun) dominates the score.
+- **Non-escape:** all 16 runs end below gain 2.0, so the escaped-only
+  secondary readings and P7 are unreadable. The escape threshold was set
+  on the broken world. On a target dominated by an invisible channel it is
+  unreachable, and the runs still learn the visible channels (density z R²
+  about 0.65, restitution about 0.98).
+
+**What this changes.** F31a's original NULL was a broken-ramp result. But
+the ramp fix changed two things at once: the friction content of the
+target, and the effective head-loss ratio (1.0× on the broken world, 19.3×
+on the fixed one). So the §9 → §12 reversal carries the same
+content-versus-loudness confound as (c), and "the broken ramp hid a real
+effect" cannot be credited to content alone either. Bounded that way, the
+honest statement is "on the repaired world, trajectory supervision at this
+weight raises friction in z". Whether the time structure or the extra loss
+does the work is open.
+
+**For F31b.** The latent now holds friction (0.66 on held-out scenes), but
+the behavior head stays at gain about 1.04 because the 1 m slide normalizer
+lets one field dominate. Gain-based unity instruments (F29's transfer
+advantage) would measure nothing on this target. F31b's preregistration
+needs a target-scale fix first (per-field standardization, or log slide).
+The equal-weight arm (w ≈ 0.36) comes first: it is the cheapest experiment
+that separates "better target" from "louder target".
+
+Reproduce: `bash scripts/f31_rerun.sh run <arm> <world> <seed> [traj]` for
+the 16 runs, then `bash scripts/f31_rerun.sh stage-b-report`.
+
+---
+
 ## 4. Next steps — the gap is NOT intrinsic; the fork is resolved
 
 *(Rewritten 2026-07-30 after F22a. The previous version concluded the
@@ -2512,6 +2772,6 @@ Reproduce F8: `python tests/batch_probe_stability.py`.
 
 ---
 
-*Tests: 283 across 35 suites, all passing (1 skipped); core imports with no
+*Tests: 299 across 39 suites, all passing (2 skipped with the cloud deps installed); core imports with no
 mujoco/bpy/trimesh/numpy/mlx/torch. Personal research; not affiliated with World
 Labs.*
