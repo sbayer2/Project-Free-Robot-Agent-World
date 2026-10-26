@@ -49,6 +49,7 @@ RAMP_DEG = (5.7, 11.3, 16.7, 24.2, 31.0, 38.7)   # tan = 0.10 0.20 0.30 0.45 0.6
 PUSH_N = (15.0, 60.0, 240.0, 960.0, 3840.0)      # x 0.1 s = 1.5 ... 384 N.s
 STRIKE_MASS, STRIKE_SPEED, STRIKE_R, STRIKE_GAP = 17.0, 4.0, 0.05, 0.25
 SHAPE = "box"
+DROP_HEIGHT = 0.6                                 # m, gap below the box (as DropSpec)
 SIM_SECONDS, FPS = 2.0, 60
 
 
@@ -160,7 +161,7 @@ def run_drop(mat) -> list:
     from pseudomarble.data.generate_mujoco import build_mjcf, half_height
 
     model = mujoco.MjModel.from_xml_string(
-        build_mjcf(SHAPE, mat, object_z=half_height(SHAPE) + 0.6))
+        build_mjcf(SHAPE, mat, object_z=half_height(SHAPE) + DROP_HEIGHT))
     return _record(model, mujoco.MjData(model), ["object"])["object"]
 
 
@@ -227,7 +228,7 @@ def main() -> None:
                         raw=np.array([r[2] for r in results]),
                         **{f"traj_{p}": v for p, v in traj.items()})
     json.dump({"source": args.source or f"MaterialSampler, seed {args.seed}",
-               "shape": SHAPE, "n_scenes": len(results),
+               "shape": SHAPE, "n_scenes": len(results), "drop_height": DROP_HEIGHT,
                "probes": names, "ramp_deg": RAMP_DEG, "push_newtons": PUSH_N,
                "push_window_s": 0.1, "strike": {"mass": STRIKE_MASS, "speed": STRIKE_SPEED,
                                                 "radius": STRIKE_R, "gap": STRIKE_GAP},

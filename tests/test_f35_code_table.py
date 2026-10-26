@@ -49,3 +49,35 @@ def test_inverse_r2_finds_planted_axis_only():
     X = np.stack([E[:, 2], rng.normal(size=300)], 1)[:, None, :]
     r = C.inverse_r2(X, E)
     assert r[2] > 0.95 and r[0] < 0.1 and r[1] < 0.1
+
+
+def test_family_grouping():
+    names = ("drop", "ramp05.7", "push0960", "strike", "strike_ball", "tilt")
+    assert [C.family(n) for n in names] == ["drop", "ramp", "push", "strike", "strike", "tilt"]
+    z = np.zeros((3, 4, 6))
+    T = {"ramp05.7": z, "ramp11.3": z + 1, "drop": z}
+    F = C.families(T)
+    assert F["ramp"].shape == (3, 48) and F["drop"].shape == (3, 24)
+
+
+def test_gate_needs_two_families():
+    table = {"drop": [0.0, 0.1, 0.99], "ramp": [0.0, 0.9, 0.85], "push": [0.85, 0.82, 0.1]}
+    g = C.gate(table, 0.8)
+    assert g["restitution"]["pass"] and g["friction"]["pass"] and not g["density"]["pass"]
+    assert g["density"]["families"] == ["push"]
+
+
+def test_load_npz_matches_resample(tmp_path):
+    rng = np.random.default_rng(0)
+    raw = np.concatenate([np.tile(np.arange(10)[None, :, None] * 0.016, (2, 1, 1)),
+                          rng.normal(size=(2, 10, 6))], 2).astype(np.float32)
+    np.savez_compressed(tmp_path / "battery.npz", essence=np.ones((2, 3)), traj_drop=raw)
+    (tmp_path / "manifest.json").write_text(
+        '{"probes": ["drop"], "drop_height": 0.6}')
+    E, T, times, h = C.load_npz(str(tmp_path), 4)
+    trajs = [[{"t": float(r[0]), "pos": r[1:4].tolist(), "up": r[4:7].tolist()} for r in s]
+             for s in raw.astype(float)]
+    for i, tr in enumerate(trajs):
+        X, t = C.resample(tr, 4)
+        assert np.allclose(T["drop"][i], X, atol=1e-6) and np.allclose(times["drop"], t)
+    assert h == 0.6 and E.shape == (2, 3)

@@ -1,6 +1,8 @@
 """F35 design pilot: which interaction encodes which material axis, and where
 in the interaction the information lives. Zero training, state trajectories
-(no pixels), on a --keep-trajectory world (docs/CROSS_INTERACTION.md §4).
+(no pixels), on either a --keep-trajectory world (sample.json per scene) or a
+battery written by scripts/f35_generate_battery.py (battery.npz + manifest)
+(docs/CROSS_INTERACTION.md §4-5).
 
 Two readouts:
 
@@ -13,8 +15,13 @@ Two readouts:
    fall, the first frames of contact, everything after -- and from fixed
    random frame subsets shared by every scene (the erasure question: does
    any k of n frames recover the axis?).
+3. GATE (§5): per axis, the probe FAMILIES (all of a family's recordings
+   read together: every ramp angle, every push force, the struck box plus
+   the sphere) that reach inverse R^2 >= --gate-r2 at --gate-noise. An axis
+   passes with at least two families. The bar and noise are not frozen yet.
 
     python scripts/f35_code_table.py --data data/pm_f31fix_loud
+    python scripts/f35_code_table.py --data data/pm_f35_battery
 """
 
 from __future__ import annotations
@@ -100,6 +107,50 @@ def load(data: str, n: int):
     return np.array(E), {k: np.array(v) for k, v in T.items()}, times, heights.pop()
 
 
+def load_npz(data: str, n: int):
+    """The f35_generate_battery format -> the same tuple as load(). Recordings
+    are (scenes, frames, [t, x, y, z, up_x, up_y, up_z]); positions are taken
+    relative to frame 0, as resample() does."""
+    man = json.load(open(os.path.join(data, "manifest.json")))
+    if "drop_height" not in man:
+        raise SystemExit(f"{data}/manifest.json has no drop_height; regenerate the battery")
+    z = np.load(os.path.join(data, "battery.npz"))
+    T, times = {}, {}
+    for name in man["probes"]:
+        a = z[f"traj_{name}"].astype(float)
+        idx = np.linspace(0, a.shape[1] - 1, n).round().astype(int)
+        X = a[:, idx, 1:7].copy()
+        X[:, :, :3] -= a[:, :1, 1:4]
+        T[name], times[name] = X, a[0, idx, 0]
+    return z["essence"].astype(float), T, times, float(man["drop_height"])
+
+
+def family(name: str) -> str:
+    """Probe family of a recording: ramp05.7 -> ramp, push0960 -> push,
+    strike_ball -> strike; single-recording probes are their own family."""
+    for prefix in ("ramp", "push", "strike"):
+        if name.startswith(prefix):
+            return prefix
+    return name
+
+
+def families(T: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
+    """Each family's recordings side by side along the feature axis."""
+    out: dict[str, list] = {}
+    for name, X in T.items():
+        out.setdefault(family(name), []).append(X.reshape(len(X), -1))
+    return {f: np.concatenate(v, 1) for f, v in out.items()}
+
+
+def gate(table: dict[str, list[float]], bar: float) -> dict[str, dict]:
+    """Per axis: families reaching the bar, and PASS iff at least two do."""
+    out = {}
+    for j, a in enumerate(ESSENCE_AXES):
+        ok = [f for f, r in table.items() if r[j] >= bar]
+        out[a] = {"families": ok, "pass": len(ok) >= 2}
+    return out
+
+
 def fmt(r: np.ndarray) -> str:
     return " ".join(f"{a[:4]} {v:+.2f}" for a, v in zip(ESSENCE_AXES, r, strict=True))
 
@@ -108,19 +159,40 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--data", required=True)
     ap.add_argument("--frames", type=int, default=64)
+    ap.add_argument("--gate-noise", type=float, default=5.0, help="mm; not frozen")
+    ap.add_argument("--gate-r2", type=float, default=0.8, help="not frozen")
     ap.add_argument("--out", default=None)
     args = ap.parse_args()
 
-    E, T, times, height = load(args.data, args.frames)
-    report: dict = {"data": args.data, "frames": args.frames, "code_table": {}, "keyframes": {}}
-    print(f"[f35] {args.data}: {len(E)} scenes, {args.frames} frames per probe over "
-          f"{times['drop'][-1]:.2f} s")
+    npz = os.path.exists(os.path.join(args.data, "battery.npz"))
+    E, T, times, height = (load_npz if npz else load)(args.data, args.frames)
+    report: dict = {"data": args.data, "frames": args.frames, "code_table": {},
+                    "per_recording": {}, "keyframes": {}}
+    print(f"[f35] {args.data}: {len(E)} scenes, {len(T)} recordings, {args.frames} frames "
+          f"each over {times['drop'][-1]:.2f} s")
 
-    print("\nCODE TABLE: axis read from ONE probe's trajectory (inverse R^2)")
+    fam = families(T)
+    print("\nCODE TABLE: axis read from ONE probe family's trajectories (inverse R^2)")
     for noise in NOISE_MM:
-        row = {p: inverse_r2(add_noise(X, noise), E).tolist() for p, X in T.items()}
+        row = {f: inverse_r2(add_noise(X.reshape(len(X), -1, 6), noise), E).tolist()
+               for f, X in fam.items()}
         report["code_table"][f"{noise:g}mm"] = row
-        print(f"  {noise:4g} mm  " + " | ".join(f"{p}: {fmt(np.array(r))}" for p, r in row.items()))
+        print(f"  {noise:4g} mm  " + " | ".join(f"{f}: {fmt(np.array(r))}" for f, r in row.items()))
+    if len(fam) < len(T):
+        print(f"\nPER RECORDING at {args.gate_noise:g} mm")
+        for name, X in T.items():
+            r = inverse_r2(add_noise(X, args.gate_noise), E)
+            report["per_recording"][name] = r.tolist()
+            print(f"  {name:12s} {fmt(r)}")
+
+    table = {f: inverse_r2(add_noise(X.reshape(len(X), -1, 6), args.gate_noise), E).tolist()
+             for f, X in fam.items()}
+    report["gate"] = {"noise_mm": args.gate_noise, "bar": args.gate_r2,
+                      "axes": gate(table, args.gate_r2)}
+    print(f"\nGATE (R^2 >= {args.gate_r2:g} from >= 2 families at {args.gate_noise:g} mm; "
+          "bar and noise NOT frozen)")
+    for a, g in report["gate"]["axes"].items():
+        print(f"  {a:12s} {'PASS' if g['pass'] else 'FAIL'}  families: {g['families'] or 'none'}")
 
     # Free fall from rest covers `height` (the gap to the ground) in sqrt(2h/g).
     t_contact = float(np.sqrt(2.0 * height / 9.81))
