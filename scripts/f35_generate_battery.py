@@ -17,6 +17,19 @@ model, and stores state trajectories only (no renders: tier T0). Probes:
             masses, 1.35-216 kg) launched at 4 m/s into the resting box; the
             sphere's rebound and the box's recoil encode the mass ratio and
             restitution. The sphere is stored as strike_ball.
+- scale     (D2) "weigh it": the box rests on a 1 kg plate held by a vertical
+            spring (slide joint, k = 5300 N/m, c = 1500 N.s/m). Static
+            compression is (M + m_plate) g / k -- mass with no friction or
+            gravity cancellation in it; the heaviest box sinks ~0.4 m, the
+            lightest ~4 mm. The plate is stored as scale_plate.
+- tap       (D2) a 0.2 kg, 3 cm ball dropped 0.3 m onto the resting box's
+            top face; its rebounds read restitution while the box, on the
+            ground, barely moves. The ball is stored as tap_ball.
+
+Restitution convention (D1 strike, D2 tap): the reference ball's contact
+parameters are set to the BOX's restitution, so each contact's restitution
+is attributed to the box. Physically restitution belongs to the pair; this
+is an authored modeling convention, not a simulated fact.
 
     python scripts/f35_generate_battery.py --source data/pm_f31fix_loud \
         --out data/pm_f35_battery
@@ -48,6 +61,8 @@ sys.path.insert(0, os.path.join(HERE, "..", "src"))
 RAMP_DEG = (5.7, 11.3, 16.7, 24.2, 31.0, 38.7)   # tan = 0.10 0.20 0.30 0.45 0.60 0.80
 PUSH_N = (15.0, 60.0, 240.0, 960.0, 3840.0)      # x 0.1 s = 1.5 ... 384 N.s
 STRIKE_MASS, STRIKE_SPEED, STRIKE_R, STRIKE_GAP = 17.0, 4.0, 0.05, 0.25
+SCALE_K, SCALE_C, SCALE_PLATE_MASS, SCALE_Z = 5300.0, 1500.0, 1.0, 0.5
+TAP_MASS, TAP_R, TAP_HEIGHT = 0.2, 0.03, 0.3
 SHAPE = "box"
 DROP_HEIGHT = 0.6                                 # m, gap below the box (as DropSpec)
 SIM_SECONDS, FPS = 2.0, 60
@@ -55,7 +70,8 @@ SIM_SECONDS, FPS = 2.0, 60
 
 def probe_names() -> list[str]:
     return (["drop"] + [f"ramp{a:04.1f}" for a in RAMP_DEG]
-            + [f"push{int(f):04d}" for f in PUSH_N] + ["strike", "strike_ball"])
+            + [f"push{int(f):04d}" for f in PUSH_N] + ["strike", "strike_ball"]
+            + ["scale", "scale_plate", "tap", "tap_ball"])
 
 
 def plane_normal(theta_deg: float) -> np.ndarray:
@@ -133,25 +149,68 @@ def run_push(mat, force: float) -> list:
                    )["object"]
 
 
+def _ball_xml(name: str, pos: tuple[float, float, float], radius: float, mass: float,
+              mat) -> str:
+    """A reference sphere whose contacts carry the box's restitution (the
+    authored convention in the module docstring)."""
+    from pseudomarble.data.generate_mujoco import _restitution_to_solref
+
+    vol = 4.0 / 3.0 * math.pi * radius ** 3
+    return (f'<body name="{name}" pos="{pos[0]:.4f} {pos[1]:.4f} {pos[2]:.4f}"><freejoint/>'
+            f'<geom type="sphere" size="{radius}" density="{mass / vol:.1f}" '
+            f'friction="0.01 0.005 0.0001" '
+            f'solref="{_restitution_to_solref(mat.physics.restitution)}" '
+            f'solimp="0.9 0.95 0.001" rgba="0.2 0.2 0.2 1"/></body>')
+
+
 def run_strike(mat) -> tuple[list, list]:
     import mujoco
 
-    from pseudomarble.data.generate_mujoco import _restitution_to_solref, build_mjcf, half_height
+    from pseudomarble.data.generate_mujoco import build_mjcf, half_height
 
     h = half_height(SHAPE)
-    vol = 4.0 / 3.0 * math.pi * STRIKE_R ** 3
-    x0 = -(h + STRIKE_GAP + STRIKE_R)
-    ball = (f'<body name="ball" pos="{x0:.4f} 0 {h:.4f}"><freejoint/>'
-            f'<geom type="sphere" size="{STRIKE_R}" density="{STRIKE_MASS / vol:.1f}" '
-            f'friction="0.01 0.005 0.0001" '
-            f'solref="{_restitution_to_solref(mat.physics.restitution)}" '
-            f'solimp="0.9 0.95 0.001" rgba="0.2 0.2 0.2 1"/></body>\n  </worldbody>')
-    xml = replace_once(build_mjcf(SHAPE, mat), "</worldbody>", ball)
+    ball = _ball_xml("ball", (-(h + STRIKE_GAP + STRIKE_R), 0.0, h), STRIKE_R, STRIKE_MASS, mat)
+    xml = replace_once(build_mjcf(SHAPE, mat), "</worldbody>", ball + "\n  </worldbody>")
     model = mujoco.MjModel.from_xml_string(xml)
     data = mujoco.MjData(model)
     j = model.body("ball").jntadr[0]
     data.qvel[model.jnt_dofadr[j]] = STRIKE_SPEED
     rec = _record(model, data, ["object", "ball"])
+    return rec["object"], rec["ball"]
+
+
+def run_scale(mat) -> tuple[list, list]:
+    """Box at rest on a spring-mounted plate; record box and plate."""
+    import mujoco
+
+    from pseudomarble.data.generate_mujoco import build_mjcf, half_height
+
+    half_plate = 0.01
+    vol = 0.6 * 0.6 * 2 * half_plate
+    plate = (f'<body name="plate" pos="0 0 {SCALE_Z}">'
+             f'<joint name="spring" type="slide" axis="0 0 1" stiffness="{SCALE_K}" '
+             f'damping="{SCALE_C}"/>'
+             f'<geom type="box" size="0.3 0.3 {half_plate}" '
+             f'density="{SCALE_PLATE_MASS / vol:.1f}" rgba="0.5 0.5 0.5 1"/></body>'
+             '\n  </worldbody>')
+    z = SCALE_Z + half_plate + half_height(SHAPE) + 0.0005
+    xml = replace_once(build_mjcf(SHAPE, mat, object_z=z), "</worldbody>", plate)
+    model = mujoco.MjModel.from_xml_string(xml)
+    rec = _record(model, mujoco.MjData(model), ["object", "plate"])
+    return rec["object"], rec["plate"]
+
+
+def run_tap(mat) -> tuple[list, list]:
+    """Small ball dropped onto the resting box's top face; record box and ball."""
+    import mujoco
+
+    from pseudomarble.data.generate_mujoco import build_mjcf, half_height
+
+    top = 2 * half_height(SHAPE)
+    ball = _ball_xml("ball", (0.0, 0.0, top + TAP_HEIGHT + TAP_R), TAP_R, TAP_MASS, mat)
+    xml = replace_once(build_mjcf(SHAPE, mat), "</worldbody>", ball + "\n  </worldbody>")
+    model = mujoco.MjModel.from_xml_string(xml)
+    rec = _record(model, mujoco.MjData(model), ["object", "ball"])
     return rec["object"], rec["ball"]
 
 
@@ -196,6 +255,8 @@ def simulate_scene(item) -> tuple[str, list[float], list[float], dict[str, list]
     for f in PUSH_N:
         out[f"push{int(f):04d}"] = run_push(mat, f)
     out["strike"], out["strike_ball"] = run_strike(mat)
+    out["scale"], out["scale_plate"] = run_scale(mat)
+    out["tap"], out["tap_ball"] = run_tap(mat)
     norm, raw = essence(mat)
     return scene_id, norm, raw, out
 
@@ -232,6 +293,11 @@ def main() -> None:
                "probes": names, "ramp_deg": RAMP_DEG, "push_newtons": PUSH_N,
                "push_window_s": 0.1, "strike": {"mass": STRIKE_MASS, "speed": STRIKE_SPEED,
                                                 "radius": STRIKE_R, "gap": STRIKE_GAP},
+               "scale": {"k": SCALE_K, "c": SCALE_C, "plate_mass": SCALE_PLATE_MASS,
+                         "plate_z": SCALE_Z},
+               "tap": {"mass": TAP_MASS, "radius": TAP_R, "height": TAP_HEIGHT},
+               "restitution_convention": "reference balls carry the box's solref",
+               "design_iteration": "D2",
                "sim_seconds": SIM_SECONDS, "fps": FPS,
                "columns": ["t", "x", "y", "z", "up_x", "up_y", "up_z"]},
               open(os.path.join(args.out, "manifest.json"), "w"), indent=2)

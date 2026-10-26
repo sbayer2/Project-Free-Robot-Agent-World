@@ -15,10 +15,13 @@ Two readouts:
    fall, the first frames of contact, everything after -- and from fixed
    random frame subsets shared by every scene (the erasure question: does
    any k of n frames recover the axis?).
-3. GATE (§5): per axis, the probe FAMILIES (all of a family's recordings
-   read together: every ramp angle, every push force, the struck box plus
-   the sphere) that reach inverse R^2 >= --gate-r2 at --gate-noise. An axis
-   passes with at least two families. The bar and noise are not frozen yet.
+3. GATE (§5): probe FAMILIES read whole (every ramp angle, every push
+   force, a reference ball with the box it hits, the scale plate with its
+   box). For each ordered pair of families, the axes both read at inverse
+   R^2 >= --gate-r2 at --gate-noise; an axis passes when at least one pair
+   shares it, i.e. it has a positive transfer cell. Bar and noise are not
+   frozen; every battery measured before the freeze commit is DESIGN
+   (iteration log in docs/CROSS_INTERACTION.md).
 
     python scripts/f35_code_table.py --data data/pm_f31fix_loud
     python scripts/f35_code_table.py --data data/pm_f35_battery
@@ -128,7 +131,7 @@ def load_npz(data: str, n: int):
 def family(name: str) -> str:
     """Probe family of a recording: ramp05.7 -> ramp, push0960 -> push,
     strike_ball -> strike; single-recording probes are their own family."""
-    for prefix in ("ramp", "push", "strike"):
+    for prefix in ("ramp", "push", "strike", "scale", "tap"):
         if name.startswith(prefix):
             return prefix
     return name
@@ -142,12 +145,30 @@ def families(T: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
     return {f: np.concatenate(v, 1) for f, v in out.items()}
 
 
+def pair_matrix(table: dict[str, list[float]], bar: float) -> dict[str, list[str]]:
+    """For each ordered pair "A->B" of distinct families, the axes BOTH read at
+    >= bar: the axes on which watching A could predict B. Every other axis B
+    reads is a non-shared cell, where transfer must sit at predict-the-mean."""
+    out = {}
+    for a, ra in table.items():
+        for b, rb in table.items():
+            if a != b:
+                out[f"{a}->{b}"] = [x for j, x in enumerate(ESSENCE_AXES)
+                                    if ra[j] >= bar and rb[j] >= bar]
+    return out
+
+
 def gate(table: dict[str, list[float]], bar: float) -> dict[str, dict]:
-    """Per axis: families reaching the bar, and PASS iff at least two do."""
+    """Per axis: the families reaching the bar, and PASS iff the axis is shared
+    by at least one ordered pair in pair_matrix -- i.e. it has at least one
+    positive transfer cell. (Equivalent to >= 2 families reading it; stated
+    as pairs because the cross-prediction test is scored on pairs.)"""
+    pairs = pair_matrix(table, bar)
     out = {}
     for j, a in enumerate(ESSENCE_AXES):
         ok = [f for f, r in table.items() if r[j] >= bar]
-        out[a] = {"families": ok, "pass": len(ok) >= 2}
+        cells = [p for p, axes in pairs.items() if a in axes]
+        out[a] = {"families": ok, "pairs": cells, "pass": bool(cells)}
     return out
 
 
@@ -189,8 +210,13 @@ def main() -> None:
              for f, X in fam.items()}
     report["gate"] = {"noise_mm": args.gate_noise, "bar": args.gate_r2,
                       "axes": gate(table, args.gate_r2)}
-    print(f"\nGATE (R^2 >= {args.gate_r2:g} from >= 2 families at {args.gate_noise:g} mm; "
-          "bar and noise NOT frozen)")
+    report["gate"]["pairs"] = pair_matrix(table, args.gate_r2)
+    shared = {p: ax for p, ax in report["gate"]["pairs"].items() if ax}
+    print(f"\nPAIRS sharing an axis at R^2 >= {args.gate_r2:g}, {args.gate_noise:g} mm "
+          f"({len(shared)} of {len(report['gate']['pairs'])} ordered pairs):")
+    for p, ax in shared.items():
+        print(f"  {p:16s} {', '.join(ax)}")
+    print("\nGATE (every axis shared by >= 1 pair; bar and noise NOT frozen)")
     for a, g in report["gate"]["axes"].items():
         print(f"  {a:12s} {'PASS' if g['pass'] else 'FAIL'}  families: {g['families'] or 'none'}")
 

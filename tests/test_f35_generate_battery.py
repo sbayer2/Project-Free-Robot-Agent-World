@@ -31,9 +31,15 @@ def test_ramp_angles_sit_below_the_cube_tipping_angle_and_ascend():
 
 def test_probe_names_are_stable():
     names = G.probe_names()
-    assert names[0] == "drop" and names[-2:] == ["strike", "strike_ball"]
-    assert len(names) == 1 + len(G.RAMP_DEG) + len(G.PUSH_N) + 2
+    assert names[0] == "drop" and names[-4:] == ["scale", "scale_plate", "tap", "tap_ball"]
+    assert len(names) == 1 + len(G.RAMP_DEG) + len(G.PUSH_N) + 2 + 2 + 2
     assert "ramp05.7" in names and "push0015" in names
+
+
+def test_scale_spring_sinks_the_heaviest_box_within_the_plate_stroke():
+    heaviest = 8000.0 * 0.3 ** 3                      # kg: top of DENSITY_RANGE, 0.3 m cube
+    sink = (heaviest + G.SCALE_PLATE_MASS) * 9.81 / G.SCALE_K
+    assert 0.3 < sink < G.SCALE_Z - 0.05              # visible, and the plate stays off the ground
 
 
 def test_replace_once_refuses_ambiguity():

@@ -52,19 +52,27 @@ def test_inverse_r2_finds_planted_axis_only():
 
 
 def test_family_grouping():
-    names = ("drop", "ramp05.7", "push0960", "strike", "strike_ball", "tilt")
-    assert [C.family(n) for n in names] == ["drop", "ramp", "push", "strike", "strike", "tilt"]
+    names = ("drop", "ramp05.7", "push0960", "strike_ball", "scale_plate", "tap_ball", "tilt")
+    assert [C.family(n) for n in names] == ["drop", "ramp", "push", "strike", "scale", "tap",
+                                            "tilt"]
     z = np.zeros((3, 4, 6))
     T = {"ramp05.7": z, "ramp11.3": z + 1, "drop": z}
     F = C.families(T)
     assert F["ramp"].shape == (3, 48) and F["drop"].shape == (3, 24)
 
 
-def test_gate_needs_two_families():
+def test_gate_needs_a_shared_pair():
     table = {"drop": [0.0, 0.1, 0.99], "ramp": [0.0, 0.9, 0.85], "push": [0.85, 0.82, 0.1]}
     g = C.gate(table, 0.8)
     assert g["restitution"]["pass"] and g["friction"]["pass"] and not g["density"]["pass"]
-    assert g["density"]["families"] == ["push"]
+    assert g["density"]["families"] == ["push"] and g["density"]["pairs"] == []
+    assert set(g["friction"]["pairs"]) == {"ramp->push", "push->ramp"}
+
+
+def test_pair_matrix_is_ordered_and_excludes_the_diagonal():
+    table = {"drop": [0.0, 0.1, 0.99], "tap": [0.0, 0.0, 0.9]}
+    m = C.pair_matrix(table, 0.8)
+    assert m == {"drop->tap": ["restitution"], "tap->drop": ["restitution"]}
 
 
 def test_load_npz_matches_resample(tmp_path):

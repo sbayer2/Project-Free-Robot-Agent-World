@@ -146,10 +146,21 @@ experiment means anything (§5).
 
 ## 5. Probe battery redesign (the encoder we control)
 
-Gate before any training: **every axis must be recoverable at inverse
-R² ≥ 0.8, at the preregistered noise level, from at least two different
-probes.** Then every axis has a shared message across some pair, and the
-cross-prediction matrix has positive cells for every axis.
+Gate before any training: **every axis must be shared by at least one
+ordered pair of probe families**, where a pair shares an axis when both
+families read it at inverse R² ≥ 0.8 at the preregistered noise
+(`scripts/f35_code_table.py` prints the pair matrix and the gate). Why this
+is the bar: an axis read by only one family can only ever appear in a
+non-shared (target-side) cell, so whether it transfers would be untestable by
+design. A shared pair is the minimum for every axis to have a positive
+cell. The same matrix defines the control cells of §6. It is equivalent to
+"at least two families read the axis", but stated as pairs because the test
+is scored on pairs. It is not sufficient for the third-interaction readout,
+which needs the trained input family to carry whatever the third
+interaction depends on; that is checked per pair from the same table.
+
+Every box is the same 0.3 m cube, so mass = density × 0.027 m³
+(1.35–216 kg): the density column reads mass up to a constant.
 
 - **Friction: a thermometer ramp.** Several ramp angles θ_k with tan θ_k
   tiling the friction range (0.05–1.10). Which ramps the box slides on
@@ -171,6 +182,7 @@ cross-prediction matrix has positive cells for every axis.
 - **Restitution: the drop**, unchanged. Already robust.
 
 Re-run `f35_code_table.py` on the new battery. Proceed only if the gate passes.
+The battery as built, iteration by iteration, is in §9.
 
 ## 6. Experiment sketch
 
@@ -222,8 +234,8 @@ Re-run `f35_code_table.py` on the new battery. Proceed only if the gate passes.
 
 1. Tier order: T0 first (recommended; it is the bound), then T1.
 2. Noise level(s) to preregister, in mm for T0 and as a sensor model for T1.
-3. Battery: the thermometer ramp's angles, and the density probe (striking
-   sphere vs graded impulses).
+3. Battery: a second friction family (§9, D2 result), then freeze the
+   battery and the gate in one commit before any training.
 4. Frame rate and window for T1: contact keyframes last ~64 ms.
 5. Whether the T1 "raw linear" arm uses an inverse-display-curve sensor
    model on MuJoCo frames or a linear HDR renderer.
@@ -231,3 +243,47 @@ Re-run `f35_code_table.py` on the new battery. Proceed only if the gate passes.
 
 Reproduce §4: `python scripts/f35_code_table.py --data data/pm_f31fix_loud`
 (needs a `--keep-trajectory` world generated after #45).
+
+## 9. Design iteration log
+
+**Every battery in this section is DESIGN, not evidence.** The gate is being
+set after its first results were seen, which is legitimate for an
+instrument gate (redesigning a battery until it can read the axes is
+design work) on two conditions: the battery and gate are frozen in one
+commit before any F35 training, and no F35 hypothesis is scored on a
+battery tuned against it. Numbers below: `data/pm_f35_battery_sampled`
+(`--sample 512 --seed 1234`), inverse R², 5 mm position noise, families read
+whole; the `--source data/pm_f31fix_loud` world agrees to about ±0.05.
+
+**Modeling convention (strike, tap):** the reference ball's contact
+parameters carry the box's restitution, so each contact's restitution is
+attributed to the box. Physically it belongs to the pair; this is authored.
+
+| family | probe | D | density | friction | restitution |
+|---|---|---|---|---|---|
+| drop | 0.6 m drop (existing) | D1 | −0.23 | −0.17 | **0.99** |
+| ramp | thermometer ramp, 6 angles 5.7–38.7°, box at rest | D1 | −0.16 | **0.93** | 0.24 |
+| push | graded centre push, 15–3840 N × 0.1 s | D1 | 0.25 | 0.44 | 0.00 |
+| strike | 17 kg ball at 4 m/s into the resting box | D1 | **0.88** | 0.36 | 0.79 |
+| scale | box on a spring plate (k 5300 N/m, c 1500 N·s/m) | D2 | **0.99** | −0.28 | −0.17 |
+| tap | 0.2 kg ball dropped 0.3 m onto the box | D2 | −0.17 | −0.17 | **0.94** |
+
+**D1** (`7c14978`, read by `888d741`). Gate: one family per axis, all three
+FAIL. Lessons: the ramp lost restitution because the box now starts at rest
+(no landing bounce); the graded push is friction-gated, since the box moves
+only when F > μMg and its displacement then mixes mass with friction, so
+the logarithmic force ladder does not rescue density; soft contacts let
+boxes creep below tan θ = μ, so the thermometer is blurred.
+
+**D2** (this commit) adds two friction-free probes. Gate: density PASS
+(strike, scale), restitution PASS (drop, tap), **friction FAIL** (ramp only).
+Shared pairs: strike↔scale (density), drop↔tap (restitution). D1
+recordings are byte-identical to D1's, so cross-platform reference values
+taken on D1 still hold.
+
+**Next (D3): a second friction family.** Friction is read only through the
+ramp, and every other probe mixes it with mass or force. A mass-free
+friction probe: give the resting box a fixed initial horizontal velocity
+(a "curling stone" kick on flat ground); its slide distance v₀²/(2μg) does
+not depend on mass.
+
