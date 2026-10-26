@@ -22,6 +22,12 @@ model, and stores state trajectories only (no renders: tier T0). Probes:
             compression is (M + m_plate) g / k -- mass with no friction or
             gravity cancellation in it; the heaviest box sinks ~0.4 m, the
             lightest ~4 mm. The plate is stored as scale_plate.
+            D4 fix: in D2/D3 the box-plate contact took the box's soft,
+            restitution-set parameters and a 2 cm plate, so bouncy boxes
+            (r >= 0.53) tunnelled through it in 24 of 512 scenes, the
+            outcome depending on the MuJoCo build. The plate now has contact
+            priority with stiff, critically damped parameters and is 10 cm
+            thick: the scale reads mass, not bounce.
 - tap       (D2) a 0.2 kg, 3 cm ball dropped 0.3 m onto the resting box's
             top face; its rebounds read restitution while the box, on the
             ground, barely moves. The ball is stored as tap_ball.
@@ -68,6 +74,8 @@ RAMP_DEG = (5.7, 11.3, 16.7, 24.2, 31.0, 38.7)   # tan = 0.10 0.20 0.30 0.45 0.6
 PUSH_N = (15.0, 60.0, 240.0, 960.0, 3840.0)      # x 0.1 s = 1.5 ... 384 N.s
 STRIKE_MASS, STRIKE_SPEED, STRIKE_R, STRIKE_GAP = 17.0, 4.0, 0.05, 0.25
 SCALE_K, SCALE_C, SCALE_PLATE_MASS, SCALE_Z = 5300.0, 1500.0, 1.0, 0.5
+SCALE_PLATE_HALF = 0.05          # m; D4 (was 0.01)
+SCALE_PLATE_SOLREF = "0.01 1"    # timeconst 10 ms (>= 2 timesteps), critical damping; D4
 TAP_MASS, TAP_R, TAP_HEIGHT = 0.2, 0.03, 0.3
 KICK_MPS = (1.0, 3.0)
 SHAPE = "box"
@@ -193,15 +201,17 @@ def run_scale(mat) -> tuple[list, list]:
 
     from pseudomarble.data.generate_mujoco import build_mjcf, half_height
 
-    half_plate = 0.01
-    vol = 0.6 * 0.6 * 2 * half_plate
+    vol = 0.6 * 0.6 * 2 * SCALE_PLATE_HALF
+    # priority="1": the box-plate contact uses the PLATE's solref/solimp, not
+    # the box's restitution-derived (soft, barely damped) ones.
     plate = (f'<body name="plate" pos="0 0 {SCALE_Z}">'
              f'<joint name="spring" type="slide" axis="0 0 1" stiffness="{SCALE_K}" '
              f'damping="{SCALE_C}"/>'
-             f'<geom type="box" size="0.3 0.3 {half_plate}" '
+             f'<geom type="box" size="0.3 0.3 {SCALE_PLATE_HALF}" priority="1" '
+             f'solref="{SCALE_PLATE_SOLREF}" solimp="0.95 0.99 0.001" '
              f'density="{SCALE_PLATE_MASS / vol:.1f}" rgba="0.5 0.5 0.5 1"/></body>'
              '\n  </worldbody>')
-    z = SCALE_Z + half_plate + half_height(SHAPE) + 0.0005
+    z = SCALE_Z + SCALE_PLATE_HALF + half_height(SHAPE) + 0.0005
     xml = replace_once(build_mjcf(SHAPE, mat, object_z=z), "</worldbody>", plate)
     model = mujoco.MjModel.from_xml_string(xml)
     rec = _record(model, mujoco.MjData(model), ["object", "plate"])
@@ -316,11 +326,12 @@ def main() -> None:
                "push_window_s": 0.1, "strike": {"mass": STRIKE_MASS, "speed": STRIKE_SPEED,
                                                 "radius": STRIKE_R, "gap": STRIKE_GAP},
                "scale": {"k": SCALE_K, "c": SCALE_C, "plate_mass": SCALE_PLATE_MASS,
-                         "plate_z": SCALE_Z},
+                         "plate_z": SCALE_Z, "plate_half": SCALE_PLATE_HALF,
+                         "plate_solref": SCALE_PLATE_SOLREF},
                "tap": {"mass": TAP_MASS, "radius": TAP_R, "height": TAP_HEIGHT},
                "kick_mps": KICK_MPS,
                "restitution_convention": "reference balls carry the box's solref",
-               "design_iteration": "D3",
+               "design_iteration": "D4",
                "sim_seconds": SIM_SECONDS, "fps": FPS,
                "columns": ["t", "x", "y", "z", "up_x", "up_y", "up_z"]},
               open(os.path.join(args.out, "manifest.json"), "w"), indent=2)

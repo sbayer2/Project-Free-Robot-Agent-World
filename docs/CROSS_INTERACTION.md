@@ -266,7 +266,7 @@ attributed to the box. Physically it belongs to the pair; this is authored.
 | ramp | thermometer ramp, 6 angles 5.7–38.7°, box at rest | D1 | −0.16 | **0.93** | 0.24 |
 | push | graded centre push, 15–3840 N × 0.1 s | D1 | 0.25 | 0.44 | 0.00 |
 | strike | 17 kg ball at 4 m/s into the resting box | D1 | **0.88** | 0.36 | 0.79 |
-| scale | box on a spring plate (k 5300 N/m, c 1500 N·s/m) | D2 | **0.99** | −0.28 | −0.17 |
+| scale | box on a spring plate (k 5300 N/m, c 1500 N·s/m); stiff plate contact from D4 | D2, D4 | **1.00** | −0.26 | −0.21 |
 | tap | 0.2 kg ball dropped 0.3 m onto the box | D2 | −0.17 | −0.17 | **0.94** |
 | kick | box on flat ground given 1 and 3 m/s at t = 0 | D3 | −0.20 | **0.97** | 0.20 |
 
@@ -283,7 +283,7 @@ Shared pairs: strike↔scale (density), drop↔tap (restitution). D1
 recordings are byte-identical to D1's, so cross-platform reference values
 taken on D1 still hold.
 
-**D3** (this commit) adds the mass-free friction probe D2 called for: the
+**D3** (`b85bda4`) adds the mass-free friction probe D2 called for: the
 resting box is given a horizontal velocity on flat ground (a "curling
 stone" kick). Under Coulomb friction x(t) = v₀t − μgt²/2 until it stops at
 v₀²/(2μg), with no mass in it. Smoke test: slides match that within a few
@@ -297,6 +297,25 @@ byte-identical.
 **Gate: PASS on all three axes** (both worlds): density via strike and
 scale, friction via ramp and kick (0.97, and 0.96 even at 20 mm), and
 restitution via drop and tap. Six of 42 ordered pairs share an axis.
+
+**D4** (this commit) fixes a defect the cloud session's cross-version
+reproduction found. In D2/D3 the box-plate contact used the box's own
+restitution-derived contact parameters (soft, and barely damped for bouncy
+boxes) against a 2 cm plate. In 24 of 512 sampled scenes, all with
+restitution ≥ 0.53, the box tunnelled through the plate, ending up to
+0.69 m below it; even passing scenes penetrated up to 4 cm. Tunnelling is
+chaotic, so those scenes differed between MuJoCo builds (11 of 13
+reference recordings matched to 1e-6 across machines on 3.9.0; only the
+two scale recordings did not). It also leaked restitution into the scale
+(R² 0.68 noiseless). Fix: the plate takes contact priority with stiff,
+critically damped parameters (solref 0.01 1) and is 10 cm thick. Maximum
+penetration is now 3.3 mm, no scene exceeds 1 cm, and the plate's sink
+matches (M + 1)g/k within 1.3 mm (r 0.99999). The scale now reads density
+at 1.00 and restitution at −0.01 noiseless. Only `traj_scale` and
+`traj_scale_plate` changed; every other recording is byte-identical. Gate
+unchanged: PASS on all three axes. Lesson: a probe that adds a second
+contact surface inherits the box's contact softness unless it overrides it,
+and a soft contact against a thin geom can tunnel.
 
 **Consequence for the experiment (open, not a design fix):** every family
 reads exactly one axis at the bar. The strike comes closest to two

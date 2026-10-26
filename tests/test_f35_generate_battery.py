@@ -39,7 +39,9 @@ def test_probe_names_are_stable():
 def test_scale_spring_sinks_the_heaviest_box_within_the_plate_stroke():
     heaviest = 8000.0 * 0.3 ** 3                      # kg: top of DENSITY_RANGE, 0.3 m cube
     sink = (heaviest + G.SCALE_PLATE_MASS) * 9.81 / G.SCALE_K
-    assert 0.3 < sink < G.SCALE_Z - 0.05              # visible, and the plate stays off the ground
+    assert 0.3 < sink                                     # visible
+    assert G.SCALE_Z - G.SCALE_PLATE_HALF - sink > 0.02   # the plate stays off the ground
+    assert G.SCALE_PLATE_HALF >= 0.05                     # D4: too thick to tunnel through
 
 
 def test_replace_once_refuses_ambiguity():
