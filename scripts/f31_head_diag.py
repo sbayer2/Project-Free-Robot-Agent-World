@@ -72,7 +72,7 @@ def diagnose(run: str, cache: dict) -> dict:
                       for s in ("train", "test")}
     data = cache[key]
     model = build_model(cfg)
-    model.load_state_dict(torch.load(os.path.join(run, "model.pt")))
+    model.load_state_dict(torch.load(os.path.join(run, "model.pt"), weights_only=True))
     model.eval()
     blocks = probe_blocks(cfg.trajectory_probes, cfg.trajectory_frames,
                           cfg.trajectory_pos_only)
