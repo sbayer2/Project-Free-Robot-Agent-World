@@ -16,8 +16,8 @@ Two readouts:
    random frame subsets shared by every scene (the erasure question: does
    any k of n frames recover the axis?).
 3. GATE (§5): probe FAMILIES read whole (every ramp angle, every push
-   force, a reference ball with the box it hits, the scale plate with its
-   box). For each ordered pair of families, the axes both read at inverse
+   force, every kick speed, a reference ball with the box it hits, the
+   scale plate with its box). For each ordered pair of families, the axes both read at inverse
    R^2 >= --gate-r2 at --gate-noise; an axis passes when at least one pair
    shares it, i.e. it has a positive transfer cell. Bar and noise are not
    frozen; every battery measured before the freeze commit is DESIGN
@@ -131,7 +131,7 @@ def load_npz(data: str, n: int):
 def family(name: str) -> str:
     """Probe family of a recording: ramp05.7 -> ramp, push0960 -> push,
     strike_ball -> strike; single-recording probes are their own family."""
-    for prefix in ("ramp", "push", "strike", "scale", "tap"):
+    for prefix in ("ramp", "push", "strike", "scale", "tap", "kick"):
         if name.startswith(prefix):
             return prefix
     return name

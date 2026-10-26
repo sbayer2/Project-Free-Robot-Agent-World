@@ -234,8 +234,9 @@ The battery as built, iteration by iteration, is in §9.
 
 1. Tier order: T0 first (recommended; it is the bound), then T1.
 2. Noise level(s) to preregister, in mm for T0 and as a sensor model for T1.
-3. Battery: a second friction family (§9, D2 result), then freeze the
-   battery and the gate in one commit before any training.
+3. Battery: the gate passes at D3 (§9). Decide whether the unity test needs
+   a multi-axis input family (§9, D3 consequence), then freeze the battery
+   and the gate in one commit before any training.
 4. Frame rate and window for T1: contact keyframes last ~64 ms.
 5. Whether the T1 "raw linear" arm uses an inverse-display-curve sensor
    model on MuJoCo frames or a linear HDR renderer.
@@ -267,6 +268,7 @@ attributed to the box. Physically it belongs to the pair; this is authored.
 | strike | 17 kg ball at 4 m/s into the resting box | D1 | **0.88** | 0.36 | 0.79 |
 | scale | box on a spring plate (k 5300 N/m, c 1500 N·s/m) | D2 | **0.99** | −0.28 | −0.17 |
 | tap | 0.2 kg ball dropped 0.3 m onto the box | D2 | −0.17 | −0.17 | **0.94** |
+| kick | box on flat ground given 1 and 3 m/s at t = 0 | D3 | −0.20 | **0.97** | 0.20 |
 
 **D1** (`7c14978`, read by `888d741`). Gate: one family per axis, all three
 FAIL. Lessons: the ramp lost restitution because the box now starts at rest
@@ -275,15 +277,36 @@ only when F > μMg and its displacement then mixes mass with friction, so
 the logarithmic force ladder does not rescue density; soft contacts let
 boxes creep below tan θ = μ, so the thermometer is blurred.
 
-**D2** (this commit) adds two friction-free probes. Gate: density PASS
+**D2** (`c2b02e5`) adds two friction-free probes. Gate: density PASS
 (strike, scale), restitution PASS (drop, tap), **friction FAIL** (ramp only).
 Shared pairs: strike↔scale (density), drop↔tap (restitution). D1
 recordings are byte-identical to D1's, so cross-platform reference values
 taken on D1 still hold.
 
-**Next (D3): a second friction family.** Friction is read only through the
-ramp, and every other probe mixes it with mass or force. A mass-free
-friction probe: give the resting box a fixed initial horizontal velocity
-(a "curling stone" kick on flat ground); its slide distance v₀²/(2μg) does
-not depend on mass.
+**D3** (this commit) adds the mass-free friction probe D2 called for: the
+resting box is given a horizontal velocity on flat ground (a "curling
+stone" kick). Under Coulomb friction x(t) = v₀t − μgt²/2 until it stops at
+v₀²/(2μg), with no mass in it. Smoke test: slides match that within a few
+percent at 3 m/s and do not depend on mass (μ ≈ 0.45 at 1.7 kg and 14.9 kg:
+0.118 vs 0.117 m). At 1 m/s high-μ boxes slide 0.07–0.14 m against
+≈ 0.056 m predicted, so the 1 m/s kick alone reads friction at only 0.49;
+3 m/s reads 0.98. 13 of 512 boxes tip at 3 m/s, all with μ ≥ 1.07 (a
+sliding cube tips forward when μ > 1). D1 and D2 recordings are
+byte-identical.
+
+**Gate: PASS on all three axes** (both worlds): density via strike and
+scale, friction via ramp and kick (0.97, and 0.96 even at 20 mm), and
+restitution via drop and tap. Six of 42 ordered pairs share an axis.
+
+**Consequence for the experiment (open, not a design fix):** every family
+reads exactly one axis at the bar. The strike comes closest to two
+(density 0.88, restitution 0.79 / 0.73). So every positive cell transfers a
+single axis, and the unity readout of §6 (train A → B, freeze, read a third
+interaction C) only has something to find when C depends on the same axis.
+A test of *one essence*, rather than three separate one-axis channels,
+needs at least one input that carries several axes at once: the strike
+pushed over the bar on restitution, a composite interaction (e.g. a drop
+onto the ramp, which mixes bounce and slide), or the input taken as several
+families watched together. That choice belongs to the preregistration,
+before the freeze.
 

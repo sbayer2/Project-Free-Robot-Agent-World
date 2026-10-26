@@ -26,6 +26,12 @@ model, and stores state trajectories only (no renders: tier T0). Probes:
             top face; its rebounds read restitution while the box, on the
             ground, barely moves. The ball is stored as tap_ball.
 
+- kickV.V   (D3) "curling stone": the resting box on flat ground is given a
+            horizontal velocity of V.V m/s at t = 0. Under Coulomb friction it
+            decelerates at mu*g whatever its mass, so x(t) = v0 t - mu g t^2 / 2
+            until it stops at v0^2 / (2 mu g): friction with no mass in it. A
+            cube may tip forward instead when mu > half-width / COM height = 1.
+
 Restitution convention (D1 strike, D2 tap): the reference ball's contact
 parameters are set to the BOX's restitution, so each contact's restitution
 is attributed to the box. Physically restitution belongs to the pair; this
@@ -63,6 +69,7 @@ PUSH_N = (15.0, 60.0, 240.0, 960.0, 3840.0)      # x 0.1 s = 1.5 ... 384 N.s
 STRIKE_MASS, STRIKE_SPEED, STRIKE_R, STRIKE_GAP = 17.0, 4.0, 0.05, 0.25
 SCALE_K, SCALE_C, SCALE_PLATE_MASS, SCALE_Z = 5300.0, 1500.0, 1.0, 0.5
 TAP_MASS, TAP_R, TAP_HEIGHT = 0.2, 0.03, 0.3
+KICK_MPS = (1.0, 3.0)
 SHAPE = "box"
 DROP_HEIGHT = 0.6                                 # m, gap below the box (as DropSpec)
 SIM_SECONDS, FPS = 2.0, 60
@@ -71,7 +78,8 @@ SIM_SECONDS, FPS = 2.0, 60
 def probe_names() -> list[str]:
     return (["drop"] + [f"ramp{a:04.1f}" for a in RAMP_DEG]
             + [f"push{int(f):04d}" for f in PUSH_N] + ["strike", "strike_ball"]
-            + ["scale", "scale_plate", "tap", "tap_ball"])
+            + ["scale", "scale_plate", "tap", "tap_ball"]
+            + [f"kick{v:.1f}" for v in KICK_MPS])
 
 
 def plane_normal(theta_deg: float) -> np.ndarray:
@@ -214,6 +222,18 @@ def run_tap(mat) -> tuple[list, list]:
     return rec["object"], rec["ball"]
 
 
+def run_kick(mat, speed: float) -> list:
+    """Resting box given a horizontal velocity at t = 0; record the box."""
+    import mujoco
+
+    from pseudomarble.data.generate_mujoco import build_mjcf
+
+    model = mujoco.MjModel.from_xml_string(build_mjcf(SHAPE, mat))
+    data = mujoco.MjData(model)
+    data.qvel[model.jnt_dofadr[model.body("object").jntadr[0]]] = speed
+    return _record(model, data, ["object"])["object"]
+
+
 def run_drop(mat) -> list:
     import mujoco
 
@@ -257,6 +277,8 @@ def simulate_scene(item) -> tuple[str, list[float], list[float], dict[str, list]
     out["strike"], out["strike_ball"] = run_strike(mat)
     out["scale"], out["scale_plate"] = run_scale(mat)
     out["tap"], out["tap_ball"] = run_tap(mat)
+    for v in KICK_MPS:
+        out[f"kick{v:.1f}"] = run_kick(mat, v)
     norm, raw = essence(mat)
     return scene_id, norm, raw, out
 
@@ -296,8 +318,9 @@ def main() -> None:
                "scale": {"k": SCALE_K, "c": SCALE_C, "plate_mass": SCALE_PLATE_MASS,
                          "plate_z": SCALE_Z},
                "tap": {"mass": TAP_MASS, "radius": TAP_R, "height": TAP_HEIGHT},
+               "kick_mps": KICK_MPS,
                "restitution_convention": "reference balls carry the box's solref",
-               "design_iteration": "D2",
+               "design_iteration": "D3",
                "sim_seconds": SIM_SECONDS, "fps": FPS,
                "columns": ["t", "x", "y", "z", "up_x", "up_y", "up_z"]},
               open(os.path.join(args.out, "manifest.json"), "w"), indent=2)
