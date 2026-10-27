@@ -62,4 +62,20 @@ def test_one_scene_runs_every_probe():
     assert sid == "sampled_000000" and len(norm) == len(raw) == 3
     assert set(out) == set(G.probe_names())
     for rec in out.values():
-        assert len(rec) == 125 and len(rec[0]) == 7
+        assert len(rec) == 250 and len(rec[0]) == 7          # D5: 125 fps x 2 s
+
+
+def test_ball_ground_pair_fixes_the_balls_ground_contact():
+    """D5: the ball's ground contacts carry no material property of the box."""
+    mujoco = pytest.importorskip("mujoco")
+    from pseudomarble.data.generate_mujoco import build_mjcf, half_height
+
+    _, mat = G.sampled_materials(0, 1)[0]
+    h = half_height(G.SHAPE)
+    ball = G._ball_xml("ball", (-(h + G.STRIKE_GAP + G.STRIKE_R), 0.0, h),
+                       G.STRIKE_R, G.STRIKE_MASS, mat)
+    m = mujoco.MjModel.from_xml_string(G.with_ball(build_mjcf(G.SHAPE, mat), ball))
+    assert m.npair == 1
+    assert {m.pair_geom1[0], m.pair_geom2[0]} == {m.geom("ball_geom").id, m.geom("ground").id}
+    assert np.isclose(m.pair_friction[0, 0], G.BALL_GROUND_FRICTION)
+    assert np.allclose(m.pair_solref[0], [float(v) for v in G.BALL_GROUND_SOLREF.split()])

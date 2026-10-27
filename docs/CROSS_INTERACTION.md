@@ -245,7 +245,7 @@ The battery as built, iteration by iteration, is in §9.
    only the T0 *oracle floor* (a ridge/kNN fit), not a trained T0 model.
 2. Noise level(s) to preregister, in mm for T0 and as a sensor model for T1.
    T1 sensor model proposed in §10 (DRAFT): SNR ≈ 50 at nominal white.
-3. Battery: the gate passes at D4 (§9). Decide whether the unity test needs
+3. Battery: the gate passes at D5 (§9); the strike is not a two-axis input leak-free. Decide whether the unity test needs
    a multi-axis input family (§9, D3 consequence), then freeze the battery
    and the gate in one commit before any training.
 4. Frame rate and window for T1: contact keyframes last ~64 ms. Proposed in
@@ -332,9 +332,68 @@ unchanged: PASS on all three axes. Lesson: a probe that adds a second
 contact surface inherits the box's contact softness unless it overrides it,
 and a soft contact against a thin geom can tunnel.
 
+**D5** (this commit) fixes a convention leak and the readout, and moves
+to R1's frame rate. Three changes:
+
+1. *Ball–ground leak.* The reference ball's geom-level solref (the box's
+   restitution, by the convention above) applied to **every** contact the
+   ball made, including the ground, whose friction is the box's own
+   (`build_mjcf`). After rebounding off the box, the strike ball drops
+   about 10 cm and bounced on the ground with the box's restitution and
+   friction, the box not involved: the label replayed against the floor.
+   An explicit `<pair>` (ball, ground) now gives those contacts fixed,
+   material-independent parameters (friction 0.5, solref `0.01 1`); the
+   convention remains only on ball–box contacts. Verified: one
+   ball–ground contact per step, with the fixed parameters whatever the
+   material. The tap ball never touches the ground in any of the 512
+   scenes (its recordings are byte-identical to D4's), so the tap was never
+   affected.
+2. *Readout.* The ridge half of the inverse R² used a fixed α = 1, which
+   overfits once a family's columns outnumber its scenes: D4's strike
+   family read friction at −0.4 to −1.0, and reading the same ball at 125
+   rather than 64 frames dropped its restitution from 0.89 to 0.78. α is
+   now chosen per axis by inner 4-fold CV (1e-2 … 1e5, dual form so wide
+   families stay cheap); kNN-5 is unchanged. Families are still read whole.
+3. *125 fps* (one frame every 4 steps, 250 frames), R1's rate. Every
+   recording but the strike's equals D4's at the shared frames.
+
+Strike family, restitution, 5 mm, sampled world, separating the two fixes:
+
+| battery | readout | frames | density | friction | restitution |
+|---|---|---|---|---|---|
+| D4 (leak) | α = 1 | 64 | 0.88 | 0.36 | 0.79 |
+| D4 (leak) | CV α | 64 | 0.88 | 0.54 | **0.88** |
+| D5 (fixed) | CV α | 64 | 0.81 | 0.52 | 0.71 |
+| D5 (fixed) | CV α | 250 (125 fps) | 0.83 | 0.55 | **0.74** |
+| D5, impact only (before the ball first touches the ground, frames 0–17) | CV α | 250 | 0.65 | 0.26 | 0.70 |
+
+The readout fix alone would have passed the strike on two axes, on the
+leaked signal. Leak-free, the box–ball impact reads restitution at
+0.70–0.74, below the bar at 125 fps; the source world agrees (0.74). The
+strike's friction (0.55) is genuine: the box slides after the impact.
+
+D5 family table (5 mm, CV α, 125 fps; sampled world, source world within
+±0.04):
+
+| family | density | friction | restitution |
+|---|---|---|---|
+| drop | −0.01 | −0.00 | **0.98** |
+| ramp | −0.01 | **0.94** | 0.37 |
+| push | 0.37 | 0.60 | 0.13 |
+| strike | **0.83** | 0.55 | 0.74 |
+| scale | **1.00** | −0.01 | −0.01 |
+| tap | −0.01 | −0.02 | **0.95** |
+| kick | −0.01 | **0.98** | 0.31 |
+
+**Gate: PASS on all three axes**, the same six shared pairs as D4:
+strike ↔ scale (density), ramp ↔ kick (friction), drop ↔ tap
+(restitution). With CV α, readouts that carry nothing sit at 0 instead of
+going negative (D4's −0.2 density cells).
+
 **Consequence for the experiment (open, not a design fix):** every family
 reads exactly one axis at the bar. The strike comes closest to two
-(density 0.88, restitution 0.79 / 0.73). So every positive cell transfers a
+(density 0.83, restitution 0.74 leak-free); D4's 0.79–0.89 was partly the
+ball–ground leak. So every positive cell transfers a
 single axis, and the unity readout of §6 (train A → B, freeze, read a third
 interaction C) only has something to find when C depends on the same axis.
 A test of *one essence*, rather than three separate one-axis channels,
@@ -380,7 +439,11 @@ camera costs, not whether physics transfers at all.
 - **Camera.** One fixed camera per input family, never moving. Framing is
   set from the family's T0 extents over the whole world plus a margin, so
   the full 2 s path stays in view; the metres per pixel is written to the
-  manifest.
+  manifest. **Open before the freeze (cloud review, 2026-10-27):** at 96 px,
+  whole-path framing leaves the strike ball under 1 px and the box 4–5 px
+  on the steep ramp and the 3 m/s kick. The likely fix is a camera that
+  covers only the window each target field needs; to be settled with the
+  outcome fields.
 - **Timing.** 125 fps (one frame every 4 simulator steps of 2 ms), the full
   2 s window: 250 frames per recording. A contact keyframe (~64 ms, §4.2)
   spans 8 frames. Each frame is the exact state at one instant (zero

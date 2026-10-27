@@ -90,3 +90,42 @@ def test_load_npz_matches_resample(tmp_path):
         X, t = C.resample(tr, 4)
         assert np.allclose(T["drop"][i], X, atol=1e-6) and np.allclose(times["drop"], t)
     assert h == 0.6 and E.shape == (2, 3)
+
+
+def test_dual_ridge_matches_primal_ridge():
+    """ridge_path's dual form equals oracle_ceiling's closed-form ridge on
+    standardized inputs (whose intercept is unpenalized)."""
+    from oracle_ceiling import ridge_fit_predict
+
+    rng = np.random.default_rng(0)
+    X, Y = rng.normal(size=(60, 8)), rng.normal(size=(60, 2))
+    mu, sd = X[:40].mean(0), X[:40].std(0)
+    A, B = (X[:40] - mu) / sd, (X[40:] - mu) / sd
+    for alpha in (0.1, 10.0):
+        P = C.ridge_path(A, Y[:40], B, alphas=(alpha,))[0]
+        assert np.allclose(P, ridge_fit_predict(A, Y[:40], B, alpha=alpha), atol=1e-8)
+
+
+def test_knn_predict_matches_reference():
+    """Same neighbours as oracle_ceiling's kNN on already-standardized inputs."""
+    from oracle_ceiling import knn_fit_predict
+
+    rng = np.random.default_rng(1)
+    X = rng.normal(size=(60, 6))
+    Y = rng.normal(size=(50, 3))
+    mu, sd = X[:50].mean(0), X[:50].std(0)
+    A, B = (X[:50] - mu) / sd, (X[50:] - mu) / sd
+    assert np.allclose(C.knn_predict(A, Y, B), knn_fit_predict(A, Y, B))
+
+
+def test_cv_alpha_reads_a_spread_signal_past_many_noise_columns():
+    """A signal spread over many noisy columns (as over trajectory frames),
+    padded with pure noise to 10x more columns than scenes, stays readable
+    and an absent axis stays at zero."""
+    rng = np.random.default_rng(2)
+    n = 200
+    E = rng.normal(size=(n, 2))
+    X = np.concatenate([E[:, :1] + 3.0 * rng.normal(size=(n, 200)),
+                        rng.normal(size=(n, 1800))], 1)
+    r2 = C.inverse_r2(X, E)
+    assert r2[0] > 0.6 and r2[1] < 0.1

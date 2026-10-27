@@ -42,6 +42,13 @@ Restitution convention (D1 strike, D2 tap): the reference ball's contact
 parameters are set to the BOX's restitution, so each contact's restitution
 is attributed to the box. Physically restitution belongs to the pair; this
 is an authored modeling convention, not a simulated fact.
+D5 fix: in D1-D4 that geom-level solref also applied to the ball's contacts
+with the ground, whose friction is the box's own (build_mjcf), so the
+strike ball's floor bounces replayed the box's restitution and friction
+with the box not involved. An explicit ball-ground <pair> now gives those
+contacts fixed, material-independent parameters; the convention is left
+only on ball-box contacts. D5 also records at 125 fps (every 4 steps), the
+R1 frame rate.
 
     python scripts/f35_generate_battery.py --source data/pm_f31fix_loud \
         --out data/pm_f35_battery
@@ -80,7 +87,9 @@ TAP_MASS, TAP_R, TAP_HEIGHT = 0.2, 0.03, 0.3
 KICK_MPS = (1.0, 3.0)
 SHAPE = "box"
 DROP_HEIGHT = 0.6                                 # m, gap below the box (as DropSpec)
-SIM_SECONDS, FPS = 2.0, 60
+SIM_SECONDS, FPS = 2.0, 125                       # D5: 125 fps (was 60, i.e. 62.5 Hz)
+BALL_GROUND_FRICTION = 0.5                        # D5: fixed ball-ground contact,
+BALL_GROUND_SOLREF = "0.01 1"                     # stiff and critically damped
 
 
 def probe_names() -> list[str]:
@@ -123,7 +132,7 @@ def _record(model, data, bodies: list[str], seconds: float = SIM_SECONDS,
 
     ids = {b: model.body(b).id for b in bodies}
     n_steps = int(seconds / model.opt.timestep)
-    every = max(1, int((1.0 / fps) / model.opt.timestep))
+    every = max(1, round((1.0 / fps) / model.opt.timestep))
     out: dict[str, list] = {b: [] for b in bodies}
     for step in range(n_steps):
         t = step * model.opt.timestep
@@ -173,10 +182,21 @@ def _ball_xml(name: str, pos: tuple[float, float, float], radius: float, mass: f
 
     vol = 4.0 / 3.0 * math.pi * radius ** 3
     return (f'<body name="{name}" pos="{pos[0]:.4f} {pos[1]:.4f} {pos[2]:.4f}"><freejoint/>'
-            f'<geom type="sphere" size="{radius}" density="{mass / vol:.1f}" '
+            f'<geom name="{name}_geom" type="sphere" size="{radius}" density="{mass / vol:.1f}" '
             f'friction="0.01 0.005 0.0001" '
             f'solref="{_restitution_to_solref(mat.physics.restitution)}" '
             f'solimp="0.9 0.95 0.001" rgba="0.2 0.2 0.2 1"/></body>')
+
+
+def with_ball(xml: str, ball: str, name: str = "ball") -> str:
+    """Insert a reference ball into a build_mjcf scene, with an explicit
+    ball-ground <pair> (D5): a pair overrides the per-geom parameter mixing,
+    so the ball's ground contacts carry no material property of the box."""
+    pair = (f'<contact><pair geom1="{name}_geom" geom2="ground" '
+            f'friction="{BALL_GROUND_FRICTION} {BALL_GROUND_FRICTION} 0.005 0.0001 0.0001" '
+            f'solref="{BALL_GROUND_SOLREF}" solimp="0.9 0.95 0.001"/></contact>')
+    xml = replace_once(xml, "</worldbody>", ball + "\n  </worldbody>")
+    return replace_once(xml, "</mujoco>", pair + "\n</mujoco>")
 
 
 def run_strike(mat) -> tuple[list, list]:
@@ -186,7 +206,7 @@ def run_strike(mat) -> tuple[list, list]:
 
     h = half_height(SHAPE)
     ball = _ball_xml("ball", (-(h + STRIKE_GAP + STRIKE_R), 0.0, h), STRIKE_R, STRIKE_MASS, mat)
-    xml = replace_once(build_mjcf(SHAPE, mat), "</worldbody>", ball + "\n  </worldbody>")
+    xml = with_ball(build_mjcf(SHAPE, mat), ball)
     model = mujoco.MjModel.from_xml_string(xml)
     data = mujoco.MjData(model)
     j = model.body("ball").jntadr[0]
@@ -226,7 +246,7 @@ def run_tap(mat) -> tuple[list, list]:
 
     top = 2 * half_height(SHAPE)
     ball = _ball_xml("ball", (0.0, 0.0, top + TAP_HEIGHT + TAP_R), TAP_R, TAP_MASS, mat)
-    xml = replace_once(build_mjcf(SHAPE, mat), "</worldbody>", ball + "\n  </worldbody>")
+    xml = with_ball(build_mjcf(SHAPE, mat), ball)
     model = mujoco.MjModel.from_xml_string(xml)
     rec = _record(model, mujoco.MjData(model), ["object", "ball"])
     return rec["object"], rec["ball"]
@@ -330,8 +350,11 @@ def main() -> None:
                          "plate_solref": SCALE_PLATE_SOLREF},
                "tap": {"mass": TAP_MASS, "radius": TAP_R, "height": TAP_HEIGHT},
                "kick_mps": KICK_MPS,
-               "restitution_convention": "reference balls carry the box's solref",
-               "design_iteration": "D4",
+               "restitution_convention": "reference balls carry the box's solref "
+                                         "on ball-box contacts only",
+               "ball_ground": {"friction": BALL_GROUND_FRICTION,
+                               "solref": BALL_GROUND_SOLREF},
+               "design_iteration": "D5",
                "sim_seconds": SIM_SECONDS, "fps": FPS,
                "columns": ["t", "x", "y", "z", "up_x", "up_y", "up_z"]},
               open(os.path.join(args.out, "manifest.json"), "w"), indent=2)

@@ -7,8 +7,9 @@ battery written by scripts/f35_generate_battery.py (battery.npz + manifest)
 Two readouts:
 
 1. CODE TABLE: inverse R^2 of each essence axis read back out of ONE probe's
-   trajectory (pos relative to frame 0 + up vector, resampled), best of ridge
-   and kNN, 5-fold, under Gaussian position noise of 0 / 1 / 5 / 20 mm. The
+   trajectory (pos relative to frame 0 + up vector), best of ridge (alpha
+   chosen per axis by inner 4-fold CV; D5, was fixed at 1) and kNN-5, 5-fold,
+   under Gaussian position noise of 0 / 1 / 5 / 20 mm. The
    simulator is noiseless, so without noise any sub-millimetre difference is
    perfectly readable; the noise level is the channel.
 2. KEYFRAMES (drop probe): the same readout from frame windows -- pure free
@@ -40,11 +41,12 @@ import numpy as np
 HERE = os.path.dirname(__file__)
 sys.path.insert(0, os.path.join(HERE, "..", "src"))
 sys.path.insert(0, HERE)
-from oracle_ceiling import ESSENCE_AXES, knn_fit_predict, ridge_fit_predict  # noqa: E402
+from oracle_ceiling import ESSENCE_AXES  # noqa: E402
 
 PROBES = ("drop", "tilt", "push")
 NOISE_MM = (0.0, 1.0, 5.0, 20.0)
 UP_NOISE = 0.01   # added to the up-vector channels whenever position noise is on
+ALPHAS = tuple(float(a) for a in 10.0 ** np.arange(-2, 6))   # 1e-2 ... 1e5
 
 
 def resample(traj: list[dict], n: int) -> tuple[np.ndarray, np.ndarray]:
@@ -71,23 +73,60 @@ def first_contact_frame(times: np.ndarray, t_contact: float) -> int:
     return int(np.searchsorted(times, t_contact - 1e-9))
 
 
+def ridge_path(A: np.ndarray, Y: np.ndarray, B: np.ndarray,
+               alphas: tuple[float, ...] = ALPHAS) -> np.ndarray:
+    """Ridge predictions for every alpha at once, (len(alphas), len(B), Y cols).
+    Dual form: exact for column-centred A (the intercept is Y's mean), and its
+    cost is set by the number of scenes, not features, so whole families at
+    125 fps (thousands of columns) stay cheap."""
+    ym = Y.mean(0)
+    w, V = np.linalg.eigh(A @ A.T)
+    VtY = V.T @ (Y - ym)
+    KB = B @ A.T
+    return np.stack([KB @ (V @ (VtY / (w + a)[:, None])) + ym for a in alphas])
+
+
+def ridge_cv_predict(A: np.ndarray, Y: np.ndarray, B: np.ndarray, seed: int = 0) -> np.ndarray:
+    """Ridge with alpha chosen per output column by inner 4-fold CV on (A, Y).
+    A fixed alpha overfits once a family's columns outnumber its scenes (D4:
+    the strike family read friction at -1.0)."""
+    inner = np.array_split(np.random.default_rng(seed).permutation(len(A)), 4)
+    sse = np.zeros((len(ALPHAS), Y.shape[1]))
+    for m in range(len(inner)):
+        te = inner[m]
+        tr = np.concatenate([inner[j] for j in range(len(inner)) if j != m])
+        mu = A[tr].mean(0)
+        sse += ((ridge_path(A[tr] - mu, Y[tr], A[te] - mu) - Y[te]) ** 2).sum(1)
+    P = ridge_path(A, Y, B)
+    best = sse.argmin(0)
+    return P[best, :, np.arange(Y.shape[1])].T
+
+
+def knn_predict(A: np.ndarray, Y: np.ndarray, B: np.ndarray, k: int = 5) -> np.ndarray:
+    """kNN-k mean, with squared distances from Gram products (memory n_te x n_tr,
+    not n_te x n_tr x features)."""
+    d = (B ** 2).sum(1)[:, None] + (A ** 2).sum(1)[None, :] - 2.0 * B @ A.T
+    idx = np.argsort(d, axis=1)[:, :min(k, len(A))]
+    return Y[idx].mean(axis=1)
+
+
 def inverse_r2(X: np.ndarray, E: np.ndarray, k: int = 5, seed: int = 0) -> np.ndarray:
     """Per-axis out-of-fold R^2 of reading E from flattened X, best of ridge
-    (alpha 1) and kNN-5, columns standardized on each training fold."""
+    (alpha by inner CV) and kNN-5, columns standardized on each training fold."""
     X = X.reshape(len(X), -1)
     folds = np.array_split(np.random.default_rng(seed).permutation(len(X)), k)
-    best = None
-    for fit in (lambda a, b, c: ridge_fit_predict(a, b, c, alpha=1.0), knn_fit_predict):
-        P = np.zeros_like(E)
-        for i in range(k):
-            te = folds[i]
-            tr = np.concatenate([folds[j] for j in range(k) if j != i])
-            mu, sd = X[tr].mean(0), X[tr].std(0)
-            sd = np.where(sd < 1e-12, 1.0, sd)
-            P[te] = fit((X[tr] - mu) / sd, E[tr], (X[te] - mu) / sd)
-        r2 = 1.0 - ((E - P) ** 2).sum(0) / ((E - E.mean(0)) ** 2).sum(0)
-        best = r2 if best is None else np.maximum(best, r2)
-    return best
+    preds = {"ridge": np.zeros_like(E), "knn": np.zeros_like(E)}
+    for i in range(k):
+        te = folds[i]
+        tr = np.concatenate([folds[j] for j in range(k) if j != i])
+        mu, sd = X[tr].mean(0), X[tr].std(0)
+        sd = np.where(sd < 1e-12, 1.0, sd)
+        A, B = (X[tr] - mu) / sd, (X[te] - mu) / sd
+        preds["ridge"][te] = ridge_cv_predict(A, E[tr], B, seed=seed + i)
+        preds["knn"][te] = knn_predict(A, E[tr], B)
+    tot = ((E - E.mean(0)) ** 2).sum(0)
+    r2 = [1.0 - ((E - P) ** 2).sum(0) / tot for P in preds.values()]
+    return np.maximum(*r2)
 
 
 def load(data: str, n: int):
@@ -110,10 +149,11 @@ def load(data: str, n: int):
     return np.array(E), {k: np.array(v) for k, v in T.items()}, times, heights.pop()
 
 
-def load_npz(data: str, n: int):
+def load_npz(data: str, n: int | None):
     """The f35_generate_battery format -> the same tuple as load(). Recordings
     are (scenes, frames, [t, x, y, z, up_x, up_y, up_z]); positions are taken
-    relative to frame 0, as resample() does."""
+    relative to frame 0, as resample() does. n = None keeps every recorded
+    frame (the battery's native rate)."""
     man = json.load(open(os.path.join(data, "manifest.json")))
     if "drop_height" not in man:
         raise SystemExit(f"{data}/manifest.json has no drop_height; regenerate the battery")
@@ -121,7 +161,8 @@ def load_npz(data: str, n: int):
     T, times = {}, {}
     for name in man["probes"]:
         a = z[f"traj_{name}"].astype(float)
-        idx = np.linspace(0, a.shape[1] - 1, n).round().astype(int)
+        idx = (np.arange(a.shape[1]) if n is None
+               else np.linspace(0, a.shape[1] - 1, n).round().astype(int))
         X = a[:, idx, 1:7].copy()
         X[:, :, :3] -= a[:, :1, 1:4]
         T[name], times[name] = X, a[0, idx, 0]
@@ -172,6 +213,33 @@ def gate(table: dict[str, list[float]], bar: float) -> dict[str, dict]:
     return out
 
 
+def strike_windows(data: str, T: dict[str, np.ndarray], E: np.ndarray,
+                   noise_mm: float) -> dict[str, list[float]]:
+    """Where the strike's signal lives: ball + box before the ball first
+    touches the ground (the box-ball impact alone) vs the whole recording.
+    D4's strike read restitution mostly from the ball's ground bounces,
+    which replayed the box's restitution (fixed in D5)."""
+    man = json.load(open(os.path.join(data, "manifest.json")))
+    zb = np.load(os.path.join(data, "battery.npz"))["traj_strike_ball"][:, :, 3]
+    if T["strike_ball"].shape[1] != zb.shape[1]:
+        print("\nSTRIKE WINDOWS skipped: needs the battery's native frames (no --frames)")
+        return {}
+    on_ground = zb <= man["strike"]["radius"] + 0.003
+    first = np.where(on_ground.any(1), on_ground.argmax(1), zb.shape[1])
+    cut = int(first.min())
+    rows = {}
+    for name, hi in ((f"ball + box, before ground contact (frames 0-{cut - 1})", cut),
+                     ("ball + box, whole recording", zb.shape[1])):
+        X = np.concatenate([add_noise(T[p][:, :hi], noise_mm, seed=s).reshape(len(E), -1)
+                            for s, p in enumerate(("strike_ball", "strike"), start=1)], 1)
+        rows[name] = inverse_r2(X, E).tolist()
+    print(f"\nSTRIKE WINDOWS at {noise_mm:g} mm (ball first touches the ground at frame "
+          f"{cut}-{int(first.max())})")
+    for name, r in rows.items():
+        print(f"  {name:50s} {fmt(np.array(r))}")
+    return rows
+
+
 def fmt(r: np.ndarray) -> str:
     return " ".join(f"{a[:4]} {v:+.2f}" for a, v in zip(ESSENCE_AXES, r, strict=True))
 
@@ -179,14 +247,18 @@ def fmt(r: np.ndarray) -> str:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--data", required=True)
-    ap.add_argument("--frames", type=int, default=64)
+    ap.add_argument("--frames", type=int, default=None,
+                    help="resample to this many frames (default: a battery's native "
+                         "rate; 64 for sample.json worlds)")
     ap.add_argument("--gate-noise", type=float, default=5.0, help="mm; not frozen")
     ap.add_argument("--gate-r2", type=float, default=0.8, help="not frozen")
     ap.add_argument("--out", default=None)
     args = ap.parse_args()
 
     npz = os.path.exists(os.path.join(args.data, "battery.npz"))
-    E, T, times, height = (load_npz if npz else load)(args.data, args.frames)
+    E, T, times, height = (load_npz(args.data, args.frames) if npz
+                           else load(args.data, args.frames or 64))
+    args.frames = len(times["drop"])
     report: dict = {"data": args.data, "frames": args.frames, "code_table": {},
                     "per_recording": {}, "keyframes": {}}
     print(f"[f35] {args.data}: {len(E)} scenes, {len(T)} recordings, {args.frames} frames "
@@ -219,6 +291,9 @@ def main() -> None:
     print("\nGATE (every axis shared by >= 1 pair; bar and noise NOT frozen)")
     for a, g in report["gate"]["axes"].items():
         print(f"  {a:12s} {'PASS' if g['pass'] else 'FAIL'}  families: {g['families'] or 'none'}")
+
+    if npz and "strike_ball" in T:
+        report["strike_windows"] = strike_windows(args.data, T, E, args.gate_noise)
 
     # Free fall from rest covers `height` (the gap to the ground) in sqrt(2h/g).
     t_contact = float(np.sqrt(2.0 * height / 9.81))
