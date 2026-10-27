@@ -72,18 +72,25 @@ The signal chain, and the choices it forces:
 - **State (tier T0).** The simulator's own trajectory: position and up
   vector per frame (`--keep-trajectory`, 125 samples over 2 s). No pixels.
   The oracle tier: anything a camera could recover is bounded by this.
-- **Raw frames (tier T1).** Rendered frames with no codec. A synthetic
-  camera is a perfect global shutter: each frame is the exact state at one
-  instant, and MuJoCo steps at 500 Hz (timestep 0.002 s), so frame rate is a
-  free choice. MuJoCo's renderer returns 8-bit display RGB, not linear raw.
-  Options for "raw linear": (i) undo the display curve and add a sensor model
-  (shot noise, read noise, Bayer mosaic, 12-bit depth), which cannot recover
-  clipped highlights; (ii) a linear HDR renderer (the repo has
-  `generate_blender.py`, not yet used for dynamics).
-- **Compressed video (tier T2, later, as a degradation arm only).** F33's
-  clips went through ffmpeg at 4 fps, where a bounce is invisible. Codecs
-  quantize away exactly the small, fast contact events §4 finds the
-  information in.
+- **Raw frames (tier T1).** Rendered frames kept as numeric arrays, never
+  passed through a codec. A synthetic camera is a perfect global shutter:
+  each frame is the exact state at one instant, and MuJoCo steps at 500 Hz
+  (timestep 0.002 s), so frame rate is a free choice. MuJoCo's renderer
+  returns 8-bit RGB that is **linear in light**: no display curve is
+  applied. Measured 2026-10-27 on MuJoCo 3.9.0: a grey plane (albedo 0.5)
+  under a headlight of 0.05–1.2 renders at 6, 13, 26, 51, 102, 153, exactly
+  0.5 × light × 255. What it lacks against a CMOS raw is bit depth (8 bits,
+  clipped at 1.0) and sensor physics (no shot or read noise, no mosaic).
+  Because the output is linear, rendering each frame at two light levels
+  and merging them extends it to about 12 bits; a sensor model then adds
+  the noise. §10 specifies this.
+  *Correction:* an earlier version of this note said the renderer returns
+  "8-bit display RGB, not linear raw" and proposed undoing a display curve.
+  That was not checked and is wrong; there is no display curve to undo.
+- **Compressed video (tier T2): not on the main path.** Owner decision,
+  2026-10-27: no codec and no text anywhere in F35. F33's clips went through
+  ffmpeg at 4 fps, where a bounce is invisible; codecs quantize away exactly
+  the small, fast contact events §4 finds the information in.
 
 **A noise model is mandatory.** The simulator is noiseless, so without
 noise a decoder can read sub-millimetre differences perfectly. The pilot hit
@@ -228,19 +235,26 @@ The battery as built, iteration by iteration, is in §9.
 - **The static question stays separate.** The 2026-10-26 pooling pilot
   (friction R² 0.18 from the averaged view vs 0.64 from cross-view features,
   controls at or below zero) is about appearance and belongs to the F13–F31
-  line. It is not part of this design.
+  line. It is not part of this design. Its draft preregistration is
+  `docs/CROSSVIEW_POOLING.md` on `claude/crossview-pooling-prereg`.
 
 ## 8. Open decisions
 
-1. Tier order: T0 first (recommended; it is the bound), then T1.
+1. Tier order: T0 first (recommended; it is the bound), then T1. §10 needs
+   only the T0 *oracle floor* (a ridge/kNN fit), not a trained T0 model.
 2. Noise level(s) to preregister, in mm for T0 and as a sensor model for T1.
-3. Battery: the gate passes at D3 (§9). Decide whether the unity test needs
+   T1 sensor model proposed in §10 (DRAFT).
+3. Battery: the gate passes at D4 (§9). Decide whether the unity test needs
    a multi-axis input family (§9, D3 consequence), then freeze the battery
    and the gate in one commit before any training.
-4. Frame rate and window for T1: contact keyframes last ~64 ms.
-5. Whether the T1 "raw linear" arm uses an inverse-display-curve sensor
-   model on MuJoCo frames or a linear HDR renderer.
+4. Frame rate and window for T1: contact keyframes last ~64 ms. Proposed in
+   §10: 125 fps over the full 2 s.
+5. ~~Inverse display curve or linear HDR renderer~~ Resolved: MuJoCo's
+   output is already linear (§3); §10 uses exposure bracketing plus a
+   sensor model. Blender remains an option for a photoreal follow-up.
 6. F-number assignment.
+7. Architecture for T1: owner decision 2026-10-27, an attention transformer
+   over frame tokens; no FNet arm (§10.9).
 
 Reproduce §4: `python scripts/f35_code_table.py --data data/pm_f31fix_loud`
 (needs a `--keep-trajectory` world generated after #45).
@@ -329,3 +343,170 @@ onto the ramp, which mixes bounce and slide), or the input taken as several
 families watched together. That choice belongs to the preregistration,
 before the freeze.
 
+
+## 10. Amendment R1 (DRAFT): the T1 pixel arm, an attention transformer on uncompressed frame arrays
+
+**Status: DRAFT, 2026-10-27. Not frozen.** R1 freezes together with the
+battery and gate (§8 item 3), in one commit that also adds the frame
+generator, the model and `scripts/f35_r1_verdicts.py`, before any R1 model is
+trained. Until then everything here can change.
+
+**Owner decisions recorded (2026-10-27):**
+- The model reads rendered frames stored as numeric arrays (`.npz`). No
+  PNG, no video codec, no text anywhere: no captions, prompts or language
+  model. Physics → frame arrays → model → numbers.
+- One architecture: an attention transformer over frame tokens. FNet is not
+  tested (§10.9).
+
+### 10.1 The question R1 adds
+
+T0 asks what the exact state carries. R1 asks whether a model that sees
+only pixels, through a realistic sensor, recovers the same transfer: watch
+interaction A as raw frames, predict interaction B. The bar is the T0
+oracle floor at the matching precision (§10.5), so R1 measures what the
+camera costs, not whether physics transfers at all.
+
+### 10.2 Frames (the channel)
+
+- **Scene.** Every box has the same albedo and finish (one fixed
+  appearance, §6), so material is unreadable from any single frame.
+  Lighting fixed.
+- **Camera.** One fixed camera per input family, never moving. Framing is
+  set from the family's T0 extents over the whole world plus a margin, so
+  the full 2 s path stays in view; the metres per pixel is written to the
+  manifest.
+- **Timing.** 125 fps (one frame every 4 simulator steps of 2 ms), the full
+  2 s window: 250 frames per recording. A contact keyframe (~64 ms, §4.2)
+  spans 8 frames. Each frame is the exact state at one instant (zero
+  exposure time, no motion blur; a disclosed idealization). T0 for R1 is
+  recorded at the same 125 fps so frames and states align one to one.
+- **Resolution.** 96 × 96 (disk: §10.8).
+- **Linear exposure pair.** Each frame is rendered twice, with every light
+  scaled by 1 and by 1/16. MuJoCo's output is linear in light (§3), so
+  merging the pair (use the bright frame where it is below 250, otherwise
+  16 × the dim frame) gives linear radiance over about 12 bits with no
+  clipping below 16× the nominal white. The freeze commit includes a test
+  that the merge is linear across the seam.
+- **Sensor model**, applied in numpy from a per-scene seed at load time, so
+  disk holds only the noiseless exposure pair:
+  1. scale linear radiance so the merged range maps to a full well of
+     10 000 e⁻;
+  2. Poisson shot noise;
+  3. Gaussian read noise, σ = 3 e⁻;
+  4. RGGB Bayer mosaic: one colour sample per pixel, one channel;
+  5. 12-bit ADC, 0–4095, clipped.
+  The model's input is that single-channel 12-bit mosaic: the closest a
+  simulator gets to the "raw binary" of a global-shutter CMOS sensor.
+- **What stays synthetic:** the 8-bit quantization of each exposure (fine
+  steps after merging, but not a true analog signal), MuJoCo's lighting
+  model, and zero exposure time. Blender (`generate_blender.py`, linear
+  float output) is the route to photoreal raw if R1 is worth extending.
+
+### 10.3 Model
+
+New module (one module per concept), under the repo's three-backend rule:
+MLX canonical, torch mirror with a parity test, numpy forward for CI.
+
+- **Frame encoder**, shared across frames. Conv 32/64/128, kernel 3, the
+  first with stride 2 so each step covers one 2 × 2 Bayer cell. Then
+  **no global average pool**: averaging over the image throws away where
+  the box is, and position is the signal. Instead a 1 × 1 conv to 32
+  keypoint maps, a spatial soft-argmax per map (x, y), and a linear layer
+  from the 64 coordinates to a 256-dim frame token (deep spatial
+  autoencoder style, Finn et al. 2016).
+- **Temporal transformer.** 250 frame tokens plus a learned time embedding;
+  4 pre-LayerNorm blocks, width 256, 4 heads, FFN 512, dropout 0.1; mean
+  over tokens → z (256) → MLP head → target outcomes.
+- **Frame dropout in training.** Each frame token is replaced by a learned
+  mask token with p = 0.25, identically in every run, so the erasure tests
+  (§10.6) are in distribution at evaluation.
+- **Loss.** MSE on the target family's outcomes, each field standardized on
+  train statistics, never a raw MSE in which one field dominates (the F31a
+  head-collapse lesson). Outcome fields per family are defined in the freeze
+  commit.
+
+### 10.4 Pairs, splits, seeds
+
+- **Pairs:** the frozen battery's shared pairs. At D4: kick → ramp
+  (friction, primary: the faintest keyframe), drop → tap (restitution),
+  strike → scale (density). The multi-axis input question (§9) may add one
+  pair at the freeze.
+- **Split:** one fixed iid 80/20 split by scene (seed 0), the same for
+  every pair. **Seeds:** 0–4 per pair.
+
+### 10.5 The bar: the T0 oracle floor at pixel precision
+
+For each pair, **F_px** = best of ridge and kNN-5 from the input family's
+T0 trajectory (125 fps, position noise σ = 0.5 px × that camera's metres per
+pixel) to the target outcomes, fit on the train split, scored on the test
+split. F_5mm (σ = 5 mm, the §5 gate noise) is co-reported. A pixel model
+cannot beat exact state, except through noise; F_px is what a perfect
+tracker at the camera's resolution would get with a linear or
+nearest-neighbour readout.
+
+### 10.6 Gates, hypotheses and frozen rules
+
+**Gates:**
+- G1 apparatus: the box centroid from a segmentation render matches the
+  projected T0 position within 0.5 px RMS over all frames of every
+  recording (checks frame timing and camera).
+- G2 head health, per run: train gain ≥ 1.5 and the spread of predictions
+  across scenes ≥ 0.5 × the target's. A failing run is reported and
+  withheld (F31a's heads collapsed without anyone checking).
+- G3 controls, per pair: shuffled pairing (input from scene i, target from
+  scene π(i)) held-out R² ≤ 0.05; first frame only (the box at rest, before
+  any interaction) held-out R² ≤ 0.05. A G3 failure withholds that pair.
+
+**H1 — transfer reaches the floor (primary on kick → ramp; secondary on
+the other pairs).** S = mean over seeds of held-out R² of the target
+outcomes (mean over standardized fields).
+- REACHES: S ≥ F_px − 0.05
+- SHORT: S ≤ F_px − 0.20
+- otherwise PARTIAL
+
+**H2 — erasure (the keyframe analogy, §2 item 3 and §4.2)**, evaluated on
+H1's trained models by masking frames at test time:
+- (a) Drop → tap: masking every frame before the first contact costs ≤ 0.02
+  in S. In-betweens carry nothing.
+- (b) Keeping a fixed random 25 % of frames: the restitution pair loses less
+  S than the friction pair. Restitution is redrawn at every bounce;
+  friction is one faint keyframe.
+
+**Descriptive (no verdict):** the same model on noiseless frames (the leak
+the noise model exists to prevent); z → each essence axis, 5-fold ridge;
+full erasure curves (pre-contact, contact-onset, motion, rest windows; k
+of n random subsets).
+
+### 10.7 Predictions (registered at real odds, before any frame exists)
+
+- **Friction pair (kick → ramp) REACHES 45 %, PARTIAL 35 %, SHORT 20 %.**
+  Low-μ kicks slide metres, so framing for them makes a pixel several
+  centimetres; the slide-and-stop is large but its fine detail is
+  sub-pixel. F_px prices that in, but a learned tracker may still fall short
+  of a perfect one.
+- **Restitution pair REACHES 65 %**: bounce heights are large and redundant.
+- **Density pair REACHES 50 %**: the strike's rebound is fast and brief.
+- **G2 passes in every run, 70 %**, given the F31a history.
+- **H2 (a) holds 75 %; H2 (b) holds 70 %.**
+
+### 10.8 Compute and disk
+
+Per input family: 512 scenes × 250 frames × 96 × 96 × 2 exposures of uint8
+≈ 2.4 GB before compression; the background is static and noise is added at
+load, so `.npz` compression should cut this substantially. The Mac has
+about 58 GB free (2026-10-27). Run time per model is unknown: one
+single-seed smoke run, labeled as such and not graded, measures it before
+the freeze. If one run takes over 30 minutes, R1 is cut to the friction
+pair.
+
+### 10.9 Not tested, and why
+
+- **FNet** (fixed Fourier token mixing), by owner decision. The reasoning,
+  recorded: the format of the input (`.npz` vs a lossless PNG) does not
+  favour either architecture; what was decisive is that a Fourier basis is
+  global in time while contact keyframes are brief, and that attention is
+  the stronger default (FNet reached 92–97 % of attention's accuracy on
+  language). A learned spectral filter (GFNet / FNO style) is likewise not
+  tested.
+- **Codec or text inputs** (§3, owner decision).
+- **Photoreal rendering** (Blender): only if R1 is worth extending.
