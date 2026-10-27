@@ -82,8 +82,9 @@ The signal chain, and the choices it forces:
   0.5 × light × 255. What it lacks against a CMOS raw is bit depth (8 bits,
   clipped at 1.0) and sensor physics (no shot or read noise, no mosaic).
   Because the output is linear, rendering each frame at two light levels
-  and merging them extends it to about 12 bits; a sensor model then adds
-  the noise. §10 specifies this.
+  and merging them extends its range above the clip point (two stops with
+  §10's × 1/4 bracket); a sensor model then adds the noise and digitizes at
+  12 bits. §10 specifies this.
   *Correction:* an earlier version of this note said the renderer returns
   "8-bit display RGB, not linear raw" and proposed undoing a display curve.
   That was not checked and is wrong; there is no display curve to undo.
@@ -243,7 +244,7 @@ The battery as built, iteration by iteration, is in §9.
 1. Tier order: T0 first (recommended; it is the bound), then T1. §10 needs
    only the T0 *oracle floor* (a ridge/kNN fit), not a trained T0 model.
 2. Noise level(s) to preregister, in mm for T0 and as a sensor model for T1.
-   T1 sensor model proposed in §10 (DRAFT).
+   T1 sensor model proposed in §10 (DRAFT): SNR ≈ 50 at nominal white.
 3. Battery: the gate passes at D4 (§9). Decide whether the unity test needs
    a multi-axis input family (§9, D3 consequence), then freeze the battery
    and the gate in one commit before any training.
@@ -351,6 +352,11 @@ battery and gate (§8 item 3), in one commit that also adds the frame
 generator, the model and `scripts/f35_r1_verdicts.py`, before any R1 model is
 trained. Until then everything here can change.
 
+*Revision 2026-10-27 (draft 2), from the cloud session's review: explicit
+exposure and SNR (and a × 1/4 bracket in place of × 1/16); angular noise in
+F_px; span masking in training; H2 (b) defined as relative retention; G2
+per field; corner split co-reported; mosaic and headlight notes.*
+
 **Owner decisions recorded (2026-10-27):**
 - The model reads rendered frames stored as numeric arrays (`.npz`). No
   PNG, no video codec, no text anywhere: no captions, prompts or language
@@ -382,21 +388,37 @@ camera costs, not whether physics transfers at all.
   recorded at the same 125 fps so frames and states align one to one.
 - **Resolution.** 96 × 96 (disk: §10.8).
 - **Linear exposure pair.** Each frame is rendered twice, with every light
-  scaled by 1 and by 1/16. MuJoCo's output is linear in light (§3), so
-  merging the pair (use the bright frame where it is below 250, otherwise
-  16 × the dim frame) gives linear radiance over about 12 bits with no
-  clipping below 16× the nominal white. The freeze commit includes a test
-  that the merge is linear across the seam.
+  scaled by 1 and by 1/4: the headlight's ambient, diffuse and specular
+  included, no emissive materials, no skybox. MuJoCo's output is linear in
+  light and clips at 255 (§3; confirmed on 3.9.0 and 3.17.0, GPU and
+  software renderers alike), so merging the pair (the bright frame where it
+  is below 250, otherwise 4 × the dim frame) gives linear radiance up to
+  4 × nominal white. The freeze commit includes a test that the merge is
+  linear across the seam, with the headlight scaled.
+- **Exposure and noise, stated explicitly** (the noise level is the
+  channel, §3, so it is a preregistered number, not a by-product):
+  - nominal white (255 in the × 1 exposure) = 2 500 e⁻, so **SNR at white
+    ≈ 50** (shot-limited); a surface of albedo a sits at a × 2 500 e⁻, and
+    the box albedo fixed at the freeze sets the box's SNR, which the
+    manifest records;
+  - full well 10 000 e⁻ = 4 × nominal white (two stops of highlight
+    headroom), clipped above;
+  - read noise σ = 3 e⁻; 12-bit ADC over the full well (≈ 2.4 e⁻ per step).
+  Values of the order of current global-shutter CMOS. One exposure level
+  of the × 1 frame is ≈ 9.8 e⁻, about the shot noise at 100 e⁻, so 8-bit
+  quantization is visible only in deep shadow (disclosed).
 - **Sensor model**, applied in numpy from a per-scene seed at load time, so
   disk holds only the noiseless exposure pair:
-  1. scale linear radiance so the merged range maps to a full well of
-     10 000 e⁻;
+  1. map merged linear radiance to electrons as above;
   2. Poisson shot noise;
-  3. Gaussian read noise, σ = 3 e⁻;
+  3. Gaussian read noise;
   4. RGGB Bayer mosaic: one colour sample per pixel, one channel;
   5. 12-bit ADC, 0–4095, clipped.
   The model's input is that single-channel 12-bit mosaic: the closest a
-  simulator gets to the "raw binary" of a global-shutter CMOS sensor.
+  simulator gets to the "raw binary" of a global-shutter CMOS sensor. With
+  a grey scene under white light the three channels are equal, so the
+  mosaic changes nothing but the format; it is kept for fidelity and
+  costs nothing.
 - **What stays synthetic:** the 8-bit quantization of each exposure (fine
   steps after merging, but not a true analog signal), MuJoCo's lighting
   model, and zero exposure time. Blender (`generate_blender.py`, linear
@@ -417,9 +439,13 @@ MLX canonical, torch mirror with a parity test, numpy forward for CI.
 - **Temporal transformer.** 250 frame tokens plus a learned time embedding;
   4 pre-LayerNorm blocks, width 256, 4 heads, FFN 512, dropout 0.1; mean
   over tokens → z (256) → MLP head → target outcomes.
-- **Frame dropout in training.** Each frame token is replaced by a learned
-  mask token with p = 0.25, identically in every run, so the erasure tests
-  (§10.6) are in distribution at evaluation.
+- **Masking in training**, identically in every run, so the erasure tests
+  (§10.6) are in distribution at evaluation. Each training example gets,
+  with equal probability, either i.i.d. frame masking (each frame token
+  replaced by a learned mask token with p = 0.25) or one contiguous span of
+  8–80 frames masked (length uniform). H2 (a) masks a contiguous block of
+  about 44 frames, which i.i.d. masking alone would make out of
+  distribution.
 - **Loss.** MSE on the target family's outcomes, each field standardized on
   train statistics, never a raw MSE in which one field dominates (the F31a
   head-collapse lesson). Outcome fields per family are defined in the freeze
@@ -432,14 +458,22 @@ MLX canonical, torch mirror with a parity test, numpy forward for CI.
   strike → scale (density). The multi-axis input question (§9) may add one
   pair at the freeze.
 - **Split:** one fixed iid 80/20 split by scene (seed 0), the same for
-  every pair. **Seeds:** 0–4 per pair.
+  every pair; primary. R1's first question is whether pixels can match the
+  state floor at all, which is an interpolation question. **Corner split,
+  co-reported** (the project default, "splits with teeth"): per pair, the
+  top 20 % of the shared axis held out, with its own F_px. A model that
+  reaches the floor on iid and falls short on the corner has learned the
+  training range, not the physics. **Seeds:** 0–4 per pair.
 
 ### 10.5 The bar: the T0 oracle floor at pixel precision
 
 For each pair, **F_px** = best of ridge and kNN-5 from the input family's
-T0 trajectory (125 fps, position noise σ = 0.5 px × that camera's metres per
-pixel) to the target outcomes, fit on the train split, scored on the test
-split. F_5mm (σ = 5 mm, the §5 gate noise) is co-reported. A pixel model
+T0 trajectory to the target outcomes, fit on the train split, scored on the
+test split. T0 is degraded to what the camera can see: position noise
+σ = 0.5 px × that camera's metres per pixel, and orientation noise of the
+same pixel precision, σ_θ = 0.5 px × (m/px) / 0.15 m (the cube's half
+size), applied as a random rotation of the up vector. Without the angular
+term the bar would be inflated wherever the box tips or bounces. F_5mm (σ = 5 mm, the §5 gate noise) is co-reported. A pixel model
 cannot beat exact state, except through noise; F_px is what a perfect
 tracker at the camera's resolution would get with a linear or
 nearest-neighbour readout.
@@ -450,9 +484,12 @@ nearest-neighbour readout.
 - G1 apparatus: the box centroid from a segmentation render matches the
   projected T0 position within 0.5 px RMS over all frames of every
   recording (checks frame timing and camera).
-- G2 head health, per run: train gain ≥ 1.5 and the spread of predictions
-  across scenes ≥ 0.5 × the target's. A failing run is reported and
-  withheld (F31a's heads collapsed without anyone checking).
+- G2 head health, per run and **per standardized field**: train gain
+  ≥ 1.5 overall, and for every field the floor can predict (per-field F_px
+  R² ≥ 0.3), the spread of the model's train predictions across scenes
+  ≥ 0.5 × that field's target spread. A pooled check can pass while a
+  small block is collapsed: F31a's drop block was, hidden under the
+  dominant tilt block. A failing run is reported and withheld.
 - G3 controls, per pair: shuffled pairing (input from scene i, target from
   scene π(i)) held-out R² ≤ 0.05; first frame only (the box at rest, before
   any interaction) held-out R² ≤ 0.05. A G3 failure withholds that pair.
@@ -467,10 +504,14 @@ outcomes (mean over standardized fields).
 **H2 — erasure (the keyframe analogy, §2 item 3 and §4.2)**, evaluated on
 H1's trained models by masking frames at test time:
 - (a) Drop → tap: masking every frame before the first contact costs ≤ 0.02
-  in S. In-betweens carry nothing.
-- (b) Keeping a fixed random 25 % of frames: the restitution pair loses less
-  S than the friction pair. Restitution is redrawn at every bounce;
-  friction is one faint keyframe.
+  in S. In-betweens carry nothing. Co-reported: the cost of masking the
+  same number of i.i.d. random frames from the whole recording.
+- (b) Keeping a fixed random 25 % of frames (the same frame indices for
+  every scene), each pair's **retention** is ρ = S(25 % kept) / S(all
+  frames), relative to its own full-frame S because the pairs start from
+  different S. Holds if ρ(restitution) − ρ(friction) ≥ 0.10 on the seed
+  mean and in at least 4 of 5 seeds. Restitution is redrawn at every
+  bounce; friction is one faint keyframe.
 
 **Descriptive (no verdict):** the same model on noiseless frames (the leak
 the noise model exists to prevent); z → each essence axis, 5-fold ridge;
