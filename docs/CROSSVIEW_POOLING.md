@@ -6,6 +6,12 @@ tests, per CLAUDE.md) and `scripts/crossview_verdicts.py`, before any
 pooling-variant model is trained. Until then every number, arm and bar here
 can change. F-number: unassigned (the owner assigns it at the freeze).
 
+*Revision 2026-10-27 (draft 2), from the cloud session's review: matched
+no-mixing controls P1′/P2′ become the primary comparisons; D1 gains
+nonlinear readouts and numeric thresholds; G2 is named the memorisation
+guard and RISES also needs a positive held-out difference; loud seeds 5 →
+10.*
+
 ## 1. Why this, why now
 
 The encoder averages its 16 per-view latents into z (`models/mlx_net.py`,
@@ -80,7 +86,7 @@ uses all 512 scenes and matches F31a's H1.
 
 MLX (canonical), F27b recipe: lr 2e-4, 50 epochs, batch 16, 128 px, 16
 views. **Joint arm only: no trajectory head** (the F31a head collapsed on
-both backends). Worlds `data/pm_f31fix_loud` (seeds 0–4) and
+both backends). Worlds `data/pm_f31fix_loud` (seeds 0–9) and
 `data/pm_f31fix_ctrl` (seeds 0–2). `pm_big` is not run: the pilot finds
 nothing there to recover.
 
@@ -93,15 +99,22 @@ unchanged):
 |---|---|---|---|
 | P0 | `mean` | mean_i v_i (today's encoder, rerun under the new code) | 0 |
 | P1 | `stats` | relu(W [mean_i v_i ; std_i v_i]), W: 512 → 256 | 131 k |
+| P1′ | `stats_ctrl` | relu(W [mean_i v_i ; mean_i v_i]): P1's layer and ReLU, no cross-view information | 131 k |
 | P2 | `attn` | mean_i of one pre-LayerNorm transformer block over the 16 tokens v_i + E·d_i (4 heads, FFN 512, residual), where d_i is camera i's unit direction from `samples.fibonacci_sphere_poses` and E: 3 → 256 is learned | ≈ 0.53 M |
+| P2′ | `attn_ctrl` | P2's block with a diagonal (self-only) attention mask: same parameters and depth, no information passes between views | ≈ 0.53 M |
 
 P2 is the principled mixer: a highlight depends on where each camera sits
 relative to the light, so each view token carries its camera direction. The
 views are deterministic and in a fixed order for every scene, so the
 direction is the same information as the view index, stated physically.
 
-24 runs in all (3 arms × 8), about 3 min each on the Mac at the replication's
-pace (P2 somewhat more).
+**Matched controls.** P1 and P2 add capacity (a layer, a ReLU, depth), not
+only mixing. P1′ and P2′ keep the added capacity and remove the mixing, so
+the primary hypotheses (§5) compare each mixer with its own control and
+test the mixing itself. Comparisons with P0 are reported as well.
+
+65 runs in all (5 arms × 13), about 3 min each on the Mac at the
+replication's pace (P2 and P2′ somewhat more), so roughly 3–4 hours.
 
 ## 4. Readouts
 
@@ -115,54 +128,76 @@ lands on this branch with the freeze), per checkpoint:
 - **PR**: final latent participation ratio.
 - **Descriptive:** density and restitution z R²; held-out behavior gain.
 
-**Diagnostic D1 (where friction is lost):** for every P0 checkpoint,
-5-fold ridge from the 16 concatenated per-view latents (4096 dims) to
-friction. If D1 is well above P0's z, the information exists per view and
-the average discards it. If D1 ≈ z, the per-view CNN loses it first and no
-pooling change can recover it. D1 needs a per-view encode helper (added
-with the freeze).
+**Diagnostic D1 (where friction is lost):** for every P0 checkpoint, the
+per-view latents v_1 … v_16 are read out by nested 5-fold ridge (the
+pilot's `nested_r2`) through five constructions: the plain concatenation
+(4096 dims, linear in v), and the pilot's nonlinear cross-view features C,
+D, G and H (§2) computed on v instead of on hand-made image statistics.
+A linear readout of the concatenation cannot compute a spread or a
+quantile, so the nonlinear constructions are what can show the information
+is present per view. (D here is a fixed readout feature, not an FNet model.)
+**D1** = the best of the five, mean over P0 seeds; **z₀** = P0's mean
+friction z R².
+- D1 high: D1 ≥ z₀ + 0.15. The information survives per view; the
+  average discards it.
+- D1 ≈ z: D1 ≤ z₀ + 0.05. The per-view CNN has already lost it.
+- In between: unresolved.
+
+D1 needs a per-view encode helper (added with the freeze).
 
 ## 5. Gates, hypotheses and frozen rules
 
 Every Welch t is two-sample over the listed seeds. Power disclosure: with
-P0's friction sd of about 0.080, the smallest difference reaching t = 2.5
-at n = 5 per arm is about 0.13. Effects between 0.05 and 0.13 will read
-INCONCLUSIVE, and that is the honest reading at this n.
+P0's friction sd of about 0.080 (MLX, 5 seeds), the smallest difference
+reaching t = 2.5 is about 0.13 at n = 5, 0.10 at n = 8 and 0.09 at n = 10
+per arm; hence 10 loud seeds. Effects between 0.05 and 0.09 will read
+INCONCLUSIVE.
 
 **Gates (read first):**
 - G1 health: every run's final PR ≥ 8.
-- G2 control: every ctrl run of an arm has friction z R² < 0.10. The ctrl
-  pixels carry no material, so a positive is leakage. A G2 failure
-  withholds that arm's verdict.
+- G2 control, **the memorisation guard**: every ctrl run of an arm has
+  friction z R² < 0.10. The essence head regresses friction from z on the
+  training scenes, and the 5-fold readout covers those same scenes, so a
+  higher-capacity mixer could raise the readout by fitting that target
+  rather than by reading highlights. On ctrl the pixels carry no material,
+  so the same fitting would show there. A G2 failure withholds that arm's
+  verdict.
 - G3 apparatus (reported, does not withhold): P0's loud mean is within
   ±0.10 of the replication's 0.267. Verdicts compare against the P0 rerun
   either way.
 
-**H1 — stats pooling (P1 vs P0)** and **H2 — attention pooling (P2 vs P0)**,
-each graded separately on Δ = mean friction z R²(arm) − mean(P0):
-- RISES: Δ ≥ +0.10 and t ≥ 2.5
+**H1 — stats mixing (P1 vs P1′)** and **H2 — attention mixing (P2 vs
+P2′)**, primary, each graded on Δ = mean friction z R²(mixer) − mean(its
+matched control), with Δ_h the same difference on the held-out readout:
+- RISES: Δ ≥ +0.10, t ≥ 2.5, **and Δ_h > 0** (the 20 corner scenes are
+  never trained on, so memorisation cannot raise them; F31a Amendment 2's
+  co-report, made a condition)
 - NULL: |Δ| < 0.05
 - FALLS: Δ ≤ −0.10 and t ≤ −2.5
 - otherwise INCONCLUSIVE
 
-Two comparisons share one baseline. At df ≈ 8, t ≥ 2.5 is about p = 0.02
-one-sided per test, so about 0.04 family-wise; disclosed, not corrected.
+Two primary comparisons. At df ≈ 18, t ≥ 2.5 is about p = 0.011 one-sided
+per test, so about 0.02 family-wise; disclosed, not corrected.
+
+**Reported against P0, same bars, secondary:** P1, P1′, P2, P2′ each vs
+P0 (is any arm better than today's encoder, whatever the reason).
 
 **H3 — mechanism (P2 vs P1)**, same bars, secondary: does direction-aware
 mixing beat order-free statistics?
 
 ## 6. Predictions (registered at real odds)
 
-- **P1: H2 (attention) RISES 50 %**, NULL or INCONCLUSIVE 45 %, FALLS 5 %.
-  The pilot shows cross-view structure worth about +0.3 to +0.45 over the
-  averaged view on fixed features. Against it: the per-view CNN's global
-  average may already have flattened the highlight, which D1 will show.
-- **P2: H1 (stats) RISES 30 %.** The pilot's C (mean + std) gained only
-  +0.13 over A on fixed features.
+- **P1: H2 (attention vs its matched control) RISES 45 %**, NULL or
+  INCONCLUSIVE 50 %, FALLS 5 %. The pilot shows cross-view structure worth
+  about +0.3 to +0.45 over the averaged view on fixed features. Against it:
+  the per-view CNN's global average may already have flattened the
+  highlight, which D1 will show.
+- **P2: H1 (stats vs its matched control) RISES 30 %.** The pilot's C
+  (mean + std) gained only +0.13 over A on fixed features.
 - **P3: G2 passes for every arm, 90 %.**
 - **P4 (descriptive):** restitution z R² stays ≥ 0.97 in every arm
   (brightness reads the same from every view; nothing to gain).
-- **P5: D1 (per-view concatenation, P0) reads friction ≥ 0.45, 55 %.**
+- **P5: D1 reads "high" (≥ z₀ + 0.15), 55 %.**
 
 ## 7. What each outcome means
 
@@ -173,9 +208,11 @@ mixing beat order-free statistics?
 - **NULL, D1 high:** the information survives per view but the mixer does
   not learn to use it under this loss. The next question is the training
   signal, not the architecture.
-- **NULL, D1 ≈ z:** the per-view CNN loses friction before pooling. The
-  next lever is the per-view encoder (resolution, no global average over
-  H × W), not the pooling.
+- **NULL, D1 ≈ z:** the per-view CNN loses friction before pooling, as far
+  as these five readouts can see. The next lever is the per-view encoder
+  (resolution, no global average over H × W), not the pooling.
+- **Mixer and its matched control both beat P0, with H1/H2 NULL:** the gain
+  is capacity, not cross-view information.
 - **G2 failure in an arm:** that mixer reads something other than the
   material from the ctrl photos; its loud result is not interpretable.
 
