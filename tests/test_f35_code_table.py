@@ -53,9 +53,9 @@ def test_inverse_r2_finds_planted_axis_only():
 
 def test_family_grouping():
     names = ("drop", "ramp05.7", "push0960", "strike_ball", "scale_plate", "tap_ball",
-             "kick3.0", "tilt")
+             "kick3.0", "tilt", "dropramp38.7")
     assert [C.family(n) for n in names] == ["drop", "ramp", "push", "strike", "scale", "tap",
-                                            "kick", "tilt"]
+                                            "kick", "tilt", "dropramp"]
     z = np.zeros((3, 4, 6))
     T = {"ramp05.7": z, "ramp11.3": z + 1, "drop": z}
     F = C.families(T)

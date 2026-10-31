@@ -31,8 +31,8 @@ def test_ramp_angles_sit_below_the_cube_tipping_angle_and_ascend():
 
 def test_probe_names_are_stable():
     names = G.probe_names()
-    assert names[0] == "drop" and names[-2:] == ["kick1.0", "kick3.0"]
-    assert len(names) == 1 + len(G.RAMP_DEG) + len(G.PUSH_N) + 2 + 2 + 2 + len(G.KICK_MPS)
+    assert names[0] == "drop" and names[-3:] == ["kick1.0", "kick3.0", "dropramp38.7"]
+    assert len(names) == 1 + len(G.RAMP_DEG) + len(G.PUSH_N) + 2 + 2 + 2 + len(G.KICK_MPS) + 1
     assert "ramp05.7" in names and "push0015" in names
 
 

@@ -17,6 +17,10 @@ model, and stores state trajectories only (no renders: tier T0). Probes:
             masses, 1.35-216 kg) launched at 4 m/s into the resting box; the
             sphere's rebound and the box's recoil encode the mass ratio and
             restitution. The sphere is stored as strike_ball.
+            D6: the sphere's weight is cancelled (gravcomp), so it flies level.
+            Through D5 it fell 10 cm during the ~70 ms soft impact and landed
+            just after separating, so its post-impact speed was unmeasurable
+            in 95 of 512 scenes and ground friction changed it.
 - scale     (D2) "weigh it": the box rests on a 1 kg plate held by a vertical
             spring (slide joint, k = 5300 N/m, c = 1500 N.s/m). Static
             compression is (M + m_plate) g / k -- mass with no friction or
@@ -37,6 +41,11 @@ model, and stores state trajectories only (no renders: tier T0). Probes:
             decelerates at mu*g whatever its mass, so x(t) = v0 t - mu g t^2 / 2
             until it stops at v0^2 / (2 mu g): friction with no mass in it. A
             cube may tip forward instead when mu > half-width / COM height = 1.
+- dropramp38.7 (D6) "drop onto the ramp", the composite multi-axis input
+            (docs/CROSS_INTERACTION.md §9): the drop's 0.6 m fall onto the
+            steepest ramp, the box flush with the plane. It bounces off the
+            slope (restitution) and then slides or stops (friction); mass
+            cancels, as in the drop and the ramp. Boxes that grip may tumble.
 
 Restitution convention (D1 strike, D2 tap): the reference ball's contact
 parameters are set to the BOX's restitution, so each contact's restitution
@@ -48,7 +57,8 @@ strike ball's floor bounces replayed the box's restitution and friction
 with the box not involved. An explicit ball-ground <pair> now gives those
 contacts fixed, material-independent parameters; the convention is left
 only on ball-box contacts. D5 also records at 125 fps (every 4 steps), the
-R1 frame rate.
+R1 frame rate. D6 adds dropramp and levels the strike ball; every other
+recording is unchanged.
 
     python scripts/f35_generate_battery.py --source data/pm_f31fix_loud \
         --out data/pm_f35_battery
@@ -85,6 +95,7 @@ SCALE_PLATE_HALF = 0.05          # m; D4 (was 0.01)
 SCALE_PLATE_SOLREF = "0.01 1"    # timeconst 10 ms (>= 2 timesteps), critical damping; D4
 TAP_MASS, TAP_R, TAP_HEIGHT = 0.2, 0.03, 0.3
 KICK_MPS = (1.0, 3.0)
+DROPRAMP_DEG = 38.7                               # D6: the steepest ramp angle
 SHAPE = "box"
 DROP_HEIGHT = 0.6                                 # m, gap below the box (as DropSpec)
 SIM_SECONDS, FPS = 2.0, 125                       # D5: 125 fps (was 60, i.e. 62.5 Hz)
@@ -96,7 +107,7 @@ def probe_names() -> list[str]:
     return (["drop"] + [f"ramp{a:04.1f}" for a in RAMP_DEG]
             + [f"push{int(f):04d}" for f in PUSH_N] + ["strike", "strike_ball"]
             + ["scale", "scale_plate", "tap", "tap_ball"]
-            + [f"kick{v:.1f}" for v in KICK_MPS])
+            + [f"kick{v:.1f}" for v in KICK_MPS] + [f"dropramp{DROPRAMP_DEG:04.1f}"])
 
 
 def plane_normal(theta_deg: float) -> np.ndarray:
@@ -145,13 +156,15 @@ def _record(model, data, bodies: list[str], seconds: float = SIM_SECONDS,
     return out
 
 
-def run_ramp(mat, theta: float) -> list:
+def run_ramp(mat, theta: float, drop: float = 0.0) -> list:
+    """Box flush on a plane tilted theta deg, at rest on it, or (D6) released
+    `drop` m vertically above that resting place."""
     import mujoco
 
     from pseudomarble.data.generate_mujoco import build_mjcf, half_height
 
     xml = build_mjcf(SHAPE, mat, ground_euler=(theta, 0.0, 0.0))
-    pos = plane_normal(theta) * (half_height(SHAPE) + 0.0005)
+    pos = plane_normal(theta) * (half_height(SHAPE) + 0.0005) + np.array([0.0, 0.0, drop])
     xml, n = re.subn(r'<body name="object" pos="[^"]*">',
                      f'<body name="object" euler="{theta} 0 0" '
                      f'pos="{pos[0]:.6f} {pos[1]:.6f} {pos[2]:.6f}">', xml)
@@ -175,13 +188,15 @@ def run_push(mat, force: float) -> list:
 
 
 def _ball_xml(name: str, pos: tuple[float, float, float], radius: float, mass: float,
-              mat) -> str:
+              mat, gravcomp: float = 0.0) -> str:
     """A reference sphere whose contacts carry the box's restitution (the
-    authored convention in the module docstring)."""
+    authored convention in the module docstring); gravcomp=1 cancels its
+    weight (D6 strike: a puck on an air track)."""
     from pseudomarble.data.generate_mujoco import _restitution_to_solref
 
     vol = 4.0 / 3.0 * math.pi * radius ** 3
-    return (f'<body name="{name}" pos="{pos[0]:.4f} {pos[1]:.4f} {pos[2]:.4f}"><freejoint/>'
+    return (f'<body name="{name}" pos="{pos[0]:.4f} {pos[1]:.4f} {pos[2]:.4f}" '
+            f'gravcomp="{gravcomp:g}"><freejoint/>'
             f'<geom name="{name}_geom" type="sphere" size="{radius}" density="{mass / vol:.1f}" '
             f'friction="0.01 0.005 0.0001" '
             f'solref="{_restitution_to_solref(mat.physics.restitution)}" '
@@ -205,7 +220,8 @@ def run_strike(mat) -> tuple[list, list]:
     from pseudomarble.data.generate_mujoco import build_mjcf, half_height
 
     h = half_height(SHAPE)
-    ball = _ball_xml("ball", (-(h + STRIKE_GAP + STRIKE_R), 0.0, h), STRIKE_R, STRIKE_MASS, mat)
+    ball = _ball_xml("ball", (-(h + STRIKE_GAP + STRIKE_R), 0.0, h), STRIKE_R, STRIKE_MASS, mat,
+                     gravcomp=1.0)
     xml = with_ball(build_mjcf(SHAPE, mat), ball)
     model = mujoco.MjModel.from_xml_string(xml)
     data = mujoco.MjData(model)
@@ -309,6 +325,7 @@ def simulate_scene(item) -> tuple[str, list[float], list[float], dict[str, list]
     out["tap"], out["tap_ball"] = run_tap(mat)
     for v in KICK_MPS:
         out[f"kick{v:.1f}"] = run_kick(mat, v)
+    out[f"dropramp{DROPRAMP_DEG:04.1f}"] = run_ramp(mat, DROPRAMP_DEG, drop=DROP_HEIGHT)
     norm, raw = essence(mat)
     return scene_id, norm, raw, out
 
@@ -344,17 +361,18 @@ def main() -> None:
                "shape": SHAPE, "n_scenes": len(results), "drop_height": DROP_HEIGHT,
                "probes": names, "ramp_deg": RAMP_DEG, "push_newtons": PUSH_N,
                "push_window_s": 0.1, "strike": {"mass": STRIKE_MASS, "speed": STRIKE_SPEED,
-                                                "radius": STRIKE_R, "gap": STRIKE_GAP},
+                                                "radius": STRIKE_R, "gap": STRIKE_GAP,
+                                                "ball_gravcomp": 1.0},
                "scale": {"k": SCALE_K, "c": SCALE_C, "plate_mass": SCALE_PLATE_MASS,
                          "plate_z": SCALE_Z, "plate_half": SCALE_PLATE_HALF,
                          "plate_solref": SCALE_PLATE_SOLREF},
                "tap": {"mass": TAP_MASS, "radius": TAP_R, "height": TAP_HEIGHT},
-               "kick_mps": KICK_MPS,
+               "kick_mps": KICK_MPS, "dropramp_deg": DROPRAMP_DEG,
                "restitution_convention": "reference balls carry the box's solref "
                                          "on ball-box contacts only",
                "ball_ground": {"friction": BALL_GROUND_FRICTION,
                                "solref": BALL_GROUND_SOLREF},
-               "design_iteration": "D5",
+               "design_iteration": "D6",
                "sim_seconds": SIM_SECONDS, "fps": FPS,
                "columns": ["t", "x", "y", "z", "up_x", "up_y", "up_z"]},
               open(os.path.join(args.out, "manifest.json"), "w"), indent=2)

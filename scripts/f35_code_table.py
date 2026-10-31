@@ -171,8 +171,9 @@ def load_npz(data: str, n: int | None):
 
 def family(name: str) -> str:
     """Probe family of a recording: ramp05.7 -> ramp, push0960 -> push,
-    strike_ball -> strike; single-recording probes are their own family."""
-    for prefix in ("ramp", "push", "strike", "scale", "tap", "kick"):
+    strike_ball -> strike, dropramp38.7 -> dropramp; single-recording probes
+    are their own family."""
+    for prefix in ("dropramp", "ramp", "push", "strike", "scale", "tap", "kick"):
         if name.startswith(prefix):
             return prefix
     return name
