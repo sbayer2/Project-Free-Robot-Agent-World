@@ -102,6 +102,60 @@ SIM_SECONDS, FPS = 2.0, 125                       # D5: 125 fps (was 60, i.e. 62
 BALL_GROUND_FRICTION = 0.5                        # D5: fixed ball-ground contact,
 BALL_GROUND_SOLREF = "0.01 1"                     # stiff and critically damped
 
+# D7 pilot knob. "repo" is the contact model every world since F13 uses: the
+# default pyramidal cone, where friction is a soft constraint sharing the box's
+# restitution-derived solref, so a low-damping (bouncy) box creeps on a slope
+# it should hold. "elliptic" switches the cone and sets impratio (friction-to-
+# normal impedance ratio); a non-empty solreffriction also adds an explicit
+# box-ground <pair> carrying the box's own normal solref/solimp (what MuJoCo's
+# mixing gives: min of a direct-format and a default solref) plus a fixed
+# friction solref. Set per process via set_contact (pool initializer).
+CONTACT = {"model": "repo", "impratio": 1.0, "solreffriction": ""}
+
+
+def set_contact(model: str = "repo", impratio: float = 1.0, solreffriction: str = "") -> None:
+    if model not in ("repo", "elliptic"):
+        raise ValueError(f"unknown contact model {model!r}")
+    if model == "repo" and (impratio != 1.0 or solreffriction):
+        raise ValueError("impratio/solreffriction need --contact elliptic")
+    CONTACT.update(model=model, impratio=impratio, solreffriction=solreffriction)
+
+
+def contact_xml(xml: str, mat) -> str:
+    """Apply CONTACT to a build_mjcf scene; identity for the repo model."""
+    if CONTACT["model"] == "repo":
+        return xml
+    from pseudomarble.data.generate_mujoco import _restitution_to_solref
+
+    xml = replace_once(xml, "<option ",
+                       f'<option cone="elliptic" impratio="{CONTACT["impratio"]:g}" ')
+    if CONTACT["solreffriction"]:
+        mu = mat.physics.friction
+        pair = (f'<contact><pair geom1="obj" geom2="ground" '
+                f'friction="{mu} {mu} 0.005 0.0001 0.0001" '
+                f'solref="{_restitution_to_solref(mat.physics.restitution)}" '
+                f'solreffriction="{CONTACT["solreffriction"]}" '
+                f'solimp="0.9 0.95 0.001"/></contact>')
+        xml = replace_once(xml, "</mujoco>", pair + "\n</mujoco>")
+    return xml
+
+
+def set_dropramp(deg: float) -> None:
+    global DROPRAMP_DEG
+    DROPRAMP_DEG = deg
+
+
+def init_worker(contact: tuple, dropramp_deg: float) -> None:
+    set_contact(*contact)
+    set_dropramp(dropramp_deg)
+
+
+def mjcf(mat, **kw) -> str:
+    """build_mjcf for SHAPE under the active contact model."""
+    from pseudomarble.data.generate_mujoco import build_mjcf
+
+    return contact_xml(build_mjcf(SHAPE, mat, **kw), mat)
+
 
 def probe_names() -> list[str]:
     return (["drop"] + [f"ramp{a:04.1f}" for a in RAMP_DEG]
@@ -161,9 +215,9 @@ def run_ramp(mat, theta: float, drop: float = 0.0) -> list:
     `drop` m vertically above that resting place."""
     import mujoco
 
-    from pseudomarble.data.generate_mujoco import build_mjcf, half_height
+    from pseudomarble.data.generate_mujoco import half_height
 
-    xml = build_mjcf(SHAPE, mat, ground_euler=(theta, 0.0, 0.0))
+    xml = mjcf(mat, ground_euler=(theta, 0.0, 0.0))
     pos = plane_normal(theta) * (half_height(SHAPE) + 0.0005) + np.array([0.0, 0.0, drop])
     xml, n = re.subn(r'<body name="object" pos="[^"]*">',
                      f'<body name="object" euler="{theta} 0 0" '
@@ -177,9 +231,7 @@ def run_ramp(mat, theta: float, drop: float = 0.0) -> list:
 def run_push(mat, force: float) -> list:
     import mujoco
 
-    from pseudomarble.data.generate_mujoco import build_mjcf
-
-    model = mujoco.MjModel.from_xml_string(build_mjcf(SHAPE, mat))
+    model = mujoco.MjModel.from_xml_string(mjcf(mat))
     settle, window = 0.4, 0.1
     wrench = [force, 0.0, 0.0, 0.0, 0.0, 0.0]          # at the centre: no torque
     return _record(model, mujoco.MjData(model), ["object"],
@@ -217,12 +269,12 @@ def with_ball(xml: str, ball: str, name: str = "ball") -> str:
 def run_strike(mat) -> tuple[list, list]:
     import mujoco
 
-    from pseudomarble.data.generate_mujoco import build_mjcf, half_height
+    from pseudomarble.data.generate_mujoco import half_height
 
     h = half_height(SHAPE)
     ball = _ball_xml("ball", (-(h + STRIKE_GAP + STRIKE_R), 0.0, h), STRIKE_R, STRIKE_MASS, mat,
                      gravcomp=1.0)
-    xml = with_ball(build_mjcf(SHAPE, mat), ball)
+    xml = with_ball(mjcf(mat), ball)
     model = mujoco.MjModel.from_xml_string(xml)
     data = mujoco.MjData(model)
     j = model.body("ball").jntadr[0]
@@ -235,7 +287,7 @@ def run_scale(mat) -> tuple[list, list]:
     """Box at rest on a spring-mounted plate; record box and plate."""
     import mujoco
 
-    from pseudomarble.data.generate_mujoco import build_mjcf, half_height
+    from pseudomarble.data.generate_mujoco import half_height
 
     vol = 0.6 * 0.6 * 2 * SCALE_PLATE_HALF
     # priority="1": the box-plate contact uses the PLATE's solref/solimp, not
@@ -248,7 +300,7 @@ def run_scale(mat) -> tuple[list, list]:
              f'density="{SCALE_PLATE_MASS / vol:.1f}" rgba="0.5 0.5 0.5 1"/></body>'
              '\n  </worldbody>')
     z = SCALE_Z + SCALE_PLATE_HALF + half_height(SHAPE) + 0.0005
-    xml = replace_once(build_mjcf(SHAPE, mat, object_z=z), "</worldbody>", plate)
+    xml = replace_once(mjcf(mat, object_z=z), "</worldbody>", plate)
     model = mujoco.MjModel.from_xml_string(xml)
     rec = _record(model, mujoco.MjData(model), ["object", "plate"])
     return rec["object"], rec["plate"]
@@ -258,11 +310,11 @@ def run_tap(mat) -> tuple[list, list]:
     """Small ball dropped onto the resting box's top face; record box and ball."""
     import mujoco
 
-    from pseudomarble.data.generate_mujoco import build_mjcf, half_height
+    from pseudomarble.data.generate_mujoco import half_height
 
     top = 2 * half_height(SHAPE)
     ball = _ball_xml("ball", (0.0, 0.0, top + TAP_HEIGHT + TAP_R), TAP_R, TAP_MASS, mat)
-    xml = with_ball(build_mjcf(SHAPE, mat), ball)
+    xml = with_ball(mjcf(mat), ball)
     model = mujoco.MjModel.from_xml_string(xml)
     rec = _record(model, mujoco.MjData(model), ["object", "ball"])
     return rec["object"], rec["ball"]
@@ -272,9 +324,7 @@ def run_kick(mat, speed: float) -> list:
     """Resting box given a horizontal velocity at t = 0; record the box."""
     import mujoco
 
-    from pseudomarble.data.generate_mujoco import build_mjcf
-
-    model = mujoco.MjModel.from_xml_string(build_mjcf(SHAPE, mat))
+    model = mujoco.MjModel.from_xml_string(mjcf(mat))
     data = mujoco.MjData(model)
     data.qvel[model.jnt_dofadr[model.body("object").jntadr[0]]] = speed
     return _record(model, data, ["object"])["object"]
@@ -283,10 +333,10 @@ def run_kick(mat, speed: float) -> list:
 def run_drop(mat) -> list:
     import mujoco
 
-    from pseudomarble.data.generate_mujoco import build_mjcf, half_height
+    from pseudomarble.data.generate_mujoco import half_height
 
     model = mujoco.MjModel.from_xml_string(
-        build_mjcf(SHAPE, mat, object_z=half_height(SHAPE) + DROP_HEIGHT))
+        mjcf(mat, object_z=half_height(SHAPE) + DROP_HEIGHT))
     return _record(model, mujoco.MjData(model), ["object"])["object"]
 
 
@@ -339,7 +389,15 @@ def main() -> None:
     ap.add_argument("--out", required=True)
     ap.add_argument("--workers", type=int, default=max(1, (os.cpu_count() or 2) - 2))
     ap.add_argument("--limit", type=int, default=None)
+    ap.add_argument("--contact", choices=("repo", "elliptic"), default="repo",
+                    help="D7 pilot; repo reproduces D6 bit for bit")
+    ap.add_argument("--impratio", type=float, default=1.0)
+    ap.add_argument("--solreffriction", default="",
+                    help='e.g. "0.01 1"; adds the explicit box-ground pair')
+    ap.add_argument("--dropramp-deg", type=float, default=DROPRAMP_DEG, help="D7 pilot")
     args = ap.parse_args()
+    contact = (args.contact, args.impratio, args.solreffriction)
+    init_worker(contact, args.dropramp_deg)
 
     if args.source:
         files = sorted(glob.glob(os.path.join(args.source, "*", "sample.json")))[:args.limit]
@@ -347,7 +405,8 @@ def main() -> None:
     else:
         items = sampled_materials(args.seed, args.sample)[:args.limit]
     t0 = time.time()
-    with ProcessPoolExecutor(args.workers) as ex:
+    with ProcessPoolExecutor(args.workers, initializer=init_worker,
+                             initargs=(contact, args.dropramp_deg)) as ex:
         results = list(ex.map(simulate_scene, items, chunksize=4))
     names = probe_names()
     traj = {p: np.array([r[3][p] for r in results], dtype=np.float32) for p in names}
@@ -372,7 +431,8 @@ def main() -> None:
                                          "on ball-box contacts only",
                "ball_ground": {"friction": BALL_GROUND_FRICTION,
                                "solref": BALL_GROUND_SOLREF},
-               "design_iteration": "D6",
+               "contact": dict(CONTACT),
+               "design_iteration": "D6" if CONTACT["model"] == "repo" else "D7-pilot",
                "sim_seconds": SIM_SECONDS, "fps": FPS,
                "columns": ["t", "x", "y", "z", "up_x", "up_y", "up_z"]},
               open(os.path.join(args.out, "manifest.json"), "w"), indent=2)

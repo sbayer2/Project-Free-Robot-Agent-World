@@ -79,3 +79,33 @@ def test_ball_ground_pair_fixes_the_balls_ground_contact():
     assert {m.pair_geom1[0], m.pair_geom2[0]} == {m.geom("ball_geom").id, m.geom("ground").id}
     assert np.isclose(m.pair_friction[0, 0], G.BALL_GROUND_FRICTION)
     assert np.allclose(m.pair_solref[0], [float(v) for v in G.BALL_GROUND_SOLREF.split()])
+
+
+def test_repo_contact_model_is_the_identity():
+    mat = G.sampled_materials(0, 1)[0][1]
+    G.set_contact("repo")
+    xml = "<mujoco><option timestep='0.002'/></mujoco>"
+    assert G.contact_xml(xml, mat) == xml
+    with pytest.raises(ValueError):
+        G.set_contact("repo", impratio=10.0)
+    with pytest.raises(ValueError):
+        G.set_contact("pyramidal")
+
+
+def test_elliptic_contact_model_sets_cone_and_box_ground_pair():
+    mujoco = pytest.importorskip("mujoco")
+    mat = G.sampled_materials(0, 1)[0][1]
+    try:
+        G.set_contact("elliptic", impratio=10.0)
+        m = mujoco.MjModel.from_xml_string(G.mjcf(mat))
+        assert m.opt.cone == mujoco.mjtCone.mjCONE_ELLIPTIC and m.opt.impratio == 10.0
+        assert m.npair == 0
+        G.set_contact("elliptic", solreffriction="0.01 1")
+        m = mujoco.MjModel.from_xml_string(G.mjcf(mat))
+        assert m.npair == 1
+        assert {m.pair_geom1[0], m.pair_geom2[0]} == {m.geom("obj").id, m.geom("ground").id}
+        assert np.allclose(m.pair_solreffriction[0], [0.01, 1.0])
+        assert np.allclose(m.pair_solref[0], m.geom_solref[m.geom("obj").id])
+        assert np.isclose(m.pair_friction[0, 0], mat.physics.friction)
+    finally:
+        G.set_contact("repo")
