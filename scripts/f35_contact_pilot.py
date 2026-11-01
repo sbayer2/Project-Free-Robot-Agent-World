@@ -82,6 +82,25 @@ def dropramp_restitution(data: str) -> dict:
             "undefined": int((~np.isfinite(dr)).sum())}
 
 
+def tumblers(data: str) -> dict:
+    """Which materials the dropramp tumble mask removes from dropramp.log_slide
+    (NaN there): raw friction and restitution quantiles of tumblers vs the rest,
+    and the friction range the slide field is left to cover."""
+    o = np.load(os.path.join(data, "outcomes.npz"))
+    tip = ~np.isfinite(o["values"][:, list(o["names"]).index("dropramp.log_slide")])
+    raw = np.load(os.path.join(data, "battery.npz"))["raw"].astype(float)
+
+    def q(x: np.ndarray) -> list[float]:
+        qs = np.quantile(x, (0, 0.25, 0.5, 0.75, 1)) if x.size else []
+        return [round(float(v), 3) for v in qs]
+
+    return {"n": int(tip.sum()), "frac": float(tip.mean()),
+            "mu_tumbled": q(raw[tip, 1]), "mu_kept": q(raw[~tip, 1]),
+            "e_tumbled": q(raw[tip, 2]), "e_kept": q(raw[~tip, 2]),
+            "r_tip_mu": pearson(tip.astype(float), raw[:, 1]),
+            "r_tip_e": pearson(tip.astype(float), raw[:, 2])}
+
+
 def leak_ablation(data: str) -> dict[str, list[float]]:
     """Essence R^2 (density, friction, restitution) of the ramp / kick
     families under varied field definitions."""
@@ -120,7 +139,7 @@ def variant(out: str, name: str, spec: tuple, n: int, seed: int, reuse: bool,
     oc = json.load(open(os.path.join(data, "outcomes.json")))
     return {"spec": {"contact": contact, "impratio": imp, "solreffriction": srf},
             "creep": creep(data), "dropramp_restitution": dropramp_restitution(data),
-            "ablation": leak_ablation(data),
+            "ablation": leak_ablation(data), "tumblers": tumblers(data),
             "gate": {a: g["pass"] for a, g in ct["gate"]["axes"].items()},
             "per_recording": {k: ct["per_recording"][f"dropramp{dropramp_deg:04.1f}"
                                                      if k == "dropramp" else k]
@@ -183,6 +202,13 @@ def main() -> None:
         print(f"  {k:9s} r(dropramp.e1, drop.e1) {d['r_vs_drop_e1']:+.2f}  median ratio "
               f"{d['median_ratio']:.2f}  R2 dropramp.e1 {f['dropramp.e1']:+.2f}  "
               f"drop.e1 {f['drop.e1']:+.2f}  tumbled {r['diagnostics']['dropramp_tumbled']}")
+    print("\nDROPRAMP TUMBLERS: raw friction / restitution quantiles (min q25 med q75 max)")
+    for k, r in res.items():
+        t = r["tumblers"]
+        print(f"  {k:9s} n {t['n']} ({t['frac']:.0%})  r(tip, mu) {t['r_tip_mu']:+.2f}  "
+              f"r(tip, e) {t['r_tip_e']:+.2f}")
+        print(f"    mu tumbled {t['mu_tumbled']}  kept {t['mu_kept']}")
+        print(f"    e  tumbled {t['e_tumbled']}  kept {t['e_kept']}")
     print("\nABLATION: essence R^2 (density friction restitution) from the ramp / kick "
           "outcome families, field definitions varied")
     for a in res[names[0]]["ablation"]:
