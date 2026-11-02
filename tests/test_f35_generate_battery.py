@@ -109,3 +109,16 @@ def test_elliptic_contact_model_sets_cone_and_box_ground_pair():
         assert np.isclose(m.pair_friction[0, 0], mat.physics.friction)
     finally:
         G.set_contact("repo")
+
+
+def test_dropramp_height_defaults_to_the_flat_drop_and_is_positive():
+    assert G.DROPRAMP_HEIGHT == G.DROP_HEIGHT  # D6 releases from the flat drop's gap
+    try:
+        G.set_dropramp(20.0, 0.15)
+        assert (G.DROPRAMP_DEG, G.DROPRAMP_HEIGHT) == (20.0, 0.15)
+        assert G.probe_names()[-1] == "dropramp20.0"
+        with pytest.raises(ValueError):
+            G.set_dropramp(20.0, 0.0)
+    finally:
+        G.set_dropramp(38.7)
+    assert G.DROPRAMP_HEIGHT == G.DROP_HEIGHT

@@ -82,6 +82,35 @@ def dropramp_restitution(data: str) -> dict:
             "undefined": int((~np.isfinite(dr)).sum())}
 
 
+def slide_from_rest(data: str) -> dict[str, list[float]]:
+    """Essence R^2 of the dropramp slide measured from the ramp rest pose
+    below the release point, not from the release point. The release point
+    sits h vertically above the rest pose, so the as-defined slide carries a
+    constant h sin(theta) of fall in its downhill projection, and that offset
+    changes with h. Tumblers excluded, as in the as-defined field. Reports
+    essence R^2 (density, friction, restitution) of the as-defined field, of
+    the from-rest slide, and of the from-rest slide with the 1 cm dead zone
+    proposed for the ramp slides."""
+    o = np.load(os.path.join(data, "outcomes.npz"))
+    ls = o["values"][:, list(o["names"]).index("dropramp.log_slide")]
+    man = json.load(open(os.path.join(data, "manifest.json")))
+    a = man["dropramp_deg"]
+    h = man.get("dropramp_height", man["drop_height"])
+    r = np.load(os.path.join(data, "battery.npz"))[f"traj_dropramp{a:04.1f}"].astype(float)
+    rad = math.radians(a)
+    downhill = -np.array([0.0, math.cos(rad), math.sin(rad)])
+    d = (r[:, -1, 1:4] - (r[:, 0, 1:4] - np.array([0.0, 0.0, h]))) @ downhill
+    E = np.load(os.path.join(data, "battery.npz"))["essence"].astype(float)
+    ok = np.isfinite(ls)
+    d = np.clip(d[ok], 0.0, None)
+
+    def r2(x: np.ndarray) -> list[float]:
+        return inverse_r2(x[:, None], E[ok]).tolist()
+
+    return {"as_defined": r2(ls[ok]), "from_rest": r2(np.log10(d + EPS_M)),
+            "from_rest_deadzone_1cm": r2(np.log10(np.maximum(d, 0.01)))}
+
+
 def tumblers(data: str) -> dict:
     """Which materials the dropramp tumble mask removes from dropramp.log_slide
     (NaN there): raw friction and restitution quantiles of tumblers vs the rest,
@@ -130,16 +159,17 @@ def leak_ablation(data: str) -> dict[str, list[float]]:
 
 
 def variant(out: str, name: str, spec: tuple, n: int, seed: int, reuse: bool,
-            dropramp_deg: float) -> dict:
+            dropramp_deg: float, dropramp_height: float | None = None) -> dict:
     data = os.path.join(out, name)
     contact, imp, srf = spec
     if not (reuse and os.path.exists(os.path.join(data, "outcomes.npz"))):
-        _generate(data, contact, imp, srf, n, seed, dropramp_deg)
+        _generate(data, contact, imp, srf, n, seed, dropramp_deg, dropramp_height)
     ct = json.load(open(os.path.join(data, "code_table.json")))
     oc = json.load(open(os.path.join(data, "outcomes.json")))
     return {"spec": {"contact": contact, "impratio": imp, "solreffriction": srf},
             "creep": creep(data), "dropramp_restitution": dropramp_restitution(data),
             "ablation": leak_ablation(data), "tumblers": tumblers(data),
+            "dropramp_slide_from_rest": slide_from_rest(data),
             "gate": {a: g["pass"] for a, g in ct["gate"]["axes"].items()},
             "per_recording": {k: ct["per_recording"][f"dropramp{dropramp_deg:04.1f}"
                                                      if k == "dropramp" else k]
@@ -152,10 +182,11 @@ def variant(out: str, name: str, spec: tuple, n: int, seed: int, reuse: bool,
 
 
 def _generate(data: str, contact: str, imp: float, srf: str, n: int, seed: int,
-              dropramp_deg: float) -> None:
+              dropramp_deg: float, dropramp_height: float | None = None) -> None:
+    height = [] if dropramp_height is None else ["--dropramp-height", str(dropramp_height)]
     run(os.path.join(HERE, "f35_generate_battery.py"), "--sample", str(n), "--seed", str(seed),
         "--out", data, "--contact", contact, "--impratio", str(imp), "--solreffriction", srf,
-        "--dropramp-deg", str(dropramp_deg))
+        "--dropramp-deg", str(dropramp_deg), *height)
     run(os.path.join(HERE, "f35_code_table.py"), "--data", data,
         "--out", os.path.join(data, "code_table.json"))
     run(os.path.join(HERE, "f35_outcomes.py"), "--data", data)
@@ -173,12 +204,14 @@ def main() -> None:
     ap.add_argument("--only", nargs="*", default=None, help="subset of variants")
     ap.add_argument("--reuse", action="store_true", help="skip variants already generated")
     ap.add_argument("--dropramp-deg", type=float, default=38.7)
+    ap.add_argument("--dropramp-height", type=float, default=None,
+                    help="vertical drop gap above the ramp (m); generator default if omitted")
     args = ap.parse_args()
     names = args.only or list(VARIANTS)
     res = {}
     for name in names:
         res[name] = variant(args.out, name, VARIANTS[name], args.sample, args.seed, args.reuse,
-                            args.dropramp_deg)
+                            args.dropramp_deg, args.dropramp_height)
         print(f"[pilot] {name} done", flush=True)
     print("\nCREEP on the 38.7 deg ramp, boxes that should hold "
           f"(n = {res[names[0]]['creep']['n_held']})")
@@ -209,6 +242,8 @@ def main() -> None:
               f"r(tip, e) {t['r_tip_e']:+.2f}")
         print(f"    mu tumbled {t['mu_tumbled']}  kept {t['mu_kept']}")
         print(f"    e  tumbled {t['e_tumbled']}  kept {t['e_kept']}")
+        print("    dropramp slide R2 " + "  ".join(
+            f"{k} {f3(v)}" for k, v in r["dropramp_slide_from_rest"].items()))
     print("\nABLATION: essence R^2 (density friction restitution) from the ramp / kick "
           "outcome families, field definitions varied")
     for a in res[names[0]]["ablation"]:

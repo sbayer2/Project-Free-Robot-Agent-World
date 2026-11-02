@@ -98,6 +98,7 @@ KICK_MPS = (1.0, 3.0)
 DROPRAMP_DEG = 38.7                               # D6: the steepest ramp angle
 SHAPE = "box"
 DROP_HEIGHT = 0.6                                 # m, gap below the box (as DropSpec)
+DROPRAMP_HEIGHT = DROP_HEIGHT                     # m, vertical gap above the ramp rest pose
 SIM_SECONDS, FPS = 2.0, 125                       # D5: 125 fps (was 60, i.e. 62.5 Hz)
 BALL_GROUND_FRICTION = 0.5                        # D5: fixed ball-ground contact,
 BALL_GROUND_SOLREF = "0.01 1"                     # stiff and critically damped
@@ -140,14 +141,16 @@ def contact_xml(xml: str, mat) -> str:
     return xml
 
 
-def set_dropramp(deg: float) -> None:
-    global DROPRAMP_DEG
-    DROPRAMP_DEG = deg
+def set_dropramp(deg: float, height: float = DROP_HEIGHT) -> None:
+    global DROPRAMP_DEG, DROPRAMP_HEIGHT
+    if height <= 0:
+        raise ValueError(f"dropramp height must be > 0, got {height}")
+    DROPRAMP_DEG, DROPRAMP_HEIGHT = deg, height
 
 
-def init_worker(contact: tuple, dropramp_deg: float) -> None:
+def init_worker(contact: tuple, dropramp_deg: float, dropramp_height: float = DROP_HEIGHT) -> None:
     set_contact(*contact)
-    set_dropramp(dropramp_deg)
+    set_dropramp(dropramp_deg, dropramp_height)
 
 
 def mjcf(mat, **kw) -> str:
@@ -375,7 +378,7 @@ def simulate_scene(item) -> tuple[str, list[float], list[float], dict[str, list]
     out["tap"], out["tap_ball"] = run_tap(mat)
     for v in KICK_MPS:
         out[f"kick{v:.1f}"] = run_kick(mat, v)
-    out[f"dropramp{DROPRAMP_DEG:04.1f}"] = run_ramp(mat, DROPRAMP_DEG, drop=DROP_HEIGHT)
+    out[f"dropramp{DROPRAMP_DEG:04.1f}"] = run_ramp(mat, DROPRAMP_DEG, drop=DROPRAMP_HEIGHT)
     norm, raw = essence(mat)
     return scene_id, norm, raw, out
 
@@ -395,9 +398,11 @@ def main() -> None:
     ap.add_argument("--solreffriction", default="",
                     help='e.g. "0.01 1"; adds the explicit box-ground pair')
     ap.add_argument("--dropramp-deg", type=float, default=DROPRAMP_DEG, help="D7 pilot")
+    ap.add_argument("--dropramp-height", type=float, default=DROP_HEIGHT,
+                    help="D7 pilot: vertical drop gap above the ramp (m)")
     args = ap.parse_args()
     contact = (args.contact, args.impratio, args.solreffriction)
-    init_worker(contact, args.dropramp_deg)
+    init_worker(contact, args.dropramp_deg, args.dropramp_height)
 
     if args.source:
         files = sorted(glob.glob(os.path.join(args.source, "*", "sample.json")))[:args.limit]
@@ -406,7 +411,8 @@ def main() -> None:
         items = sampled_materials(args.seed, args.sample)[:args.limit]
     t0 = time.time()
     with ProcessPoolExecutor(args.workers, initializer=init_worker,
-                             initargs=(contact, args.dropramp_deg)) as ex:
+                             initargs=(contact, args.dropramp_deg,
+                                       args.dropramp_height)) as ex:
         results = list(ex.map(simulate_scene, items, chunksize=4))
     names = probe_names()
     traj = {p: np.array([r[3][p] for r in results], dtype=np.float32) for p in names}
@@ -427,6 +433,7 @@ def main() -> None:
                          "plate_solref": SCALE_PLATE_SOLREF},
                "tap": {"mass": TAP_MASS, "radius": TAP_R, "height": TAP_HEIGHT},
                "kick_mps": KICK_MPS, "dropramp_deg": DROPRAMP_DEG,
+               "dropramp_height": DROPRAMP_HEIGHT,
                "restitution_convention": "reference balls carry the box's solref "
                                          "on ball-box contacts only",
                "ball_ground": {"friction": BALL_GROUND_FRICTION,
