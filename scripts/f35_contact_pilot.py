@@ -21,6 +21,11 @@ then runs the code table and the outcome fields on it, and adds:
              from the physics.
 
     python scripts/f35_contact_pilot.py --out data/pm_f35_d7pilot
+
+The D7-pilot numbers in docs/CROSS_INTERACTION.md §9 were produced at 2df55d1,
+on the D6 outcome fields. From D7 on, f35_outcomes.py floors the ramp slides
+at 1 cm, has no kick stop_s and keeps dropramp tumblers, so the "as-is"
+ablation rows here read the D7 fields; the generator base is --design D6.
 """
 
 from __future__ import annotations
@@ -185,8 +190,9 @@ def variant(out: str, name: str, spec: tuple, n: int, seed: int, reuse: bool,
 def _generate(data: str, contact: str, imp: float, srf: str, n: int, seed: int,
               dropramp_deg: float, dropramp_height: float | None = None) -> None:
     height = [] if dropramp_height is None else ["--dropramp-height", str(dropramp_height)]
-    run(os.path.join(HERE, "f35_generate_battery.py"), "--sample", str(n), "--seed", str(seed),
-        "--out", data, "--contact", contact, "--impratio", str(imp), "--solreffriction", srf,
+    run(os.path.join(HERE, "f35_generate_battery.py"), "--design", "D6",
+        "--sample", str(n), "--seed", str(seed), "--out", data,
+        "--contact", contact, "--impratio", str(imp), "--solreffriction", srf,
         "--dropramp-deg", str(dropramp_deg), *height)
     run(os.path.join(HERE, "f35_code_table.py"), "--data", data,
         "--out", os.path.join(data, "code_table.json"))

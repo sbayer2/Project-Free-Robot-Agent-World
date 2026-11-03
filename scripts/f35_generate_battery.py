@@ -41,11 +41,13 @@ model, and stores state trajectories only (no renders: tier T0). Probes:
             decelerates at mu*g whatever its mass, so x(t) = v0 t - mu g t^2 / 2
             until it stops at v0^2 / (2 mu g): friction with no mass in it. A
             cube may tip forward instead when mu > half-width / COM height = 1.
-- dropramp38.7 (D6) "drop onto the ramp", the composite multi-axis input
-            (docs/CROSS_INTERACTION.md §9): the drop's 0.6 m fall onto the
-            steepest ramp, the box flush with the plane. It bounces off the
-            slope (restitution) and then slides or stops (friction); mass
-            cancels, as in the drop and the ramp. Boxes that grip may tumble.
+- droprampXX.X (D6) "drop onto the ramp", the composite multi-axis input
+            (docs/CROSS_INTERACTION.md §9): the box is released a vertical
+            gap above its flush rest pose on a tilted plane. It bounces off
+            the slope (restitution) and then slides or stops (friction); mass
+            cancels, as in the drop and the ramp. Some boxes tumble.
+            D6: 38.7 deg from 0.6 m. D7: 20 deg from 0.3 m (at 38.7 deg 84% of
+            boxes tumble under the D7 contact model).
 
 Restitution convention (D1 strike, D2 tap): the reference ball's contact
 parameters are set to the BOX's restitution, so each contact's restitution
@@ -59,6 +61,12 @@ contacts fixed, material-independent parameters; the convention is left
 only on ball-box contacts. D5 also records at 125 fps (every 4 steps), the
 R1 frame rate. D6 adds dropramp and levels the strike ball; every other
 recording is unchanged.
+D7 changes the box-ground contact for every recording: elliptic friction
+cone and an explicit box-ground <pair> with a fixed friction solref
+("0.01 1"). Under the repo model friction shared the box's restitution-
+derived solref, so bouncy boxes crept 15 cm (median, n = 96) down a 38.7 deg
+slope they should hold, r 0.87 with restitution; under D7 the creep is
+4 mm. --design D6 rebuilds D6 bit for bit.
 
     python scripts/f35_generate_battery.py --source data/pm_f31fix_loud \
         --out data/pm_f35_battery
@@ -95,15 +103,15 @@ SCALE_PLATE_HALF = 0.05          # m; D4 (was 0.01)
 SCALE_PLATE_SOLREF = "0.01 1"    # timeconst 10 ms (>= 2 timesteps), critical damping; D4
 TAP_MASS, TAP_R, TAP_HEIGHT = 0.2, 0.03, 0.3
 KICK_MPS = (1.0, 3.0)
-DROPRAMP_DEG = 38.7                               # D6: the steepest ramp angle
+DROPRAMP_DEG = 20.0                               # D7 (D6: 38.7, the steepest ramp)
 SHAPE = "box"
 DROP_HEIGHT = 0.6                                 # m, gap below the box (as DropSpec)
-DROPRAMP_HEIGHT = DROP_HEIGHT                     # m, vertical gap above the ramp rest pose
+DROPRAMP_HEIGHT = 0.3                             # m, gap above the ramp rest pose (D6: 0.6)
 SIM_SECONDS, FPS = 2.0, 125                       # D5: 125 fps (was 60, i.e. 62.5 Hz)
 BALL_GROUND_FRICTION = 0.5                        # D5: fixed ball-ground contact,
 BALL_GROUND_SOLREF = "0.01 1"                     # stiff and critically damped
 
-# D7 pilot knob. "repo" is the contact model every world since F13 uses: the
+# Contact model. "repo" is the contact model every world since F13 uses: the
 # default pyramidal cone, where friction is a soft constraint sharing the box's
 # restitution-derived solref, so a low-damping (bouncy) box creeps on a slope
 # it should hold. "elliptic" switches the cone and sets impratio (friction-to-
@@ -111,7 +119,12 @@ BALL_GROUND_SOLREF = "0.01 1"                     # stiff and critically damped
 # box-ground <pair> carrying the box's own normal solref/solimp (what MuJoCo's
 # mixing gives: min of a direct-format and a default solref) plus a fixed
 # friction solref. Set per process via set_contact (pool initializer).
-CONTACT = {"model": "repo", "impratio": 1.0, "solreffriction": ""}
+# D7 is elliptic + solreffriction "0.01 1" (docs/CROSS_INTERACTION.md §9, D7).
+DESIGNS = {  # name: ((contact, impratio, solreffriction), dropramp deg, dropramp height m)
+    "D7": (("elliptic", 1.0, "0.01 1"), 20.0, 0.3),
+    "D6": (("repo", 1.0, ""), 38.7, 0.6),
+}
+CONTACT = {"model": "elliptic", "impratio": 1.0, "solreffriction": "0.01 1"}
 
 
 def set_contact(model: str = "repo", impratio: float = 1.0, solreffriction: str = "") -> None:
@@ -141,14 +154,14 @@ def contact_xml(xml: str, mat) -> str:
     return xml
 
 
-def set_dropramp(deg: float, height: float = DROP_HEIGHT) -> None:
+def set_dropramp(deg: float, height: float = 0.3) -> None:
     global DROPRAMP_DEG, DROPRAMP_HEIGHT
     if height <= 0:
         raise ValueError(f"dropramp height must be > 0, got {height}")
     DROPRAMP_DEG, DROPRAMP_HEIGHT = deg, height
 
 
-def init_worker(contact: tuple, dropramp_deg: float, dropramp_height: float = DROP_HEIGHT) -> None:
+def init_worker(contact: tuple, dropramp_deg: float, dropramp_height: float = 0.3) -> None:
     set_contact(*contact)
     set_dropramp(dropramp_deg, dropramp_height)
 
@@ -165,6 +178,13 @@ def probe_names() -> list[str]:
             + [f"push{int(f):04d}" for f in PUSH_N] + ["strike", "strike_ball"]
             + ["scale", "scale_plate", "tap", "tap_ball"]
             + [f"kick{v:.1f}" for v in KICK_MPS] + [f"dropramp{DROPRAMP_DEG:04.1f}"])
+
+
+def design_name() -> str:
+    """The DESIGNS entry the active settings match, else "pilot"."""
+    now = ((CONTACT["model"], CONTACT["impratio"], CONTACT["solreffriction"]),
+           DROPRAMP_DEG, DROPRAMP_HEIGHT)
+    return next((k for k, v in DESIGNS.items() if v == now), "pilot")
 
 
 def plane_normal(theta_deg: float) -> np.ndarray:
@@ -392,16 +412,24 @@ def main() -> None:
     ap.add_argument("--out", required=True)
     ap.add_argument("--workers", type=int, default=max(1, (os.cpu_count() or 2) - 2))
     ap.add_argument("--limit", type=int, default=None)
-    ap.add_argument("--contact", choices=("repo", "elliptic"), default="repo",
-                    help="D7 pilot; repo reproduces D6 bit for bit")
-    ap.add_argument("--impratio", type=float, default=1.0)
-    ap.add_argument("--solreffriction", default="",
+    ap.add_argument("--design", choices=tuple(DESIGNS), default="D7",
+                    help="preset for the flags below; D6 rebuilds D6 bit for bit")
+    ap.add_argument("--contact", choices=("repo", "elliptic"), default=None)
+    ap.add_argument("--impratio", type=float, default=None)
+    ap.add_argument("--solreffriction", default=None,
                     help='e.g. "0.01 1"; adds the explicit box-ground pair')
-    ap.add_argument("--dropramp-deg", type=float, default=DROPRAMP_DEG, help="D7 pilot")
-    ap.add_argument("--dropramp-height", type=float, default=DROP_HEIGHT,
-                    help="D7 pilot: vertical drop gap above the ramp (m)")
+    ap.add_argument("--dropramp-deg", type=float, default=None)
+    ap.add_argument("--dropramp-height", type=float, default=None,
+                    help="vertical drop gap above the ramp rest pose (m)")
     args = ap.parse_args()
-    contact = (args.contact, args.impratio, args.solreffriction)
+    (c0, i0, s0), deg0, h0 = DESIGNS[args.design]
+
+    def pick(v, default):
+        return default if v is None else v
+
+    contact = (pick(args.contact, c0), pick(args.impratio, i0), pick(args.solreffriction, s0))
+    args.dropramp_deg = pick(args.dropramp_deg, deg0)
+    args.dropramp_height = pick(args.dropramp_height, h0)
     init_worker(contact, args.dropramp_deg, args.dropramp_height)
 
     if args.source:
@@ -439,7 +467,7 @@ def main() -> None:
                "ball_ground": {"friction": BALL_GROUND_FRICTION,
                                "solref": BALL_GROUND_SOLREF},
                "contact": dict(CONTACT),
-               "design_iteration": "D6" if CONTACT["model"] == "repo" else "D7-pilot",
+               "design_iteration": design_name(),
                "sim_seconds": SIM_SECONDS, "fps": FPS,
                "columns": ["t", "x", "y", "z", "up_x", "up_y", "up_z"]},
               open(os.path.join(args.out, "manifest.json"), "w"), indent=2)

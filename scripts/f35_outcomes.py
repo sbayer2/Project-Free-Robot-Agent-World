@@ -6,8 +6,8 @@ function of the T0 trajectory, standardized on train statistics at training.
 Rules (cloud proposal 2026-10-27, with the three fixes agreed that day):
 - distances spanning millimetres to metres enter as log10(d + 1 mm);
 - no binary fields; a field that a scene cannot define (a box that tipped
-  over in the kick, tumbled down the ramp) is NaN there: excluded from the
-  loss and the scoring, and counted in the report;
+  over in the kick) is NaN there: excluded from the loss and the scoring,
+  and counted in the report;
 - bounces are SPEED ratios per contact, e_k = v_out / v_in, from apex
   heights (v = sqrt(2 g h)). No-bounce rule: a rebound under BOUNCE_MM is no
   bounce; the next contact is then unobservable and e_{k+1} takes e_k's
@@ -17,6 +17,21 @@ Rules (cloud proposal 2026-10-27, with the three fixes agreed that day):
   ground, a second ball-box contact, the box stopping): constant velocity for
   the ball (horizontal flight), constant deceleration for the box (Coulomb
   sliding), so friction does not leak into the box's recoil speed.
+
+D7 (docs/CROSS_INTERACTION.md §9):
+- ramp slides are floored at DEAD_ZONE_M = 1 cm, log10(max(d, 1 cm)): the
+  same "still" threshold tan_steepest_still uses. Below it the slide is
+  residual contact creep, which carries restitution (r +0.45 under D7);
+- kick stop_s is dropped: it repeats log_stop's stop event in time and read
+  restitution at 0.79 under D7 with log_stop alone at -0.01;
+- dropramp.log_slide is defined for EVERY scene, tumbled or not (downhill
+  travel of the centre of mass over the recording). Under D7 the tumblers
+  are the bouncy boxes (r +0.5 at 20 deg, 0.3 m), so masking them would
+  grade friction on a restitution-selected subset. Tumbling is recorded as a
+  covariate (outcomes.npz "dropramp_tumbled", and its r with each essence
+  axis in the diagnostics), never a field and never a mask. The dropramp
+  slide also carries restitution under every contact model and angle
+  tried, so it is a composite field, never a pure friction target.
 
 Prints each field's zero-training readout both ways: the field from the
 essence (is it a function of the material?) and the essence from the
@@ -46,10 +61,18 @@ EPS_M = 0.001                # log10(d + 1 mm)
 BOUNCE_MM = 2.0              # a rebound under this is no bounce
 STOP_MPS = 0.0125            # 0.1 mm per 8 ms frame: the box has stopped
 TIP_UP = 0.9                 # up_z (or up . plane normal) below this: tipped
+DEAD_ZONE_M = 0.01           # D7: ramp slides under 1 cm count as still
+FIELDS_VERSION = "D7"
 
 
 def log_dist(d: np.ndarray) -> np.ndarray:
     return np.log10(np.asarray(d) + EPS_M)
+
+
+def log_slide(d: np.ndarray) -> np.ndarray:
+    """D7 ramp slide: log10(max(d, DEAD_ZONE_M)), so creep under the still
+    threshold reads as still."""
+    return np.log10(np.maximum(np.asarray(d, float), DEAD_ZONE_M))
 
 
 def apexes(h: np.ndarray) -> np.ndarray:
@@ -159,8 +182,8 @@ def compute(data: str) -> tuple[dict[str, np.ndarray], dict[str, str], dict]:
     for a in man["ramp_deg"]:
         r = tr[f"ramp{a:04.1f}"]
         slide = np.linalg.norm(r[:, -1, 1:4] - r[:, 0, 1:4], axis=1)
-        put(f"ramp{a:04.1f}.log_slide", "ramp", log_dist(slide))
-        tilts.append(slide < 0.01)
+        put(f"ramp{a:04.1f}.log_slide", "ramp", log_slide(slide))
+        tilts.append(slide < DEAD_ZONE_M)
     still = np.stack(tilts, 1)                                # (S, angles): did not slide
     tans = np.tan(np.radians(man["ramp_deg"]))
     put("ramp.tan_steepest_still", "ramp",
@@ -197,7 +220,6 @@ def compute(data: str) -> tuple[dict[str, np.ndarray], dict[str, str], dict]:
         stop = np.array([stop_index(x[:, 1:4], dt) for x in r])
         dist = np.linalg.norm(r[np.arange(S), stop, 1:4] - r[:, 0, 1:4], axis=1)
         put(f"kick{v:.1f}.log_stop", "kick", np.where(tip, np.nan, log_dist(dist)))
-        put(f"kick{v:.1f}.stop_s", "kick", np.where(tip, np.nan, r[np.arange(S), stop, 0]))
         diag[f"kick{v:.1f}_tipped"] = int(tip.sum())
 
     if "dropramp_deg" in man:
@@ -210,10 +232,18 @@ def compute(data: str) -> tuple[dict[str, np.ndarray], dict[str, str], dict]:
         tip = np.array([tipped(x[:, 4:7], n) for x in r])
         put("dropramp.e1", "dropramp", [rebound_ratios(h, 1)[0] for h in hn])
         slide = (r[:, -1, 1:4] - r[:, 0, 1:4]) @ downhill
-        put("dropramp.log_slide", "dropramp",
-            np.where(tip, np.nan, log_dist(np.clip(slide, 0.0, None))))
+        put("dropramp.log_slide", "dropramp", log_dist(np.clip(slide, 0.0, None)))
         diag["dropramp_tumbled"] = int(tip.sum())
+        diag["covariates"] = {"dropramp_tumbled": tip}
     return f, fam, diag
+
+
+def covariate_r(c: np.ndarray, E: np.ndarray) -> list[float]:
+    """Pearson r of a 0/1 covariate with each essence axis (0 if constant)."""
+    c = np.asarray(c, float)
+    if c.std() == 0:
+        return [0.0] * E.shape[1]
+    return [float(np.corrcoef(c, E[:, k])[0, 1]) for k in range(E.shape[1])]
 
 
 def readouts(f: dict[str, np.ndarray], fam: dict[str, str],
@@ -240,6 +270,9 @@ def main() -> None:
     f, fam, diag = compute(args.data)
     E = np.load(os.path.join(args.data, "battery.npz"))["essence"].astype(float)
     per_field, per_family = readouts(f, fam, E)
+    cov = diag.pop("covariates", {})
+    for name, c in cov.items():
+        diag[f"{name}_r_essence"] = covariate_r(c, E)
     print(f"[f35-outcomes] {args.data}: {len(E)} scenes, {len(f)} fields")
     print("\nFIELD <- essence (R^2, kNN-5 / ridge best)     undefined  mean   sd")
     for name, v in f.items():
@@ -252,8 +285,9 @@ def main() -> None:
     print("\n" + json.dumps(diag))
     np.savez_compressed(os.path.join(args.data, "outcomes.npz"),
                         names=np.array(list(f)), families=np.array([fam[n] for n in f]),
-                        values=np.stack(list(f.values()), 1))
+                        values=np.stack(list(f.values()), 1), **cov)
     json.dump({"per_field": per_field, "per_family": per_family, "diagnostics": diag,
+               "fields_version": FIELDS_VERSION, "dead_zone_m": DEAD_ZONE_M,
                "bounce_mm": BOUNCE_MM, "stop_mps": STOP_MPS, "tip_up": TIP_UP},
               open(os.path.join(args.data, "outcomes.json"), "w"), indent=2)
 

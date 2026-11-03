@@ -31,7 +31,7 @@ def test_ramp_angles_sit_below_the_cube_tipping_angle_and_ascend():
 
 def test_probe_names_are_stable():
     names = G.probe_names()
-    assert names[0] == "drop" and names[-3:] == ["kick1.0", "kick3.0", "dropramp38.7"]
+    assert names[0] == "drop" and names[-3:] == ["kick1.0", "kick3.0", "dropramp20.0"]
     assert len(names) == 1 + len(G.RAMP_DEG) + len(G.PUSH_N) + 2 + 2 + 2 + len(G.KICK_MPS) + 1
     assert "ramp05.7" in names and "push0015" in names
 
@@ -83,13 +83,16 @@ def test_ball_ground_pair_fixes_the_balls_ground_contact():
 
 def test_repo_contact_model_is_the_identity():
     mat = G.sampled_materials(0, 1)[0][1]
-    G.set_contact("repo")
-    xml = "<mujoco><option timestep='0.002'/></mujoco>"
-    assert G.contact_xml(xml, mat) == xml
-    with pytest.raises(ValueError):
-        G.set_contact("repo", impratio=10.0)
-    with pytest.raises(ValueError):
-        G.set_contact("pyramidal")
+    try:
+        G.set_contact("repo")
+        xml = "<mujoco><option timestep='0.002'/></mujoco>"
+        assert G.contact_xml(xml, mat) == xml
+        with pytest.raises(ValueError):
+            G.set_contact("repo", impratio=10.0)
+        with pytest.raises(ValueError):
+            G.set_contact("pyramidal")
+    finally:
+        G.set_contact(*G.DESIGNS["D7"][0])
 
 
 def test_elliptic_contact_model_sets_cone_and_box_ground_pair():
@@ -108,17 +111,23 @@ def test_elliptic_contact_model_sets_cone_and_box_ground_pair():
         assert np.allclose(m.pair_solref[0], m.geom_solref[m.geom("obj").id])
         assert np.isclose(m.pair_friction[0, 0], mat.physics.friction)
     finally:
-        G.set_contact("repo")
+        G.set_contact(*G.DESIGNS["D7"][0])
 
 
-def test_dropramp_height_defaults_to_the_flat_drop_and_is_positive():
-    assert G.DROPRAMP_HEIGHT == G.DROP_HEIGHT  # D6 releases from the flat drop's gap
+def test_d7_is_the_default_design_and_d6_stays_reachable():
+    """D7: elliptic cone + fixed friction solref, dropramp 20 deg from 0.3 m;
+    the D6 preset keeps the repo contact model, 38.7 deg and 0.6 m."""
+    assert G.design_name() == "D7"
+    assert (G.CONTACT["model"], G.CONTACT["solreffriction"]) == ("elliptic", "0.01 1")
+    assert (G.DROPRAMP_DEG, G.DROPRAMP_HEIGHT) == (20.0, 0.3)
+    assert G.DESIGNS["D6"] == (("repo", 1.0, ""), 38.7, 0.6)
     try:
-        G.set_dropramp(20.0, 0.15)
-        assert (G.DROPRAMP_DEG, G.DROPRAMP_HEIGHT) == (20.0, 0.15)
-        assert G.probe_names()[-1] == "dropramp20.0"
+        G.init_worker(*G.DESIGNS["D6"])
+        assert G.design_name() == "D6" and G.probe_names()[-1] == "dropramp38.7"
+        G.set_dropramp(38.7, 0.15)
+        assert G.design_name() == "pilot"
         with pytest.raises(ValueError):
             G.set_dropramp(20.0, 0.0)
     finally:
-        G.set_dropramp(38.7)
-    assert G.DROPRAMP_HEIGHT == G.DROP_HEIGHT
+        G.init_worker(*G.DESIGNS["D7"])
+    assert G.design_name() == "D7"
