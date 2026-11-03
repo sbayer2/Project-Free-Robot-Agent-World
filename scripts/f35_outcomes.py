@@ -32,6 +32,8 @@ D7 (docs/CROSS_INTERACTION.md §9):
   axis in the diagnostics), never a field and never a mask. The dropramp
   slide also carries restitution under every contact model and angle
   tried, so it is a composite field, never a pure friction target.
+  Kick tipping stays a mask (log_stop is NaN for a tipped box) but is saved
+  and reported the same way, so its selection can be read.
 
 Prints each field's zero-training readout both ways: the field from the
 essence (is it a function of the material?) and the essence from the
@@ -165,7 +167,7 @@ def compute(data: str) -> tuple[dict[str, np.ndarray], dict[str, str], dict]:
     up = np.array([0.0, 0.0, 1.0])
     f: dict[str, np.ndarray] = {}
     fam: dict[str, str] = {}
-    diag: dict = {}
+    diag: dict = {"covariates": {}}
 
     def put(name: str, family: str, values) -> None:
         f[name], fam[name] = np.asarray(values, float), family
@@ -221,6 +223,7 @@ def compute(data: str) -> tuple[dict[str, np.ndarray], dict[str, str], dict]:
         dist = np.linalg.norm(r[np.arange(S), stop, 1:4] - r[:, 0, 1:4], axis=1)
         put(f"kick{v:.1f}.log_stop", "kick", np.where(tip, np.nan, log_dist(dist)))
         diag[f"kick{v:.1f}_tipped"] = int(tip.sum())
+        diag["covariates"][f"kick{v:.1f}_tipped"] = tip
 
     if "dropramp_deg" in man:
         a = man["dropramp_deg"]
@@ -234,7 +237,7 @@ def compute(data: str) -> tuple[dict[str, np.ndarray], dict[str, str], dict]:
         slide = (r[:, -1, 1:4] - r[:, 0, 1:4]) @ downhill
         put("dropramp.log_slide", "dropramp", log_dist(np.clip(slide, 0.0, None)))
         diag["dropramp_tumbled"] = int(tip.sum())
-        diag["covariates"] = {"dropramp_tumbled": tip}
+        diag["covariates"]["dropramp_tumbled"] = tip
     return f, fam, diag
 
 

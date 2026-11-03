@@ -49,3 +49,4 @@ def test_d7_fields_on_a_small_battery(tmp_path):
     assert tip.shape == (6,) and tip.dtype == bool
     assert diag["dropramp_tumbled"] == int(tip.sum())
     assert fam["dropramp.log_slide"] == "dropramp"
+    assert set(diag["covariates"]) == {"kick1.0_tipped", "kick3.0_tipped", "dropramp_tumbled"}
