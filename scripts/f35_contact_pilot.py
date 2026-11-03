@@ -69,7 +69,8 @@ def creep(data: str) -> dict:
     held = raw[:, 1] > math.tan(a) + HOLD_MARGIN
     t = travel[held]
     return {"n_held": int(held.sum()), "median_mm": float(np.median(t) * 1e3),
-            "max_mm": float(t.max() * 1e3), "r_restitution": pearson(t, raw[held, 2])}
+            "max_mm": float(t.max() * 1e3), "mean_mm": float(t.mean() * 1e3),
+            "r_restitution": pearson(t, raw[held, 2]), "r_friction": pearson(t, raw[held, 1])}
 
 
 def dropramp_restitution(data: str) -> dict:
@@ -218,7 +219,7 @@ def main() -> None:
     for k, r in res.items():
         c = r["creep"]
         print(f"  {k:9s} median {c['median_mm']:7.1f} mm  max {c['max_mm']:7.1f} mm  "
-              f"r(restitution) {c['r_restitution']:+.2f}")
+              f"r(restitution) {c['r_restitution']:+.2f}  r(friction) {c['r_friction']:+.2f}")
     print("\nPER RECORDING (density friction restitution), 5 mm, CV alpha")
     for w in WATCH:
         print(f"  {w}")
