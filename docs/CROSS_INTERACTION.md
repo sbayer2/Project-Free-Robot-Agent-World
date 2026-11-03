@@ -245,9 +245,12 @@ The battery as built, iteration by iteration, is in §9.
    only the T0 *oracle floor* (a ridge/kNN fit), not a trained T0 model.
 2. Noise level(s) to preregister, in mm for T0 and as a sensor model for T1.
    T1 sensor model proposed in §10 (DRAFT): SNR ≈ 50 at nominal white.
-3. Battery: the gate passes at D5 (§9); the strike is not a two-axis input leak-free. Decide whether the unity test needs
-   a multi-axis input family (§9, D3 consequence), then freeze the battery
-   and the gate in one commit before any training.
+3. Battery: D7 (§9) passes the gate on 5 of 5 seeds and has a two-axis
+   input (the drop onto the ramp, friction 0.82 / restitution 0.92).
+   Before the freeze: decide the kick-tip mask (44 grippy boxes masked
+   from `kick3.0.log_stop` under D7), whether a 0.02 margin on the
+   dropramp's friction is enough, and the bar and noise; then freeze the
+   battery and the gate in one commit before any training.
 4. Frame rate and window for T1: contact keyframes last ~64 ms. Proposed in
    §10: 125 fps over the full 2 s.
 5. ~~Inverse display curve or linear HDR renderer~~ Resolved: MuJoCo's
@@ -402,6 +405,137 @@ pushed over the bar on restitution, a composite interaction (e.g. a drop
 onto the ramp, which mixes bounce and slide), or the input taken as several
 families watched together. That choice belongs to the preregistration,
 before the freeze.
+
+**D6** (`61f005f`) takes the composite route and levels the strike ball.
+
+1. *Drop onto the ramp* (`dropramp38.7`): the drop's 0.6 m fall onto the
+   steepest ramp, box flush with the plane. It bounces off the slope
+   (restitution), then slides or stops (friction). Per recording at 5 mm:
+   density −0.00, friction **0.87**, restitution **0.98**, the first single
+   input over the bar on two axes. 78 of 512 boxes tumble; under the repo
+   contact model the tumblers are the grippy ones (r(tumble, μ) +0.56).
+2. *Strike ball under gravity compensation*, so it flies level instead of
+   landing about 70 ms after the impact. Strike family 0.87 / 0.69 / 0.71.
+   Caveat (cloud cross-check): the ball flies level in only 215 of 512
+   scenes; in 171 it touches the ground after the impact (heavy boxes) and
+   in 152 it climbs over light boxes (35 rise above 50 cm, out of a tight
+   camera window). The box tips under ground friction when struck, so the
+   ball's deflection depends on friction and mass, which is probably part
+   of why the strike's friction rose from 0.55 to 0.69.
+3. *Outcome fields* (`scripts/f35_outcomes.py`, the targets a model
+   predicts; §10.3a): drop/tap e1 0.99, scale 1.00, strike v_ball 0.89 and
+   v_box 0.84, kick3.0 0.96, dropramp e1 0.99 and log_slide 0.97 (field
+   from the essence).
+
+Gate PASS on all three axes, 14 of 56 ordered pairs. The cloud reproduced
+every number on MuJoCo 3.9.0 and 3.17.0 (only the 0 mm rows and two cells
+differ between versions, by 0.01). **Found in D6: restitution leaks into the
+friction targets.** Read from their outcome fields, the ramp family carries
+restitution at 0.86 and the kick at 0.77. Physics, not field definition:
+under the repo contact model friction is a soft constraint sharing the
+box's restitution-derived solref, so boxes that should hold a 38.7° slope
+creep down it, 151 mm median and 589 mm maximum (n = 96, raw μ > tan 38.7°
++ 0.1), with r 0.87 against restitution and −0.02 against friction.
+
+**D7 pilot** (`2dcd620`, `3cbfa25`, `c3b2e22`, `2df55d1`;
+`scripts/f35_contact_pilot.py`; seed 1234, one noise draw). Contact
+variants at 38.7°, held-box creep median / max, r with restitution:
+
+| contact | creep mm | r(e) | kick1.0 friction (per recording) |
+|---|---|---|---|
+| repo (D6) | 151 / 589 | +0.87 | 0.63 |
+| elliptic, impratio 1 | 52 / 390 | +0.78 | 0.65 |
+| elliptic, impratio 10 | 21 / 295 | +0.70 | 0.65 |
+| elliptic, impratio 100 | 18 / 280 | +0.70 | 0.66 |
+| elliptic + box–ground pair, solreffriction `0.01 1` | **4 / 14** | +0.45 | **0.96** |
+
+impratio alone does not fix the leak; a fixed friction solref does. Under
+it, the remaining outcome leak is field definition: ramp slides floored at
+1 cm (the existing "still" threshold; 2 and 5 cm give the same) take the
+ramp family's restitution from 0.70 to −0.00 with friction 0.98, and
+dropping kick `stop_s` (it repeats `log_stop`'s stop event in time) takes
+the kick's from 0.79 to −0.01 with friction 1.00. Under the repo model the
+same changes leave 0.85 and 0.66: there it is physics.
+
+The fix breaks the 38.7° drop onto the ramp (432 of 512 tumble; its
+rebound tracks the flat drop's only at r 0.34). Angle sweep, then drop
+height at 20°:
+
+| 20°, drop gap | tumbled | r(tumble, e) | per recording f / e | slide inverse R² f / e | r(dropramp.e1, drop.e1) |
+|---|---|---|---|---|---|
+| 0.60 m | 144 (28%) | +0.63 | 0.85 / 0.93 | 0.70 / 0.36 | 0.91 |
+| **0.30 m** | **75 (15%)** | **+0.50** | **0.82 / 0.92** | 0.65 / 0.55 | 0.91 |
+| 0.15 m | 38 (7%) | +0.36 | 0.79 / 0.90 | 0.66 / 0.59 | 0.91 |
+| 0.08 m | 30 (6%) | +0.33 | 0.75 / 0.84 | 0.65 / 0.55 | 0.90 |
+| 0.04 m | 23 (4%) | +0.29 | 0.69 / 0.73 | 0.64 / 0.58 | 0.88 |
+| 0.02 m | 23 (4%) | +0.28 | 0.63 / 0.55 | 0.67 / 0.56 | 0.87 |
+
+Three readings. (1) The contact model decides who tumbles: grippy boxes
+under repo, bouncy boxes under the fix (r(tumble, e) +0.44 to +0.67 from
+10° to 30°). The mechanism (a stiff friction grip catches a bouncing edge)
+is post hoc and untested. Masking tumblers would therefore grade friction
+on a restitution-selected subset. (2) A lower drop shrinks that selection
+but floors near 4% with r ≈ +0.3, and costs friction information below
+0.3 m. (3) The dropramp slide carries restitution under every contact
+model and angle tried (repo: 0.76 at 10°, 0.15 at 38.7°), so it is a
+composite field, never a pure friction target. Where the slide is measured
+from (release point or rest pose) changes nothing.
+
+Cross-check (cloud, notes on `claude/cloud-notes`): every pilot number
+reproduces on MuJoCo 3.9.0 (arm and x86) and 3.17.0 (x86). The only
+differences are the MuJoCo version, not the platform: one borderline
+tumbler at 0.08 and 0.04 m, and at 0.02 m the 3.17.0 dropramp restitution
+falls to 0.38 (a few-mm bounce near the 5 mm noise). At 0.3 m both
+versions agree in every column. Repo tumbles nothing at ≤ 30°.
+
+**D7** (`aacd3bc`, `2d7a519`; owner decision 2026-11-03). Battery: the
+elliptic cone with a box–ground pair, solreffriction `0.01 1`, for every
+recording; the drop onto the ramp at 20° from 0.3 m. `--design D6`
+rebuilds D6 bit for bit. Outcome fields (`FIELDS_VERSION` D7): ramp slides
+floored at 1 cm; no kick `stop_s`; `dropramp.log_slide` defined for every
+scene, with tumbling saved as a covariate (never a field, never a mask);
+kick tipping stays a mask but is saved and reported the same way.
+
+Five seeds (1234, 1–4; 512 sampled materials each; `scripts/f35_seeds.py`),
+mean ± sd, D7 against D6 on the same D7 fields:
+
+| | D6 | D7 |
+|---|---|---|
+| gate passes (density / friction / restitution) | 5 / 5 / 5 | 5 / 5 / 5 |
+| shared ordered pairs | 14 of 56 | 14 of 56 |
+| held-box creep at 38.7°, median | 134 ± 10 mm | **4.4 ± 0.0 mm** |
+| creep r with restitution | +0.86 ± 0.01 | +0.39 ± 0.05 |
+| ramp outcome family, restitution | 0.85 ± 0.02 | **−0.00 ± 0.02** (friction 0.98) |
+| kick outcome family, restitution | 0.65 ± 0.03 | **−0.01 ± 0.01** (friction 1.00) |
+| push outcome family, restitution | 0.44 ± 0.01 | −0.01 ± 0.01 |
+| ramp trajectories (5 mm family), restitution | 0.37 ± 0.03 | 0.18 ± 0.04 |
+| kick trajectories (5 mm family), restitution | 0.34 ± 0.06 | 0.13 ± 0.02 |
+| kick1.0 recording, friction | 0.67 ± 0.03 | **0.96 ± 0.00** |
+| dropramp recording, friction / restitution | 0.88 / 0.98 (38.7°, 0.6 m) | 0.82 ± 0.01 / 0.92 ± 0.00 (20°, 0.3 m) |
+| dropramp outcome family, friction / restitution | 0.95 / 1.00 | 0.88 / 0.98 |
+| dropramp tumbled; r with μ / e | 90 ± 8; +0.57 / −0.16 | 69 ± 5; −0.17 / **+0.46** |
+| kick3.0 tipped; r with μ / e | 17 ± 3; +0.31 / −0.11 | **44 ± 4**; +0.34 / +0.09 |
+| strike family (5 mm) | 0.87 / 0.67 / 0.70 | 0.86 / 0.73 / 0.69 |
+
+What D7 buys: the friction targets carry no restitution (outcome level),
+and the 1 m/s kick reads friction (0.96, from 0.67). The input trajectories
+still carry some (ramp 0.18, kick 0.13 at the family level): residual creep
+of 4 mm median that the dead zone hides from the targets only. Harmless
+while no target field carries it; stated so it is not forgotten.
+
+What D7 costs, open: (1) the dropramp recording reads friction at
+0.82 ± 0.01, a 0.02 margin over a bar that is not frozen; (2) the firmer
+grip tips 44 boxes in the 3 m/s kick (17 under D6), grippy ones (r +0.34
+with μ), and `kick3.0.log_stop` is masked there, so the kick's friction
+field loses the top of the μ range (the same selection problem as the
+dropramp, on the target's own axis); (3) D7 changes every recording's
+contact, so all reference values taken on D1–D6 are superseded.
+
+**Correction (Mac session, 2026-11-03).** During the pilot the Mac session
+withdrew "ramp restitution 0.37 → 0.19, kick 0.31 → 0.13" as unreproducible.
+They reproduce exactly at seed 1234: they are the 5 mm family readouts of
+the ramp and kick *trajectories* (the code table), not of their outcome
+fields. The withdrawal was wrong; the numbers stand with that label.
 
 
 ## 10. Amendment R1 (DRAFT): the T1 pixel arm, an attention transformer on uncompressed frame arrays
