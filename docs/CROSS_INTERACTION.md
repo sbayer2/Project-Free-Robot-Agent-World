@@ -245,12 +245,9 @@ The battery as built, iteration by iteration, is in §9.
    only the T0 *oracle floor* (a ridge/kNN fit), not a trained T0 model.
 2. Noise level(s) to preregister, in mm for T0 and as a sensor model for T1.
    T1 sensor model proposed in §10 (DRAFT): SNR ≈ 50 at nominal white.
-3. Battery: D7 (§9) passes the gate on 5 of 5 seeds and has a two-axis
-   input (the drop onto the ramp, friction 0.82 / restitution 0.92).
-   Before the freeze: decide the kick-tip mask (44 grippy boxes masked
-   from `kick3.0.log_stop` under D7), whether a 0.02 margin on the
-   dropramp's friction is enough, and the bar and noise; then freeze the
-   battery and the gate in one commit before any training.
+3. ~~Battery and gate~~ **Frozen 2026-11-04** (§9, FREEZE): battery D7,
+   outcome fields D7.1 (no masks), bar 0.8 at 5 mm on one designated pair
+   per axis, canonical MuJoCo 3.9.0. R1 is not frozen.
 4. Frame rate and window for T1: contact keyframes last ~64 ms. Proposed in
    §10: 125 fps over the full 2 s.
 5. ~~Inverse display curve or linear HDR renderer~~ Resolved: MuJoCo's
@@ -537,13 +534,113 @@ They reproduce exactly at seed 1234: they are the 5 mm family readouts of
 the ramp and kick *trajectories* (the code table), not of their outcome
 fields. The withdrawal was wrong; the numbers stand with that label.
 
+### FREEZE (2026-11-04): battery D7, outcome fields D7.1, the gate
+
+**Frozen (owner decision 2026-11-04, "apply the recommendation, freeze").**
+Code at `0260217`; this entry is the freeze commit. Changing anything
+below after this commit is a dated amendment, never a tweak, and no F35
+hypothesis may be scored on a battery or gate changed after its result
+was seen.
+
+- **Battery:** design D7 (`--design D7`, the generator default): elliptic
+  cone, box–ground pair solreffriction `0.01 1`, impratio 1; the drop onto
+  the ramp at 20° from 0.3 m; every other probe as in D6.
+- **Canonical build: MuJoCo 3.9.0** (the Mac; numpy 2.4.6, Python 3.13);
+  `pip install -e ".[f35]"` pins it. Every battery's `manifest.json` now
+  records `provenance` (MuJoCo, numpy, Python, platform, git commit and a
+  dirty flag), copied into `code_table.json` and `outcomes.json`. D7 is
+  the most version-sensitive battery so far: ramp-family sums move by up
+  to 49 between 3.9.0 and 3.17.0. The cloud session reproduced every cell
+  of the five-seed table below at two decimals on 3.17.0 / x86 and on
+  3.9.0 / x86 (note `2026-11-04-0003-d7-build-seeds.md`), so no gate cell
+  and no reported mean depends on the version; a 3.17.0 battery is still
+  not the canonical one.
+- **Outcome fields D7.1** (`FIELDS_VERSION`, 25 fields): drop.e1, drop.e2,
+  drop.bounces, drop.settle_s; ramp{05.7…38.7}.log_slide (1 cm dead zone),
+  ramp.tan_steepest_still; push{0015…3840}.log_disp; strike.v_ball,
+  strike.v_box; scale.sag; tap.e1, tap.e2; kick1.0.log_stop,
+  kick3.0.log_stop; dropramp.e1, dropramp.log_slide. **No field is ever
+  masked:** tumbling (dropramp) and tipping (kick) are covariates saved in
+  `outcomes.npz` with their r against each essence axis, never masks.
+- **Gate:** inverse R² (best of CV-α ridge and kNN-5, 5-fold), families
+  read whole, 5 mm position noise (0.01 on the up vector), **bar 0.8**.
+  Each axis's verdict rests on **one designated pair**, both families
+  reading the axis: density **strike + scale**, friction **ramp + kick**,
+  restitution **drop + tap** (`VERDICT_PAIRS` in `f35_code_table.py`). The
+  other shared pairs, the drop onto the ramp's above all, are reported and
+  never load-bearing. The any-pair gate stays as a descriptive readout.
+- **Seeds:** 1234, 1, 2, 3, 4; 512 MaterialSampler scenes each
+  (`scripts/f35_seeds.py --design D7`).
+
+**The three open items, settled:**
+1. *The 3 m/s kick's tip mask* is removed (fields D7.1). The mask cut
+   44 ± 4 boxes, the grippy ones (r +0.34 with μ; 32 of the 44 in the top
+   friction quartile), so `kick3.0.log_stop` lost the top of the μ range,
+   the selection the drop onto the ramp had under D6. The stop distance of
+   a tipped box still tracks friction (r −0.95 with μ over all 512 scenes),
+   and the kick family reads friction at 0.997 ± 0.001 unmasked, the same
+   as masked. Both kick speeds are target fields; the 1 m/s kick never
+   tips (0 of 512 on every seed). The cloud's checklist read the
+   recommendation as "kick1.0 is the target, kick3.0 stays masked and
+   descriptive"; the owner approved the unmasked version, which keeps both
+   speeds and drops the last mask.
+2. *The dropramp's 0.02 friction margin* no longer decides anything: the
+   friction verdict rests on ramp + kick (margin +0.15). **The thinnest
+   designated margin is density's**: strike reads it at 0.86 ± 0.02,
+   +0.043 over the bar on the worst seed. That margin is stated here
+   because it is the cell most likely to fail a future rerun.
+3. *The residual restitution in the ramp and kick trajectories* (family
+   0.18 / 0.13, from ~4 mm of creep) is disclosed and carried by no target
+   field (outcome-field restitution −0.00 / −0.01).
+
+**Frozen reference values** (canonical build, `0260217`, clean tree;
+mean ± sd over the five seeds; batteries bit-identical to the `ad82352`
+D7 seeds). A rerun of the frozen battery must give the same verdicts and
+match every cell at two decimals within ±0.01.
+
+| | density | friction | restitution |
+|---|---|---|---|
+| **gate verdict**, designated pair | strike+scale 5/5 | ramp+kick 5/5 | drop+tap 5/5 |
+| margin over 0.8 (worst seed) | +0.06 ± 0.02 (+0.043) | +0.15 ± 0.00 (+0.152) | +0.15 ± 0.00 (+0.147) |
+| *trajectory families, 5 mm:* drop | −0.01 | −0.02 | 0.98 |
+| ramp | −0.01 | 0.95 | 0.18 ± 0.04 |
+| push | 0.57 ± 0.03 | 0.61 ± 0.03 | 0.08 ± 0.02 |
+| strike | 0.86 ± 0.02 | 0.73 ± 0.03 | 0.69 ± 0.03 |
+| scale | 1.00 | −0.01 | −0.01 |
+| tap | −0.01 | −0.01 | 0.95 |
+| kick | −0.01 | 0.99 | 0.13 ± 0.02 |
+| dropramp | −0.02 | 0.82 ± 0.01 | 0.92 |
+| *outcome families (essence ← fields):* drop | −0.01 | −0.01 | 1.00 |
+| ramp | −0.00 | 0.98 | −0.00 ± 0.02 |
+| push | 0.94 ± 0.01 | 0.87 ± 0.02 | −0.01 |
+| strike | 0.80 ± 0.03 | 0.34 ± 0.05 | 0.26 ± 0.07 |
+| scale | 1.00 | −0.01 | −0.01 |
+| tap | −0.01 | −0.01 | 1.00 |
+| kick | −0.01 | 1.00 | −0.01 |
+| dropramp | −0.01 | 0.88 ± 0.01 | 0.98 |
+
+Shared ordered pairs: 14 of 56 on every seed (the same 14). Covariates:
+dropramp tumbled 69 ± 5 (r with μ −0.17, e +0.46); kick3.0 tipped 44 ± 4
+(μ +0.34, e +0.09); kick1.0 tipped 0. Held-box creep at 38.7°: median
+4.38 ± 0.04 mm, max 23 ± 11 mm, r with e +0.39 ± 0.05. Sds under 0.01
+are left out of the table.
+
+**Not frozen:** R1 (§10), the T1 pixel arm. Its open items stay open: the
+framing rule (the W ladder, logged as a D-iteration before computing;
+F_px chooses W, F_track grades; the tie-break rule), §10.2's exposure
+items and §10.4's pair list. R1 freezes later, in its own commit, on top
+of this frozen battery and before any R1 model is trained.
+
 
 ## 10. Amendment R1 (DRAFT): the T1 pixel arm, an attention transformer on uncompressed frame arrays
 
-**Status: DRAFT, 2026-10-27. Not frozen.** R1 freezes together with the
-battery and gate (§8 item 3), in one commit that also adds the frame
-generator, the model and `scripts/f35_r1_verdicts.py`, before any R1 model is
-trained. Until then everything here can change.
+**Status: DRAFT, 2026-10-27. Not frozen.** ~~R1 freezes together with the
+battery and gate (§8 item 3)~~ *Amended 2026-11-04:* the battery and gate
+froze first, on their own (§9, FREEZE), which is stricter: R1 can no longer
+tune the battery. R1 freezes later, in one commit that adds the frame
+generator, the model and `scripts/f35_r1_verdicts.py`, before any R1 model
+is trained. Until then everything in §10 can change except the battery,
+the outcome fields and the gate.
 
 *Revision 2026-10-27 (draft 2), from the cloud session's review: explicit
 exposure and SNR (and a × 1/4 bracket in place of × 1/16); angular noise in
@@ -653,7 +750,10 @@ MLX canonical, torch mirror with a parity test, numpy forward for CI.
 - **Pairs:** the frozen battery's shared pairs. At D4: kick → ramp
   (friction, primary: the faintest keyframe), drop → tap (restitution),
   strike → scale (density). The multi-axis input question (§9) may add one
-  pair at the freeze.
+  pair at the freeze. *Note 2026-11-04:* the frozen battery (D7) shares 14
+  ordered pairs, including the drop onto the ramp's six; the gate's
+  designated pairs are the three above. R1's pair list is decided at R1's
+  own freeze.
 - **Split:** one fixed iid 80/20 split by scene (seed 0), the same for
   every pair; primary. R1's first question is whether pixels can match the
   state floor at all, which is an interpolation question. **Corner split,
