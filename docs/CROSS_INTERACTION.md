@@ -546,7 +546,9 @@ was seen.
   cone, box–ground pair solreffriction `0.01 1`, impratio 1; the drop onto
   the ramp at 20° from 0.3 m; every other probe as in D6.
 - **Canonical build: MuJoCo 3.9.0** (the Mac; numpy 2.4.6, Python 3.13);
-  `pip install -e ".[f35]"` pins it. Every battery's `manifest.json` now
+  `pip install -e ".[f35]"` pins it. Canonical means the MuJoCo version
+  only: numpy, Python and platform are recorded, not required (the cloud's
+  3.9.0 / x86 / Python 3.11 rerun matches the reference in every cell). Every battery's `manifest.json` now
   records `provenance` (MuJoCo, numpy, Python, platform, git commit and a
   dirty flag), copied into `code_table.json` and `outcomes.json`. D7 is
   the most version-sensitive battery so far: ramp-family sums move by up
@@ -624,6 +626,14 @@ dropramp tumbled 69 ± 5 (r with μ −0.17, e +0.46); kick3.0 tipped 44 ± 4
 (μ +0.34, e +0.09); kick1.0 tipped 0. Held-box creep at 38.7°: median
 4.38 ± 0.04 mm, max 23 ± 11 mm, r with e +0.39 ± 0.05. Sds under 0.01
 are left out of the table.
+
+**Cross-check of the freeze** (cloud session, note
+`2026-11-04-2304-freeze-crosscheck.md`, at `6aa0746`): reproduces on
+MuJoCo 3.9.0 and 3.17.0 (x86). Same verdicts and margins, every cell
+within ±0.01 (identical at two decimals but for one dropramp tumbler and
+the creep-max sd), the same set of 14 shared pairs, batteries bit-identical
+to its `ad82352` D7 seeds, 28 F35 tests pass on 3.17.0, and the §9 wording
+matches the code.
 
 **Not frozen:** R1 (§10), the T1 pixel arm. Its open items stay open: the
 framing rule (the W ladder, logged as a D-iteration before computing;

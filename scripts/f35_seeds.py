@@ -92,7 +92,8 @@ def main() -> None:
     print(f"\n{args.design}: {len(R)} seeds {args.seeds}, {args.sample} scenes each "
           f"(manifest design_iteration: {sorted({r['design_iteration'] for r in R})})")
     prov = {json.dumps({k: (r["provenance"] or {}).get(k) for k in
-                        ("mujoco", "numpy", "git_commit", "git_dirty")}) for r in R}
+                        ("mujoco", "is_canonical_build", "numpy", "python", "platform",
+                         "git_commit", "git_dirty")}) for r in R}
     print(f"provenance: {' | '.join(sorted(prov))}")
     print(f"\nFROZEN GATE per axis (designated pair; seeds), fields "
           f"{sorted({str(r['fields_version']) for r in R})}")
