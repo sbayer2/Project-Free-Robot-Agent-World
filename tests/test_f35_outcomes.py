@@ -1,7 +1,8 @@
 """Pins for the F35 outcome fields (scripts/f35_outcomes.py), D7 rules: ramp
 slides floored at the 1 cm still threshold, no kick stop_s, and the dropramp
-slide defined for every scene with tumbling kept as a covariate, never a
-mask (docs/CROSS_INTERACTION.md §9, D7)."""
+slide and kick stops defined for every scene, with tumbling and tipping kept
+as covariates, never masks (docs/CROSS_INTERACTION.md §9, D7 and the D7.1
+frozen field set)."""
 
 from __future__ import annotations
 
@@ -23,7 +24,7 @@ import f35_outcomes as O  # noqa: E402
 def test_ramp_slide_dead_zone_is_the_still_threshold():
     d = np.array([0.0, 0.004, 0.0099, 0.01, 0.5])
     assert np.allclose(O.log_slide(d), [-2.0, -2.0, -2.0, -2.0, np.log10(0.5)])
-    assert O.DEAD_ZONE_M == 0.01 and O.FIELDS_VERSION == "D7"
+    assert O.DEAD_ZONE_M == 0.01 and O.FIELDS_VERSION == "D7.1"
 
 
 def test_covariate_r_is_zero_for_a_constant_and_signed_otherwise():
@@ -45,6 +46,7 @@ def test_d7_fields_on_a_small_battery(tmp_path):
         if n.startswith("ramp") and n.endswith("log_slide"):
             assert (f[n] >= -2.0 - 1e-12).all()
     assert np.isfinite(f["dropramp.log_slide"]).all()          # tumblers kept
+    assert all(np.isfinite(v).all() for v in f.values())       # D7.1: no masks at all
     tip = diag["covariates"]["dropramp_tumbled"]
     assert tip.shape == (6,) and tip.dtype == bool
     assert diag["dropramp_tumbled"] == int(tip.sum())

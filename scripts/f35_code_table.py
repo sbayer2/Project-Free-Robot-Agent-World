@@ -20,9 +20,13 @@ Two readouts:
    force, every kick speed, a reference ball with the box it hits, the
    scale plate with its box). For each ordered pair of families, the axes both read at inverse
    R^2 >= --gate-r2 at --gate-noise; an axis passes when at least one pair
-   shares it, i.e. it has a positive transfer cell. Bar and noise are not
-   frozen; every battery measured before the freeze commit is DESIGN
-   (iteration log in docs/CROSS_INTERACTION.md).
+   shares it, i.e. it has a positive transfer cell (descriptive since the
+   freeze). FROZEN GATE (2026-11-04, docs/CROSS_INTERACTION.md §9): bar
+   R^2 >= 0.8 at 5 mm, and each axis's verdict rests on ONE designated pair
+   of families that must BOTH read it: density strike + scale, friction
+   ramp + kick, restitution drop + tap. Other shared pairs (the drop onto
+   the ramp's, above all) are reported, never load-bearing. Every battery
+   measured before the freeze commit is DESIGN (iteration log in the doc).
 
     python scripts/f35_code_table.py --data data/pm_f31fix_loud
     python scripts/f35_code_table.py --data data/pm_f35_battery
@@ -46,6 +50,11 @@ from oracle_ceiling import ESSENCE_AXES  # noqa: E402
 PROBES = ("drop", "tilt", "push")
 NOISE_MM = (0.0, 1.0, 5.0, 20.0)
 UP_NOISE = 0.01   # added to the up-vector channels whenever position noise is on
+GATE_R2 = 0.8          # frozen 2026-11-04
+GATE_NOISE_MM = 5.0    # frozen 2026-11-04
+VERDICT_PAIRS = {"density": ("strike", "scale"),       # frozen 2026-11-04
+                 "friction": ("ramp", "kick"),
+                 "restitution": ("drop", "tap")}
 ALPHAS = tuple(float(a) for a in 10.0 ** np.arange(-2, 6))   # 1e-2 ... 1e5
 
 
@@ -214,6 +223,18 @@ def gate(table: dict[str, list[float]], bar: float) -> dict[str, dict]:
     return out
 
 
+def verdict(table: dict[str, list[float]], bar: float = GATE_R2) -> dict[str, dict]:
+    """The frozen gate: per axis, PASS iff BOTH families of its designated
+    pair (VERDICT_PAIRS) read it at >= bar; margin = the weaker of the two
+    minus the bar."""
+    out = {}
+    for j, a in enumerate(ESSENCE_AXES):
+        f1, f2 = VERDICT_PAIRS[a]
+        r = min(table[f1][j], table[f2][j]) if f1 in table and f2 in table else float("nan")
+        out[a] = {"pair": f"{f1}<->{f2}", "pass": bool(r >= bar), "margin": r - bar}
+    return out
+
+
 def strike_windows(data: str, T: dict[str, np.ndarray], E: np.ndarray,
                    noise_mm: float) -> dict[str, list[float]]:
     """Where the strike's signal lives: ball + box before the ball first
@@ -251,8 +272,10 @@ def main() -> None:
     ap.add_argument("--frames", type=int, default=None,
                     help="resample to this many frames (default: a battery's native "
                          "rate; 64 for sample.json worlds)")
-    ap.add_argument("--gate-noise", type=float, default=5.0, help="mm; not frozen")
-    ap.add_argument("--gate-r2", type=float, default=0.8, help="not frozen")
+    ap.add_argument("--gate-noise", type=float, default=GATE_NOISE_MM,
+                    help="mm; frozen at 5 (any other value is not the gate)")
+    ap.add_argument("--gate-r2", type=float, default=GATE_R2,
+                    help="frozen at 0.8 (any other value is not the gate)")
     ap.add_argument("--out", default=None)
     args = ap.parse_args()
 
@@ -260,7 +283,10 @@ def main() -> None:
     E, T, times, height = (load_npz(args.data, args.frames) if npz
                            else load(args.data, args.frames or 64))
     args.frames = len(times["drop"])
+    man_path = os.path.join(args.data, "manifest.json")
+    prov = json.load(open(man_path)).get("provenance") if os.path.exists(man_path) else None
     report: dict = {"data": args.data, "frames": args.frames, "code_table": {},
+                    "battery_provenance": prov,
                     "per_recording": {}, "keyframes": {}}
     print(f"[f35] {args.data}: {len(E)} scenes, {len(T)} recordings, {args.frames} frames "
           f"each over {times['drop'][-1]:.2f} s")
@@ -284,14 +310,22 @@ def main() -> None:
     report["gate"] = {"noise_mm": args.gate_noise, "bar": args.gate_r2,
                       "axes": gate(table, args.gate_r2)}
     report["gate"]["pairs"] = pair_matrix(table, args.gate_r2)
+    frozen = args.gate_r2 == GATE_R2 and args.gate_noise == GATE_NOISE_MM
+    report["gate"]["frozen"] = frozen
+    report["gate"]["verdict"] = verdict(table, args.gate_r2)
     shared = {p: ax for p, ax in report["gate"]["pairs"].items() if ax}
     print(f"\nPAIRS sharing an axis at R^2 >= {args.gate_r2:g}, {args.gate_noise:g} mm "
           f"({len(shared)} of {len(report['gate']['pairs'])} ordered pairs):")
     for p, ax in shared.items():
         print(f"  {p:16s} {', '.join(ax)}")
-    print("\nGATE (every axis shared by >= 1 pair; bar and noise NOT frozen)")
+    print("\nANY-PAIR (descriptive: every axis shared by >= 1 pair)")
     for a, g in report["gate"]["axes"].items():
         print(f"  {a:12s} {'PASS' if g['pass'] else 'FAIL'}  families: {g['families'] or 'none'}")
+    print(f"\nGATE ({'FROZEN' if frozen else 'NOT the frozen gate: bar or noise changed'}; "
+          "designated pair per axis)")
+    for a, g in report["gate"]["verdict"].items():
+        print(f"  {a:12s} {'PASS' if g['pass'] else 'FAIL'}  {g['pair']:16s} "
+              f"margin {g['margin']:+.3f}")
 
     if npz and "strike_ball" in T:
         report["strike_windows"] = strike_windows(args.data, T, E, args.gate_noise)

@@ -25,19 +25,29 @@ from f35_contact_pilot import creep  # noqa: E402
 AXES = ("density", "friction", "restitution")
 
 
+# One BLAS thread per job: several numpy jobs on a few cores otherwise
+# oversubscribe (cloud, 2026-11-04: code table 30 min-1 h 45 -> ~1 min).
+THREADS = {k: "1" for k in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS",
+                            "MKL_NUM_THREADS", "VECLIB_MAXIMUM_THREADS")}
+
+
 def run(*cmd: str, log: str | None = None) -> None:
     with open(log or os.devnull, "w") as fh:
-        subprocess.run([sys.executable, *cmd], check=True, stdout=fh)
+        subprocess.run([sys.executable, *cmd], check=True, stdout=fh,
+                       env={**os.environ, **THREADS})
 
 
 def one(root: str, design: str, seed: int, n: int, reuse: bool) -> dict:
     data = os.path.join(root, f"s{seed}")
-    if not (reuse and os.path.exists(os.path.join(data, "outcomes.json"))):
+    have = lambda f: reuse and os.path.exists(os.path.join(data, f))  # noqa: E731
+    if not have("battery.npz"):
         run(os.path.join(HERE, "f35_generate_battery.py"), "--design", design,
             "--sample", str(n), "--seed", str(seed), "--out", data)
+    if not have("code_table.json"):     # --reuse resumes per step, not per seed
         run(os.path.join(HERE, "f35_code_table.py"), "--data", data,
             "--out", os.path.join(data, "code_table.json"),
             log=os.path.join(data, "code_table.txt"))
+    if not have("outcomes.json"):
         run(os.path.join(HERE, "f35_outcomes.py"), "--data", data,
             log=os.path.join(data, "outcomes.txt"))
     ct = json.load(open(os.path.join(data, "code_table.json")))
@@ -46,6 +56,9 @@ def one(root: str, design: str, seed: int, n: int, reuse: bool) -> dict:
     dropramp = f"dropramp{man['dropramp_deg']:04.1f}"
     return {"design_iteration": man["design_iteration"],
             "gate": {a: g["pass"] for a, g in ct["gate"]["axes"].items()},
+            "verdict": ct["gate"].get("verdict", {}),
+            "fields_version": oc.get("fields_version"),
+            "provenance": man.get("provenance"),
             "pairs_shared": sum(bool(v) for v in ct["gate"]["pairs"].values()),
             "pairs_total": len(ct["gate"]["pairs"]),
             "family_5mm": ct["code_table"]["5mm"],
@@ -78,7 +91,17 @@ def main() -> None:
     R = list(res.values())
     print(f"\n{args.design}: {len(R)} seeds {args.seeds}, {args.sample} scenes each "
           f"(manifest design_iteration: {sorted({r['design_iteration'] for r in R})})")
-    print("\nGATE passes per axis (seeds); shared pairs")
+    prov = {json.dumps({k: (r["provenance"] or {}).get(k) for k in
+                        ("mujoco", "numpy", "git_commit", "git_dirty")}) for r in R}
+    print(f"provenance: {' | '.join(sorted(prov))}")
+    print(f"\nFROZEN GATE per axis (designated pair; seeds), fields "
+          f"{sorted({str(r['fields_version']) for r in R})}")
+    for a in AXES:
+        v = [r["verdict"][a] for r in R if a in r["verdict"]]
+        if v:
+            print(f"  {a:12s} {sum(x['pass'] for x in v)}/{len(v)}  {v[0]['pair']:16s} "
+                  f"margin {ms([x['margin'] for x in v])} (min {min(x['margin'] for x in v):+.3f})")
+    print("\nANY-PAIR gate passes per axis (descriptive); shared pairs")
     for a in AXES:
         print(f"  {a:12s} {sum(r['gate'][a] for r in R)}/{len(R)}")
     print(f"  pairs shared {ms([r['pairs_shared'] for r in R])} of {R[0]['pairs_total']}")
@@ -96,7 +119,7 @@ def main() -> None:
         print(f"  {fam:9s} " + "  ".join(ms([r['outcome_family'][fam][k] for r in R])
                                          for k in range(3)))
     print("\nCOVARIATES: count, r with (density, friction, restitution)")
-    for c in ("dropramp_tumbled", "kick3.0_tipped"):
+    for c in ("dropramp_tumbled", "kick3.0_tipped", "kick1.0_tipped"):
         n = [r["diagnostics"][c] for r in R]
         rr = [r["diagnostics"].get(f"{c}_r_essence", [np.nan] * 3) for r in R]
         print(f"  {c:17s} n {ms(n)}  r " + "  ".join(ms([x[i] for x in rr]) for i in range(3)))

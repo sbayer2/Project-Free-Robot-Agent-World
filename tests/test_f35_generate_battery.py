@@ -131,3 +131,13 @@ def test_d7_is_the_default_design_and_d6_stays_reachable():
     finally:
         G.init_worker(*G.DESIGNS["D7"])
     assert G.design_name() == "D7"
+
+
+def test_provenance_records_versions_and_commit():
+    pytest.importorskip("mujoco")
+    import mujoco
+    p = G.provenance()
+    assert {"mujoco", "numpy", "python", "platform", "git_commit", "git_dirty",
+            "canonical_mujoco", "is_canonical_build"} <= set(p)
+    assert p["mujoco"] == mujoco.__version__ and p["canonical_mujoco"] == "3.9.0"
+    assert p["is_canonical_build"] == (mujoco.__version__ == "3.9.0")

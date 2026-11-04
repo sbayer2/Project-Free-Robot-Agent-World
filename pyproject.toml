@@ -28,6 +28,9 @@ gso = ["trimesh>=4.0", "mujoco>=3.1", "numpy>=1.24", "imageio>=2.31", "Pillow>=1
 # Apple-silicon model stack (install on the Mac; not available in generic CI).
 # Includes image IO so training can read the generated render PNGs.
 mlx = ["mlx>=0.18", "numpy>=1.24", "imageio>=2.31", "Pillow>=10.0"]
+# F35's frozen battery (docs/CROSS_INTERACTION.md §9): canonical build MuJoCo
+# 3.9.0. 3.17.0 reproduces every gate cell, but D7's ramp recordings differ.
+f35 = ["mujoco==3.9.0", "numpy>=1.24"]
 dev = ["pytest>=8.0", "ruff>=0.6"]
 # Optional CPU PyTorch backend (models/torch_net.py): an in-session trainable
 # stand-in to verify the loop converges without a Mac. NOT the canonical trainer.

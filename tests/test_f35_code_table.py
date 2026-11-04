@@ -70,6 +70,28 @@ def test_gate_needs_a_shared_pair():
     assert set(g["friction"]["pairs"]) == {"ramp->push", "push->ramp"}
 
 
+def test_frozen_gate_constants():
+    """The freeze (docs/CROSS_INTERACTION.md §9, 2026-11-04): changing any of
+    these is a protocol change, not a tweak."""
+    assert C.GATE_R2 == 0.8 and C.GATE_NOISE_MM == 5.0
+    assert C.VERDICT_PAIRS == {"density": ("strike", "scale"),
+                               "friction": ("ramp", "kick"),
+                               "restitution": ("drop", "tap")}
+
+
+def test_verdict_rests_on_the_designated_pair_only():
+    # friction is shared by ramp and dropramp, but kick misses: the frozen gate
+    # fails friction even though the any-pair gate passes it.
+    table = {"strike": [0.85, 0.7, 0.7], "scale": [1.0, 0.0, 0.0],
+             "ramp": [0.0, 0.95, 0.2], "kick": [0.0, 0.79, 0.1],
+             "dropramp": [0.0, 0.82, 0.92], "drop": [0.0, 0.0, 0.98],
+             "tap": [0.0, 0.0, 0.95]}
+    v = C.verdict(table)
+    assert v["density"]["pass"] and abs(v["density"]["margin"] - 0.05) < 1e-12
+    assert not v["friction"]["pass"] and C.gate(table, 0.8)["friction"]["pass"]
+    assert v["restitution"]["pass"] and v["friction"]["pair"] == "ramp<->kick"
+
+
 def test_pair_matrix_is_ordered_and_excludes_the_diagonal():
     table = {"drop": [0.0, 0.1, 0.99], "tap": [0.0, 0.0, 0.9]}
     m = C.pair_matrix(table, 0.8)

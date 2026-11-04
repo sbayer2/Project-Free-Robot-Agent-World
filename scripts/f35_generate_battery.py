@@ -85,7 +85,9 @@ import glob
 import json
 import math
 import os
+import platform
 import re
+import subprocess
 import sys
 import time
 from concurrent.futures import ProcessPoolExecutor
@@ -185,6 +187,32 @@ def design_name() -> str:
     now = ((CONTACT["model"], CONTACT["impratio"], CONTACT["solreffriction"]),
            DROPRAMP_DEG, DROPRAMP_HEIGHT)
     return next((k for k, v in DESIGNS.items() if v == now), "pilot")
+
+
+CANONICAL_MUJOCO = "3.9.0"   # the frozen build (docs/CROSS_INTERACTION.md §9)
+
+
+def provenance() -> dict:
+    """What produced a battery: library versions, platform and the git commit
+    of this script (with a dirty flag for tracked changes). D7's ramp
+    recordings move with the MuJoCo version (3.9.0 vs 3.17.0, no gate cell
+    moves), so a battery without this is not comparable."""
+    import mujoco
+
+    def git(*a: str) -> str:
+        try:
+            return subprocess.run(["git", *a], cwd=os.path.dirname(os.path.abspath(__file__)),
+                                  capture_output=True, text=True, check=True).stdout.strip()
+        except (OSError, subprocess.CalledProcessError):
+            return "unknown"
+    commit = git("rev-parse", "HEAD")
+    dirty = git("status", "--porcelain", "--untracked-files=no")
+    return {"mujoco": mujoco.__version__, "numpy": np.__version__,
+            "python": platform.python_version(), "platform": platform.platform(),
+            "git_commit": commit,
+            "git_dirty": None if dirty == "unknown" else bool(dirty),
+            "canonical_mujoco": CANONICAL_MUJOCO,
+            "is_canonical_build": mujoco.__version__ == CANONICAL_MUJOCO}
 
 
 def plane_normal(theta_deg: float) -> np.ndarray:
@@ -468,6 +496,7 @@ def main() -> None:
                                "solref": BALL_GROUND_SOLREF},
                "contact": dict(CONTACT),
                "design_iteration": design_name(),
+               "provenance": provenance(),
                "sim_seconds": SIM_SECONDS, "fps": FPS,
                "columns": ["t", "x", "y", "z", "up_x", "up_y", "up_z"]},
               open(os.path.join(args.out, "manifest.json"), "w"), indent=2)

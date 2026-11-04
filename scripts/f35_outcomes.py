@@ -5,9 +5,9 @@ function of the T0 trajectory, standardized on train statistics at training.
 
 Rules (cloud proposal 2026-10-27, with the three fixes agreed that day):
 - distances spanning millimetres to metres enter as log10(d + 1 mm);
-- no binary fields; a field that a scene cannot define (a box that tipped
-  over in the kick) is NaN there: excluded from the loss and the scoring,
-  and counted in the report;
+- no binary fields; a field that a scene cannot define is NaN there:
+  excluded from the loss and the scoring, and counted in the report (no
+  field is NaN under D7.1; the D7 kick-tip mask was the last one);
 - bounces are SPEED ratios per contact, e_k = v_out / v_in, from apex
   heights (v = sqrt(2 g h)). No-bounce rule: a rebound under BOUNCE_MM is no
   bounce; the next contact is then unobservable and e_{k+1} takes e_k's
@@ -32,8 +32,14 @@ D7 (docs/CROSS_INTERACTION.md §9):
   axis in the diagnostics), never a field and never a mask. The dropramp
   slide also carries restitution under every contact model and angle
   tried, so it is a composite field, never a pure friction target.
-  Kick tipping stays a mask (log_stop is NaN for a tipped box) but is saved
-  and reported the same way, so its selection can be read.
+
+D7.1 (the frozen field set, 2026-11-04): kick tipping is a covariate too,
+never a mask. kick{v}.log_stop is the box's travel to its stop for every
+scene, tipped or not. Under D7 the 3 m/s kick tips ~44 of 512 boxes, the
+grippy ones (r +0.34 with friction; 32 of them in the top friction
+quartile), so the D7 mask cut the top of the friction range from the
+kick's target. Unmasked, the kick family still reads friction at 0.997
+(5 seeds), the same as masked. No field is NaN under D7.1.
 
 Prints each field's zero-training readout both ways: the field from the
 essence (is it a function of the material?) and the essence from the
@@ -64,7 +70,7 @@ BOUNCE_MM = 2.0              # a rebound under this is no bounce
 STOP_MPS = 0.0125            # 0.1 mm per 8 ms frame: the box has stopped
 TIP_UP = 0.9                 # up_z (or up . plane normal) below this: tipped
 DEAD_ZONE_M = 0.01           # D7: ramp slides under 1 cm count as still
-FIELDS_VERSION = "D7"
+FIELDS_VERSION = "D7.1"       # the frozen field set (docs/CROSS_INTERACTION.md §9)
 
 
 def log_dist(d: np.ndarray) -> np.ndarray:
@@ -221,7 +227,7 @@ def compute(data: str) -> tuple[dict[str, np.ndarray], dict[str, str], dict]:
         tip = np.array([tipped(x[:, 4:7], up) for x in r])
         stop = np.array([stop_index(x[:, 1:4], dt) for x in r])
         dist = np.linalg.norm(r[np.arange(S), stop, 1:4] - r[:, 0, 1:4], axis=1)
-        put(f"kick{v:.1f}.log_stop", "kick", np.where(tip, np.nan, log_dist(dist)))
+        put(f"kick{v:.1f}.log_stop", "kick", log_dist(dist))   # D7.1: no tip mask
         diag[f"kick{v:.1f}_tipped"] = int(tip.sum())
         diag["covariates"][f"kick{v:.1f}_tipped"] = tip
 
@@ -289,7 +295,9 @@ def main() -> None:
     np.savez_compressed(os.path.join(args.data, "outcomes.npz"),
                         names=np.array(list(f)), families=np.array([fam[n] for n in f]),
                         values=np.stack(list(f.values()), 1), **cov)
+    man = json.load(open(os.path.join(args.data, "manifest.json")))
     json.dump({"per_field": per_field, "per_family": per_family, "diagnostics": diag,
+               "battery_provenance": man.get("provenance"),
                "fields_version": FIELDS_VERSION, "dead_zone_m": DEAD_ZONE_M,
                "bounce_mm": BOUNCE_MM, "stop_mps": STOP_MPS, "tip_up": TIP_UP},
               open(os.path.join(args.data, "outcomes.json"), "w"), indent=2)
