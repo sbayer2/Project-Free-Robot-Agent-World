@@ -736,7 +736,10 @@ camera costs, not whether physics transfers at all.
 floor; the only numbers used are the T0 path extents of the frozen battery.
 
 **Why a rule is needed.** T0 path extents, frozen D7 battery, seed 1234,
-512 scenes (displacement from frame 0; median / p99 / max):
+all 512 scenes, test split included (no outcome and no floor was used, so
+this does not peek; disclosed). Per scene, the **extreme displacement from
+frame 0 along each axis over the recording** (not the final
+displacement); median / p99 / max across scenes:
 
 | family | motion plane | extent |
 |---|---|---|
@@ -765,32 +768,60 @@ At 96 px a window of W metres gives W / 96 m per pixel: the 0.3 m box spans
 3. **Ladder.** W ∈ {0.5, 1, 2, 4, 8, 16} m. A rung is admissible only if
    every tracked body spans at least 2 px (box: W ≤ 14.4 m; strike ball:
    W ≤ 4.8 m), so the strike's ladder stops at 4 m.
-4. **What leaves the frame is lost.** For F_px at a rung, a body whose
-   centroid projects outside the window in a frame contributes its
-   position clipped to the window edge and an up vector of zero in that
-   frame; then the §10.5 noise (σ = 0.5 px × W / 96, and its angular
-   term) is added. A body that leaves the window carries information only
-   while it is in view, as it will for the pixel model.
+4. **What leaves the frame is lost.** Per frame and per body, the F_px
+   features are the in-plane position (u, v), the up vector and a
+   **visibility bit** (centroid inside the window). In view: the §10.5
+   noise is added (σ = 0.5 px × W / 96 on u and v; the angular term
+   σ_θ = 0.5 px × (W / 96) / 0.15 m as a random rotation of the up
+   vector). Out of view: u and v are clipped to the window edge, the up
+   vector is zero, the bit is 0, and **no noise** is added (an empty frame
+   has no jitter). The bit removes the ambiguity between "left the frame"
+   and "sits at the edge" while keeping one array shape per scene.
+   Approximation, disclosed: a body is treated as fully known while its
+   centroid is inside, though near the edge the frames show only part of
+   it. Expected, not tested: σ_θ grows with W (about 0.28 rad at 8 m), so
+   readings from boxes that tumble (the drop onto the ramp, the 3 m/s
+   kick) fall at large W.
 5. **Choosing W without the test split.** For each input family, W* is
    the admissible rung with the highest F_px **by 5-fold CV inside the
-   train split** (the §10.4 seed-0 iid 80 %). The test split is never
-   used to choose W; F_px on the test split is then reported at W* only.
+   train split**: the §10.4 split seed 0 (iid 80 %: 410 train / 102 test
+   scenes) on **battery seed 1234**, the frozen reference battery. The
+   test split is never used to choose W; F_px on the test split is then
+   reported at W* only. The readout (ridge with α by inner CV, or kNN-5)
+   is also chosen inside the train split, then refit on all of it.
 6. **Ties and several pairs.** An input family that feeds several R1
    pairs uses the rung that maximises the **minimum** F_px across those
-   pairs. Rungs within 0.01 of the best count as tied, and the **largest**
-   tied W wins: less clipping, so less dependence on the 512 sampled
-   materials.
+   pairs, and each pair's own F_px at W* is reported too, so a pair whose
+   floor falls because of the shared W is visible. Rungs within 0.01 of
+   the best count as tied, and the **largest** tied W wins: less
+   clipping, so less dependence on the 512 sampled materials.
 7. **One W per input family**, the same for the iid and the corner split
-   and for all five seeds, written to the frame manifest with its m/px.
+   and for battery seeds 1–4, written to the frame manifest with its m/px
+   and **each body's size in pixels at W\***. The density H1 report states
+   the strike ball's pixel size, so a SHORT on density can be read as
+   resolution-limited or not (the strike ball carries density, the
+   thinnest frozen margin).
+
+**Predictions for W\*, registered before step (b) computes anything:**
+drop 1 m (the 0.75 m release clips slightly, but the bounce apexes stay in
+view and the pixel shrinks); kick 2 m (low-friction boxes leave the frame,
+but a log-distance target needs their early deceleration more than their
+stop); strike 4 m, the largest admissible rung (the cloud also expects the
+strike's W\* above the kick's: the ball's fast rebound leaves small
+windows within a few frames). Rough confidence: each exact rung 40 %;
+strike's W\* ≥ kick's 70 %.
 
 **The graded bar (cloud proposal; owner decision at R1's freeze).** F_px
 assumes a 0.5 px tracker; a centroid tracker on a blob 7–58 px across does
 much better (the cloud estimates ~0.03 px), so F_px likely understates
 what the frames carry. Proposal: **F_px chooses W; F_track grades H1.**
 F_track is a classical pipeline on the actual sensor-model frames at W*:
-background subtraction against the empty-scene frames, a 5 σ threshold,
-connected components, per body the intensity-weighted centroid and, for
-the box, the in-plane angle from second moments; then the same ridge /
+background subtraction against the empty-scene frames, a 5 σ threshold
+with σ the analytic per-pixel noise of the empty scene (shot noise at its
+expected signal plus 3 e⁻ read noise, in ADC units), connected components,
+per body the area centroid (every box has one albedo, so an intensity
+weighting adds nothing) and, for the box, the in-plane angle from second
+moments; then the same ridge /
 kNN-5 readout to the target outcomes. F_track sees only the in-plane
 projection, so it can fall below F_px where the box tumbles out of plane;
 which way it moves is not predicted. If adopted, H1's thresholds read
@@ -798,7 +829,11 @@ against F_track with F_px and F_5mm co-reported, and the §10.7 odds are
 re-registered against the new bar at R1's freeze, before any frame
 exists.
 
-**Order of work:** (a) review of this rule (cloud); (b) F_px on the ladder
+*Review (cloud, note `2026-11-06-1654-review-r1-w1.md`): sound, no
+blocking issue; its answers are folded into rules 4–7 and the F_track
+definition above.*
+
+**Order of work:** (a) review of this rule (cloud), done; (b) F_px on the ladder
 from T0 only, no frames; (c) the frame generator, with G1 at W*;
 (d) F_track; (e) R1's freeze commit.
 
