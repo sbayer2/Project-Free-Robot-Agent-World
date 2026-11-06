@@ -837,6 +837,49 @@ definition above.*
 from T0 only, no frames; (c) the frame generator, with G1 at W*;
 (d) F_track; (e) R1's freeze commit.
 
+**R1-W1 results, step (b)** (2026-11-06; `scripts/f35_r1_floor.py`, T0
+only, no frames; frozen D7 battery seed 1234, canonical build; CV inside
+the 410-scene train split, noise seed 1; the min over pairs is the
+dropramp's):
+
+| input → target | CV F_px by W (0.5 / 1 / 2 / 4 / 8 m) | W\* | test F_px at W\* | F_5mm |
+|---|---|---|---|---|
+| kick → ramp | .936 / .917 / .935 / .920 / .920 | 2 m | 0.946 | 0.950 |
+| drop → tap | .931 / .988 / .987 / .981 / .974 | 4 m | 0.985 | 0.991 |
+| strike → scale | .850 / .889 / .871 / .879 / — | 1 m | 0.878 | 0.850 |
+| dropramp → 4 targets (min) | .805 / .781 / .775 / .707 / .661 | 0.5 m | 0.82–0.97 | 0.79–0.91 |
+
+**Predictions scored:** kick 2 m hit; drop 1 m missed (1 m had the best
+CV score, but 4 m is within the 0.01 tie and the largest tied rung wins);
+strike 4 m missed (1 m); strike's W\* ≥ kick's (70 %) missed.
+
+**Three problems found, none a code bug:**
+1. **W\* depends on the noise draw.** Repeating the choice with noise
+   seeds 1–5 (train-split CV only): drop 4 m in 5 of 5, kick 2 m in 4 of 5,
+   strike 1 / 4 / 4 / 2 / 4 m, dropramp 0.5 m in 3 of 5. The strike's
+   rungs sit within ~0.02 of each other, the size of one noise draw's
+   effect, so the rule picks among near-equals by chance.
+2. **The corner split's per-field R² is undefined for the ramp target.**
+   In the top 20 % of friction, five of the six ramp slides have zero
+   variance (every grippy box sits in the 1 cm dead zone) and the sixth
+   0.05 × its full-population sd. R² on the corner's own variance divides
+   by ~0, giving −189 (kick → ramp) and −508 / −698 (dropramp → ramp /
+   drop). H1's corner co-report would hit the same problem for the model.
+3. **A noiseless reference is not meaningful with standardized columns:**
+   kick → ramp read 0.33 with no noise against 0.95 at 5 mm, because
+   standardizing near-constant columns lets sub-micron variation dominate
+   kNN. Dropped from the script; F_5mm is the reference.
+
+**Proposed revision R1-W2, for review (not adopted):** (a) choose W\* on
+the CV score averaged over five noise draws (seeds 1–5) instead of one;
+(b) score the corner split per field against the **train split's**
+variance of that field (equivalently, MSE in train-standardized units),
+for F_px and for the model alike, so a field that saturates in the corner
+counts as easy, not as undefined. *Disclosed:* the test-split F_px at
+R1-W1's W\* (the table) was seen before this proposal; no test score at
+any other rung was computed, and both changes are motivated by
+train-split CV and by the corner's target variances alone.
+
 ### 10.3 Model
 
 New module (one module per concept), under the repo's three-backend rule:
