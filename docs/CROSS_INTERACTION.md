@@ -913,7 +913,11 @@ like-for-like reference: strike → scale 0.856 against F_px 0.884.
 over five draws is 0.000–0.013, so a five-draw mean is good to about
 0.002–0.006); prefer (b) over dropping saturated fields (makes the field
 set split-dependent) or pooling R² (dominated by whichever fields still
-vary), and call it "skill vs train variance", not R². **R1-W2 with the
+vary), and call it "skill vs train variance", not R². **Averaging order (R1-W2 (a)):** each
+pair's CV score is averaged over the five draws first, then the minimum
+across pairs is taken: the min of five-draw estimates, not the mean of
+per-draw minima, which is biased low (the cloud's per-draw order gave
+0.790 for the dropramp at 0.5 m against 0.792). **R1-W2 with the
 fix, as it would choose:** kick 2 m, drop 4 m, strike 1 m (0.887 vs
 0.875 at 2 m), dropramp **1 m** (0.792 vs 0.784 at 1 m: inside the tie,
 the larger rung wins); test F_px at those W\*: 0.953, 0.985, 0.884, and
