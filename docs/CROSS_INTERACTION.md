@@ -963,8 +963,8 @@ first frame. At R1-W1's W\*: readable kick → ramp (0.66), drop → tap
 scale (−18.4), dropramp → ramp (0.02) and → drop (−0.72). Consequence:
 **density has no readable corner pair at R1**; its corner question is
 answered "floor-limited", not "fails". Disclosed: the 0.5 threshold is
-proposed after these floor values were seen, and two of the readable
-pairs (dropramp → kick at 0.51) sit near it; if adopted, the doc should
+proposed after these floor values were seen, and one readable pair
+(dropramp → kick, 0.51) sits just above it; if adopted, the doc should
 say the threshold was chosen with the floor in view.
 
 ### 10.3 Model
