@@ -936,6 +936,37 @@ the 38.7° ramp slide at −0.98. A model's corner score on the density
 pair cannot be read against a floor that is itself at −18; this has to
 be settled before R1's freeze.
 
+**Density corner diagnosed** (cloud note `2026-11-06-1717-rule4-fix-
+density-corner.md`; the Mac reproduces the load-bearing numbers): **both
+range and missing information.** The densest 20 % weigh 70–216 kg against
+1.4–69.7 kg in training, and their mean sag sits 6.3 train-sd above the
+training mean. Every readout trained on the light 80 % misses by 3.7–4.2
+train-sd of bias, with ridge, kNN, a log-sag target or the outcome fields
+alike. And the information thins out: with the 17 kg reference ball, a
+heavy box barely recoils (v_box 0–0.32 m/s in the corner against up to
+1.71 m/s below it; r(v_box, 1/(17 + M)) falls from 0.94 overall to 0.48
+in the corner), so even trained on heavy boxes, 5-fold CV inside the
+corner reads sag at only 0.35 at pixel precision (kNN; ridge 0.30) and
+0.64 at 5 mm. The 1/(M + m) guess above is borne out. This is a property
+of the **frozen battery's density carrier**, not of R1; a heavier
+reference ball or a second strike speed would move the saturation, for
+any future battery only.
+
+**Proposed corner co-report rule (cloud; for the owner, not adopted):**
+always report the floor's corner skill (vs train variance) beside the
+model's for every pair; read a corner *verdict* only where the floor's
+corner skill is ≥ 0.5, and label other pairs **floor-limited**, with the
+model's number descriptive only; for readable pairs, report model minus
+floor in skill units. The threshold and the W\* rule are fixed before the
+first frame. At R1-W1's W\*: readable kick → ramp (0.66), drop → tap
+(0.74), dropramp → kick (0.51) and → tap (0.81); floor-limited strike →
+scale (−18.4), dropramp → ramp (0.02) and → drop (−0.72). Consequence:
+**density has no readable corner pair at R1**; its corner question is
+answered "floor-limited", not "fails". Disclosed: the 0.5 threshold is
+proposed after these floor values were seen, and two of the readable
+pairs (dropramp → kick at 0.51) sit near it; if adopted, the doc should
+say the threshold was chosen with the floor in view.
+
 ### 10.3 Model
 
 New module (one module per concept), under the repo's three-backend rule:
