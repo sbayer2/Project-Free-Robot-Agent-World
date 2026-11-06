@@ -684,7 +684,8 @@ camera costs, not whether physics transfers at all.
   whole-path framing leaves the strike ball under 1 px and the box 4–5 px
   on the steep ramp and the 3 m/s kick. The likely fix is a camera that
   covers only the window each target field needs; to be settled with the
-  outcome fields.
+  outcome fields. *Superseded by the framing rule, §10.2a (draft
+  2026-11-06).*
 - **Timing.** 125 fps (one frame every 4 simulator steps of 2 ms), the full
   2 s window: 250 frames per recording. A contact keyframe (~64 ms, §4.2)
   spans 8 frames. Each frame is the exact state at one instant (zero
@@ -727,6 +728,79 @@ camera costs, not whether physics transfers at all.
   steps after merging, but not a true analog signal), MuJoCo's lighting
   model, and zero exposure time. Blender (`generate_blender.py`, linear
   float output) is the route to photoreal raw if R1 is worth extending.
+
+### 10.2a Framing rule (design iteration R1-W1, DRAFT 2026-11-06)
+
+**Logged before any F_px is computed** (the cloud's condition, note
+`2026-11-01-d6-crosscheck.md` (c)). Nothing below has been run against a
+floor; the only numbers used are the T0 path extents of the frozen battery.
+
+**Why a rule is needed.** T0 path extents, frozen D7 battery, seed 1234,
+512 scenes (displacement from frame 0; median / p99 / max):
+
+| family | motion plane | extent |
+|---|---|---|
+| kick1.0 | x–z | x 0.09 / 0.83 / 0.97 m |
+| kick3.0 | x–z | x 0.80 / 4.78 / 4.95 m |
+| drop | z only | z −0.66 m in every scene (0.6 m gap, then bounces) |
+| strike, box | x–z | x 1.42 / 9.19 / 10.97 m; z up to 0.99 m |
+| strike, ball | x–z | x −5.17 … +7.00 m; z up to 2.23 m |
+| dropramp | y–z | y −0.26 / −5.28 max downhill; z −0.39 / −2.21 m |
+
+At 96 px a window of W metres gives W / 96 m per pixel: the 0.3 m box spans
+28.8 / W px and the 0.1 m strike ball 9.6 / W px. Whole-path windows
+(about 6 m for the kick, 17 m for the strike) make the ball sub-pixel.
+
+**The rule:**
+1. **Camera.** One fixed camera per input family, square 96 × 96, looking
+   along the normal of the family's motion plane (along y for kick, drop
+   and strike; along x for the drop onto the ramp), never moving. W is
+   the window's width at the motion plane.
+2. **Placement, fixed per family before W is chosen.** The box's start
+   position sits at 15 % of W from the trailing edge along the motion
+   direction (+x for kick and strike, downhill for the drop onto the
+   ramp) and centred for the drop. Vertically, the flat ground line sits
+   at 15 % of W from the bottom edge; for the drop onto the ramp, which
+   descends, the box's start sits at 15 % of W from the top edge.
+3. **Ladder.** W ∈ {0.5, 1, 2, 4, 8, 16} m. A rung is admissible only if
+   every tracked body spans at least 2 px (box: W ≤ 14.4 m; strike ball:
+   W ≤ 4.8 m), so the strike's ladder stops at 4 m.
+4. **What leaves the frame is lost.** For F_px at a rung, a body whose
+   centroid projects outside the window in a frame contributes its
+   position clipped to the window edge and an up vector of zero in that
+   frame; then the §10.5 noise (σ = 0.5 px × W / 96, and its angular
+   term) is added. A body that leaves the window carries information only
+   while it is in view, as it will for the pixel model.
+5. **Choosing W without the test split.** For each input family, W* is
+   the admissible rung with the highest F_px **by 5-fold CV inside the
+   train split** (the §10.4 seed-0 iid 80 %). The test split is never
+   used to choose W; F_px on the test split is then reported at W* only.
+6. **Ties and several pairs.** An input family that feeds several R1
+   pairs uses the rung that maximises the **minimum** F_px across those
+   pairs. Rungs within 0.01 of the best count as tied, and the **largest**
+   tied W wins: less clipping, so less dependence on the 512 sampled
+   materials.
+7. **One W per input family**, the same for the iid and the corner split
+   and for all five seeds, written to the frame manifest with its m/px.
+
+**The graded bar (cloud proposal; owner decision at R1's freeze).** F_px
+assumes a 0.5 px tracker; a centroid tracker on a blob 7–58 px across does
+much better (the cloud estimates ~0.03 px), so F_px likely understates
+what the frames carry. Proposal: **F_px chooses W; F_track grades H1.**
+F_track is a classical pipeline on the actual sensor-model frames at W*:
+background subtraction against the empty-scene frames, a 5 σ threshold,
+connected components, per body the intensity-weighted centroid and, for
+the box, the in-plane angle from second moments; then the same ridge /
+kNN-5 readout to the target outcomes. F_track sees only the in-plane
+projection, so it can fall below F_px where the box tumbles out of plane;
+which way it moves is not predicted. If adopted, H1's thresholds read
+against F_track with F_px and F_5mm co-reported, and the §10.7 odds are
+re-registered against the new bar at R1's freeze, before any frame
+exists.
+
+**Order of work:** (a) review of this rule (cloud); (b) F_px on the ladder
+from T0 only, no frames; (c) the frame generator, with G1 at W*;
+(d) F_track; (e) R1's freeze commit.
 
 ### 10.3 Model
 
