@@ -860,9 +860,12 @@ strike 4 m missed (1 m); strike's W\* ≥ kick's (70 %) missed.
    rungs sit within ~0.02 of each other, the size of one noise draw's
    effect, so the rule picks among near-equals by chance.
 2. **The corner split's per-field R² is undefined for the ramp target.**
-   In the top 20 % of friction, five of the six ramp slides have zero
-   variance (every grippy box sits in the 1 cm dead zone) and the sixth
-   0.05 × its full-population sd. R² on the corner's own variance divides
+   In the top 20 % of friction, four of the six ramp slides (05.7–24.2°)
+   have zero variance (every grippy box sits in the 1 cm dead zone) and
+   two are near zero (31.0°: 0.053 × the full-population sd; 38.7°:
+   0.026). *Corrected 2026-11-06: the first version of this entry said
+   five zero and one at 0.05, a misreading of my own diagnostic; the
+   cloud's count is right.* R² on the corner's own variance divides
    by ~0, giving −189 (kick → ramp) and −508 / −698 (dropramp → ramp /
    drop). H1's corner co-report would hit the same problem for the model.
 3. **A noiseless reference is not meaningful with standardized columns:**
@@ -879,6 +882,55 @@ counts as easy, not as undefined. *Disclosed:* the test-split F_px at
 R1-W1's W\* (the table) was seen before this proposal; no test score at
 any other rung was computed, and both changes are motivated by
 train-split CV and by the corner's target variances alone.
+
+**Rule-4 leak, found by the cloud's code read and fixed** (note
+`2026-11-06-1711-r1-floor-crosscheck-review.md`). Out of view, R1-W1's
+code clipped each coordinate to the window, so the coordinate along the
+edge the body did not cross stayed exact and noiseless: a box leaving
+through the leading edge still reported its height in every later frame.
+The frames show nothing once a body is gone, so this broke rule 4 as
+written. Fix: out of view **both** coordinates are a constant (0), with
+the bit, a zero up vector and no noise. This is a correctness fix, not a
+tuning choice; the cloud tested it first, and the Mac reproduces its
+numbers. Under R1-W1 (one noise draw) **no W\* changes** (kick 2, drop 4,
+strike 1, dropramp 0.5 m), so the registered predictions stand as
+scored. Test F_px at W\*, before → after: kick → ramp 0.946 → 0.953;
+drop → tap 0.985 → 0.985; strike → scale 0.878 → 0.884; dropramp → ramp
+0.851 → **0.823**, → kick 0.919 → 0.917, → drop 0.819 → **0.784**, → tap
+0.966 → 0.964. The leak inflated the dropramp's floors and drove most of
+the strike's W\* instability: with the fix, the strike's W\* over noise
+seeds 1–5 is 1 / 1 / 1 / 2 / 1 m (was 1 / 4 / 4 / 2 / 4).
+
+**Why the strike's F_px beats F_5mm (cloud ablation, not a leak):**
+F_5mm puts noise on the out-of-plane coordinate, which for the strike is
+nearly pure noise, and windowing drops noise from uninformative
+out-of-view frames while the bit gives the exit timing, which a camera
+also shows. F_5mm is therefore not a strict ceiling for F_px. The script
+now co-reports **F_5mm in-plane** ((u, v) and up at 5 mm), the
+like-for-like reference: strike → scale 0.856 against F_px 0.884.
+
+**Cloud review of R1-W2:** adopt (a), keeping the 0.01 tie (per-rung sd
+over five draws is 0.000–0.013, so a five-draw mean is good to about
+0.002–0.006); prefer (b) over dropping saturated fields (makes the field
+set split-dependent) or pooling R² (dominated by whichever fields still
+vary), and call it "skill vs train variance", not R². **R1-W2 with the
+fix, as it would choose:** kick 2 m, drop 4 m, strike 1 m (0.887 vs
+0.875 at 2 m), dropramp **1 m** (0.792 vs 0.784 at 1 m: inside the tie,
+the larger rung wins); test F_px at those W\*: 0.953, 0.985, 0.884, and
+dropramp 0.879 / 0.933 / 0.777 / 0.958. **Status: implemented as an
+option (`--noise-seeds 1 2 3 4 5`), not adopted; the owner decides.**
+
+**New, from the corner scored as skill vs train variance** (the
+co-report R1-W2 (b) proposes; it is now computed beside the R² either
+way): defined everywhere, as intended. The grippy ramp slides that
+saturate score about 1.0, which is the honest reading. Two cells show the
+floor itself failing to extrapolate: **strike → scale −18.4** (the
+densest 20 % lie far outside the training range of the scale's sag, and
+neither ridge nor kNN on the strike's trajectory extrapolates there; the
+recoil-speed nonlinearity is a likely cause, post hoc, not measured), and
+the 38.7° ramp slide at −0.98. A model's corner score on the density
+pair cannot be read against a floor that is itself at −18; this has to
+be settled before R1's freeze.
 
 ### 10.3 Model
 

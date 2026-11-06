@@ -27,15 +27,16 @@ def test_window_placement():
     assert np.allclose(R.window(("trail", "top"), 1.0), (-0.15, 0.85, -0.85, 0.15))
 
 
-def test_out_of_view_is_clipped_unrotated_zero_and_noiseless():
+def test_out_of_view_is_constant_zero_and_noiseless():
     uv = np.array([[[0.5, 0.1], [3.0, 0.1], [-2.0, 5.0]]])        # in, right, out
     up = np.tile([0.0, 0.0, 1.0], (1, 3, 1))
     win = R.window(("trail", "ground"), 1.0)
     rng = np.random.default_rng(0)
     X = R.framed(uv, up, win, 1.0, rng)
     assert X[0, :, 5].tolist() == [1.0, 0.0, 0.0]
-    assert np.allclose(X[0, 1, :2], [0.85, 0.1], atol=0, rtol=1e-15)   # clipped, no noise
-    assert np.allclose(X[0, 2, :2], [-0.15, 0.85], atol=0, rtol=1e-15)
+    # both coordinates constant out of view: the uncrossed edge's coordinate
+    # must not survive (a box leaving sideways would still report its height)
+    assert (X[0, 1:, :2] == 0).all()
     assert (X[0, 1:, 2:5] == 0).all()                              # up zeroed
     assert not np.allclose(X[0, 0, :2], [0.5, 0.1])                # in view: noisy
     assert abs(np.linalg.norm(X[0, 0, 2:5]) - 1.0) < 1e-12         # rotation keeps |up|
@@ -60,3 +61,11 @@ def test_split_is_fixed_and_disjoint():
     assert (len(tr), len(te)) == (410, 102)
     assert not set(tr) & set(te)
     assert (R.split(512)[0] == tr).all()
+
+
+
+def test_skill_vs_train_variance_stays_defined_for_a_saturated_field():
+    Y = np.array([[-2.0, 0.1], [-2.0, 0.3], [-2.0, 0.2]])        # field 0 constant
+    P = np.array([[-2.0, 0.1], [-1.9, 0.2], [-2.0, 0.2]])
+    sk = R.skill(Y, P, ref_var=np.array([1.0, 0.04]))
+    assert abs(sk[0] - (1 - 0.01 / 3)) < 1e-12 and np.isfinite(sk).all()

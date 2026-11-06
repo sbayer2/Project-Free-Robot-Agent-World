@@ -22,6 +22,7 @@ near-constant columns lets sub-micron variation dominate the readout.
 
     python scripts/f35_r1_floor.py --data <frozen D7 battery, seed 1234>
     python scripts/f35_r1_floor.py --data <seed 1 battery> --w kick=2 drop=1 ...
+    python scripts/f35_r1_floor.py --data <...> --noise-seeds 1 2 3 4 5   (R1-W2 (a))
 """
 
 from __future__ import annotations
@@ -37,7 +38,7 @@ HERE = os.path.dirname(__file__)
 sys.path.insert(0, HERE)
 sys.path.insert(0, os.path.join(HERE, "..", "src"))
 import f35_outcomes as O  # noqa: E402
-from f35_code_table import add_noise, knn_predict, ridge_cv_predict  # noqa: E402
+from f35_code_table import UP_NOISE, add_noise, knn_predict, ridge_cv_predict  # noqa: E402
 from oracle_ceiling import ESSENCE_AXES  # noqa: E402
 
 PX = 96
@@ -122,6 +123,11 @@ def framed(uv: np.ndarray, up: np.ndarray, win: tuple, w: float,
         pos = np.where(vis[..., None], pos, uv)          # no noise out of view
         ori = np.where(vis[..., None], ori, up)
     pos = np.stack([np.clip(pos[..., 0], u_lo, u_hi), np.clip(pos[..., 1], v_lo, v_hi)], -1)
+    # Out of view BOTH coordinates are a constant: clipping alone kept the
+    # coordinate along the uncrossed edge exact and noiseless (a box leaving
+    # sideways still reported its height), which the frames do not show.
+    # Found by the cloud session's code read, note 2026-11-06-1711.
+    pos = np.where(vis[..., None], pos, 0.0)
     ori = np.where(vis[..., None], ori, 0.0)
     return np.concatenate([pos, ori, vis[..., None].astype(float)], -1)
 
@@ -129,8 +135,10 @@ def framed(uv: np.ndarray, up: np.ndarray, win: tuple, w: float,
 def features(T: dict[str, np.ndarray], fam: str, w: float | None, seed: int,
              dropramp_deg: float) -> np.ndarray:
     """Flattened per-scene features of an input family. w = 0: F_5mm, T0
-    (pos - pos0, up) with the §5 gate noise and no framing. w None: the same
-    without noise (diagnostics only)."""
+    (pos - pos0, up) with the §5 gate noise and no framing. w = -1: F_5mm
+    in-plane, (u, v) - frame 0 and up with the same noise (the like-for-like
+    reference: the out-of-plane coordinate is nearly pure noise). w None: 3D
+    T0 without noise (diagnostics only)."""
     spec = FAMILIES[fam]
     box = T[spec["recs"][0][0].format(deg=dropramp_deg)]
     origin = box[:, 0, 1:4]
@@ -138,6 +146,14 @@ def features(T: dict[str, np.ndarray], fam: str, w: float | None, seed: int,
     cols = []
     for i, (rec, _) in enumerate(spec["recs"]):
         r = T[rec.format(deg=dropramp_deg)]
+        if w == -1:
+            uv = plane_coords(r, spec["plane"], origin)
+            uv = uv - uv[:, :1]
+            g = np.random.default_rng([seed, i, 5])
+            cols.append(np.concatenate([uv + g.normal(0.0, 0.005, uv.shape),
+                                        r[..., 4:7] + g.normal(0.0, UP_NOISE, r[..., 4:7].shape)],
+                                       -1))
+            continue
         if not w:
             X = np.concatenate([r[..., 1:4] - r[:, :1, 1:4], r[..., 4:7]], -1)
             cols.append(X if w is None else add_noise(X, 5.0, seed=seed + i))
@@ -178,11 +194,23 @@ def cv_scores(X: np.ndarray, Y: np.ndarray, idx: np.ndarray, seed: int = 0) -> d
     return out
 
 
+def skill(Y: np.ndarray, P: np.ndarray, ref_var: np.ndarray) -> list[float]:
+    """Per field 1 - MSE / Var_train(field): MSE in train-standardized units.
+    Unlike R^2 on the test set's own variance it stays defined when a field
+    saturates in a held-out corner (R1-W2 (b), proposed)."""
+    mse = ((Y - P) ** 2).mean(0)
+    return (1.0 - mse / np.where(ref_var > 0, ref_var, 1.0)).tolist()
+
+
 def held_out(X: np.ndarray, Y: np.ndarray, tr: np.ndarray, te: np.ndarray) -> dict:
-    """Method chosen by CV inside tr, refit on all of tr, scored on te."""
+    """Method chosen by CV inside tr, refit on all of tr, scored on te: R^2
+    (mean over fields, on te's own variance) and skill vs train variance."""
     cv = cv_scores(X, Y, tr)
     m = max(cv, key=cv.get)
-    return {"method": m, "cv": cv[m], "test": r2_mean(Y[te], fit_predict(X[tr], Y[tr], X[te], m))}
+    P = fit_predict(X[tr], Y[tr], X[te], m)
+    sk = skill(Y[te], P, Y[tr].var(0))
+    return {"method": m, "cv": cv[m], "test": r2_mean(Y[te], P),
+            "skill_vs_train_var": float(np.mean(sk)), "skill_per_field": sk}
 
 
 def choose_w(cv_min: dict[float, float], tie: float = TIE) -> float:
@@ -204,7 +232,9 @@ def main() -> None:
     ap.add_argument("--families", nargs="+", default=list(FAMILIES))
     ap.add_argument("--w", nargs="*", default=[],
                     help="fam=W: skip the choice and evaluate at this W (other seeds)")
-    ap.add_argument("--noise-seed", type=int, default=1)
+    ap.add_argument("--noise-seeds", type=int, nargs="+", default=[1],
+                    help="W* from the CV score averaged over these noise draws; "
+                         "R1-W1 = one draw (1); R1-W2 (proposed) = 1 2 3 4 5")
     args = ap.parse_args()
     fixed = {k: float(v) for k, v in (a.split("=") for a in args.w)}
 
@@ -217,7 +247,7 @@ def main() -> None:
     tr, te = split(len(E))
     report = {"data": args.data, "provenance": man.get("provenance"),
               "fields_version": O.FIELDS_VERSION, "split": [len(tr), len(te)],
-              "ladder": LADDER, "families": {}}
+              "ladder": LADDER, "noise_seeds": args.noise_seeds, "families": {}}
     print(f"[r1-floor] {args.data}: {len(E)} scenes, split {len(tr)}/{len(te)}, fields "
           f"{O.FIELDS_VERSION}, mujoco {(man.get('provenance') or {}).get('mujoco')}")
     for fam in args.families:
@@ -225,8 +255,12 @@ def main() -> None:
         rungs = [fixed[fam]] if fam in fixed else [w for w in LADDER if admissible(fam, w)]
         ladder = {}
         for w in rungs:
-            X = features(T, fam, w, args.noise_seed, man["dropramp_deg"])
-            ladder[w] = {t: cv_scores(X, targets[t], tr) for t in pairs}
+            draws = []
+            for ns in args.noise_seeds:
+                X = features(T, fam, w, ns, man["dropramp_deg"])
+                draws.append({t: cv_scores(X, targets[t], tr) for t in pairs})
+            ladder[w] = {t: {m: float(np.mean([d[t][m] for d in draws])) for m in draws[0][t]}
+                         for t in pairs}
         cv_min = {w: min(max(v.values()) for v in row.values()) for w, row in ladder.items()}
         w_star = choose_w(cv_min)
         print(f"\n{fam} -> {', '.join(pairs)}  (CV inside train; min over pairs)")
@@ -234,19 +268,22 @@ def main() -> None:
             cells = "  ".join(f"{t} {max(v.values()):+.3f}" for t, v in row.items())
             print(f"  W {w:5.1f} m  {PX * 0.3 / w:5.1f} px box  min {cv_min[w]:+.3f}  {cells}"
                   f"{'   <- W*' if w == w_star else ''}")
-        X = features(T, fam, w_star, args.noise_seed, man["dropramp_deg"])
-        X5 = features(T, fam, 0, args.noise_seed, man["dropramp_deg"])
+        X = features(T, fam, w_star, args.noise_seeds[0], man["dropramp_deg"])
+        X5 = features(T, fam, 0, args.noise_seeds[0], man["dropramp_deg"])
+        X5p = features(T, fam, -1, args.noise_seeds[0], man["dropramp_deg"])
         at = {}
         for t, axis in pairs.items():
             Y = targets[t]
             a = E[:, ESSENCE_AXES.index(axis)]
             ctr, cte = np.where(a < np.quantile(a, 0.8))[0], np.where(a >= np.quantile(a, 0.8))[0]
             at[t] = {"F_px": held_out(X, Y, tr, te), "F_5mm": held_out(X5, Y, tr, te),
+                     "F_5mm_inplane": held_out(X5p, Y, tr, te),
                      "F_px_corner": held_out(X, Y, ctr, cte), "shared_axis": axis}
             print(f"  test at W* {w_star:g} m: {fam}->{t}  F_px {at[t]['F_px']['test']:+.3f} "
                   f"({at[t]['F_px']['method']})  F_5mm {at[t]['F_5mm']['test']:+.3f}  "
-                  f"corner F_px "
-                  f"{at[t]['F_px_corner']['test']:+.3f}")
+                  f"F_5mm in-plane {at[t]['F_5mm_inplane']['test']:+.3f}  corner: R2 "
+                  f"{at[t]['F_px_corner']['test']:+.3f}, skill vs train var "
+                  f"{at[t]['F_px_corner']['skill_vs_train_var']:+.3f}")
         report["families"][fam] = {
             "w_star": w_star, "m_per_px": w_star / PX, "chosen": fam not in fixed,
             "body_px": {b: BODY_SIZE[b] * PX / w_star for _, b in FAMILIES[fam]["recs"]},
