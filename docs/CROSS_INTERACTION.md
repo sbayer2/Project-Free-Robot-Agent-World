@@ -967,6 +967,117 @@ proposed after these floor values were seen, and one readable pair
 (dropramp → kick, 0.51) sits just above it; if adopted, the doc should
 say the threshold was chosen with the floor in view.
 
+**Step (c): the frame generator and G1** (2026-11-07;
+`scripts/f35_r1_frames.py`, commit 6316b22; frozen D7 battery seed 1234,
+all 512 scenes, canonical build; the drop onto the ramp at both candidate
+W\*, 0.5 m under R1-W1 and 1 m under R1-W2, since that choice is open).
+The generator re-simulates each R1 input recording with the battery's own
+`run_*` code, unchanged: two hooks add a `<camera>` (no body, no physics)
+and make the recorder render at every recorded step. Choices made here,
+all reviewable before R1's freeze:
+- **Orthographic camera**, `fovy` = W, looking along the motion plane's
+  normal from 20 m. A perspective camera would move a body that leaves
+  the plane (the strike ball's small y drift, a tumbling box's far
+  corner); orthographic makes the window exactly the rule's W at every
+  depth.
+- **Anchor:** each family's nominal start position. The floor anchors on
+  each scene's frame-0 position; on the anchoring axes (x for the flat
+  families, whose height is absolute; y and z for the ramp) the two
+  differ by 0 for the flat families and at most 0.0003 mm for the drop
+  onto the ramp (its first 2 ms of fall), far under 0.001 px.
+- **One box finish:** albedo 0.5, matte (specular, shininess and
+  reflectance 0), set on the compiled model, so physics cannot change.
+  The re-simulated T0 is **bit-identical** to the stored battery in all
+  6 recordings × 512 scenes. The repo's lighting is kept (headlight
+  0.6 + ambient 0.4, a spotlight from 3 m overhead).
+- **What the frames look like.** Motion stays in the camera's plane and
+  the box rotates about the view axis, so the camera always sees the same
+  face, lit head-on: every box pixel is 128 in the × 1 exposure, a flat
+  silhouette whose outline carries position and in-plane angle. The
+  ground is seen edge-on, so it is invisible, and the background is
+  black. The strike ball (albedo 0.2, the battery's) shows a small
+  highlight. **No pixel in any frame reaches the 250 knee**, so the HDR
+  merge never uses the dim exposure in this battery; the merge is still
+  tested on a synthetic sweep across the seam (below). Box SNR is
+  therefore ≈ 35 (1 255 e⁻).
+- **Storage:** one grey channel per exposure (R = G = B is checked on
+  every frame; the RGGB mosaic of a grey scene is the identity), uint8,
+  `.npz` compressed: about 100 MB for all six family × W sets (flat grey
+  on black compresses very well; §10.8's 2.4 GB per family was the
+  uncompressed size). The empty scene per recording, for F_track's
+  background, is stored with the frames (identical across scenes,
+  checked). Rendering took 5.5 min on 16 processes.
+
+**G1, defined for partial views.** §10.6 states G1 as "box centroid
+from a segmentation render vs projected T0 within 0.5 px RMS over all
+frames". Two things made "all frames" impossible as written: the rule's
+15 % placement puts the box's centre 0.15 × W from the edge, which is
+inside the box's own half-width (0.15 m) whenever W < 2 m, so at 1 m and
+0.5 m the box starts partly out of frame; and during the strike, the
+soft contact lets the 17 kg ball sink up to ~8 cm into the box, which
+hides it. G1 therefore scores the segmentation centroid against the
+centroid of the **projected silhouette clipped to the image**, which
+equals the projected T0 position whenever the body is fully in view, on
+frames where the body is not occluded and at least 25 % of it is
+visible. Both definitions are reported. A diagnostic, not graded: the
+same silhouette sampled at pixel centres against the render, which
+separates pixelization from camera or timing error.
+
+| family @ W | recording | G1 RMS px (max) | fully in view only | frames scored | raster RMS px | pixels differing |
+|---|---|---|---|---|---|---|
+| kick @ 2 m | kick1.0 | 0.182 (0.39) | 0.182 | 128 000 / 128 000 | 0.029 | 0.03 % |
+| | kick3.0 | 0.162 (0.53) | 0.162 | 112 143 | 0.022 | 0.03 % |
+| drop @ 4 m | drop | 0.186 (0.40) | 0.186 | 128 000 | 0.041 | 0.09 % |
+| strike @ 1 m | box | 0.301 (0.61) | 0.309 | 69 262 | 0.007 | 0.01 % |
+| | ball | 0.092 (0.30) | 0.090 | 28 089 (7 975 occluded) | 0.043 | 0.57 % |
+| dropramp @ 0.5 m | box | 0.021 (0.33) | 0.027 (443 frames) | 103 410 | 0.004 | 0.00 % |
+| dropramp @ 1 m | box | 0.036 (0.45) | 0.037 | 114 551 | 0.005 | 0.01 % |
+
+**G1 passes in every recording.** The camera geometry is exact: sampled
+at pixel centres, the predicted silhouette reproduces the render's
+centroid to 0.004–0.043 px. The 0.16–0.30 px G1 residual is pixelization
+of axis-aligned faces: a resting box keeps the same sub-pixel offset for
+many frames, so the error does not average out (the strike box, at rest
+for most of its in-view frames and 29 px across, has the largest). The
+tumbling dropramp box, never axis-aligned, sits at 0.02–0.04 px. Three
+strike-ball frames (of 128 000) show a presence mismatch: slivers under
+2 px² at the image edge, where MuJoCo's faceted sphere and the 96-gon
+prediction differ.
+
+**New, and relevant to the open W choice for the drop onto the ramp:
+how much of the box the frames show.** Rule 4 treats a body as fully
+known while its centroid is in view (a disclosed approximation). Measured
+on the frames, over frames whose visibility bit is 1:
+
+| family @ W | box fully in view | visible area, median / p10 |
+|---|---|---|
+| kick @ 2 m (kick3.0) | 97.3 % | 1.00 / 1.00 |
+| drop @ 4 m | 100 % | 1.00 / 1.00 |
+| strike @ 1 m | 93.2 % | 1.00 / 1.00 |
+| dropramp @ 0.5 m | **0.4 %** | **0.77 / 0.60** |
+| dropramp @ 1 m | 74.8 % | 1.00 / 0.97 |
+
+At 0.5 m the box is 58 px across, 60 % of the frame, and almost never
+wholly in it: R1-W1's W\* = 0.5 m for the drop onto the ramp rests on
+rule 4's approximation where the frames honour it least. This does not
+choose between R1-W1 and R1-W2 by itself (F_px's number at 0.5 m is what
+a tracker of the centre would get, and a tracker can infer the centre of
+a cut square from its visible corners); F_track, step (d), measures it
+directly at both rungs.
+
+**Tests** (`tests/test_f35_r1_frames.py`, 15): the camera maps the
+rule's window corners to the image corners and ignores out-of-plane
+offsets; rule 2's placement; clipping, area, centroid and raster
+geometry; a box silhouette's centroid is its projected centre under
+in-plane and out-of-plane rotation; the merge rule; **the merge is linear
+across the 250 seam with the headlight scaled** (a matte plate under a
+light sweep from × 0.6 to × 2.2, the × 1 frame clipping above × 1.1: one
+slope on both sides, residual ≤ 1 count below the seam and ≤ 4.5 above,
+i.e. one 8-bit step of the dim frame; MuJoCo's 8-bit output is good to
+about one step, not half); shot and read noise and the ADC step
+reproduce the stated variance; full-well clipping; seeded determinism;
+the grey check; G1's frame selection.
+
 ### 10.3 Model
 
 New module (one module per concept), under the repo's three-backend rule:
