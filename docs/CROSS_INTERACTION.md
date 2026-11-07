@@ -992,8 +992,11 @@ all reviewable before R1's freeze:
   0.6 + ambient 0.4, a spotlight from 3 m overhead).
 - **What the frames look like.** Motion stays in the camera's plane and
   the box rotates about the view axis, so the camera always sees the same
-  face, lit head-on: every box pixel is 128 in the × 1 exposure, a flat
-  silhouette whose outline carries position and in-plane angle. The
+  face, lit head-on: every interior box pixel is 128 in the × 1
+  exposure, a flat silhouette whose outline carries position and in-plane
+  angle. *Corrected 2026-11-07:* the first version said "every box pixel
+  is 128"; edge pixels take 32, 64 or 96, MuJoCo's 4× multisampling
+  (quarter-pixel coverage steps), which F_track uses. The
   ground is seen edge-on, so it is invisible, and the background is
   black. The strike ball (albedo 0.2, the battery's) shows a small
   highlight. **No pixel in any frame reaches the 250 knee**, so the HDR
@@ -1077,6 +1080,123 @@ i.e. one 8-bit step of the dim frame; MuJoCo's 8-bit output is good to
 about one step, not half); shot and read noise and the ADC step
 reproduce the stated variance; full-well clipping; seeded determinism;
 the grey check; G1's frame selection.
+
+**Step (d): F_track** (2026-11-07; `scripts/f35_r1_track.py`, commit
+8ce9efc; the frames above; noise seeds 1–5, sensor model as §10.2). The
+pipeline follows the cloud's definition (background subtraction against
+the empty scene, a 5 σ threshold from the empty scene's analytic noise,
+8-connected components, then the floor's ridge / kNN-5 readout on the
+same split), with three changes, each forced by the frames:
+- **Signal-weighted centroid**, not an area centroid. The proposal said
+  weighting adds nothing because every box has one albedo, but MuJoCo
+  renders with 4× multisampling, so edge pixels carry their coverage
+  (¼, ½, ¾); weighting by background-subtracted signal is weighting by
+  coverage.
+- **Orientation from the fourth-order moment**, not second moments. A
+  square's second moments are isotropic (its inertia is the same about
+  every axis), so they carry no angle; the normalized complex moment
+  m4 = Σ w (z − z̄)⁴ / Σ w |z − z̄|⁴ has the square's 4-fold symmetry
+  (arg(−m4) = 4θ) and shrinks when the outline stops being a square
+  (out-of-plane turn, a cut edge). Its real and imaginary parts are the
+  features. A face-on cube's angle is ambiguous modulo 90° in the
+  frames, as it is physically.
+- **Box and ball (strike):** the box is the largest component of pixels
+  above 0.85 of its interior level (≥ 6 px, above the ball's highlight),
+  grown 2 px for its anti-aliased edge; the ball is the largest remaining
+  component. A body not found is out of view (zeros, bit 0), as rule 4.
+
+**Tracker accuracy** (centroid vs projected T0, fully visible frames,
+noise seed 1): box 0.015–0.080 px RMS (kick 0.040–0.049, drop 0.050,
+strike 0.080, dropramp 0.015–0.019), no fully visible frame missed. The
+cloud's ~0.03 px estimate holds to within a factor of 3. The strike ball
+is 0.485 px RMS (p99 0.59), almost all of it a constant bias: its
+shading (a dark sphere lit from the camera and from above) moves the
+signal-weighted centroid upward.
+
+**F_track against F_px** (iid test split; F_track mean over noise seeds
+1–5, all sd ≤ 0.011; F_px at R1-W1's W\* with the rule-4 fix, noise
+seed 1, and the drop onto the ramp at 1 m from R1-W2's run; corner =
+skill vs train variance):
+
+| pair | W | F_px | F_track (CV) | corner: floor F_px | corner: F_track, seeds 1–5 |
+|---|---|---|---|---|---|
+| kick → ramp | 2 m | 0.953 | **0.974** (0.954) | 0.66 | 0.76–0.81 |
+| drop → tap | 4 m | 0.985 | **0.998** (0.998) | 0.74 | 0.41–0.42 |
+| strike → scale | 1 m | 0.884 | **0.967** (0.940) | −18.4 | −14.5 … −13.2 |
+| dropramp → ramp | 0.5 m | 0.823 | 0.936 (0.914) | 0.02 | 0.04, 0.64–0.69 |
+| dropramp → kick | 0.5 m | 0.917 | 0.975 (0.966) | 0.51 | 0.87–0.91 |
+| dropramp → drop | 0.5 m | 0.784 | 0.888 (0.890) | −0.72 | 0.05–0.53 |
+| dropramp → tap | 0.5 m | 0.964 | 0.991 (0.990) | 0.81 | 0.94–0.96 |
+| dropramp → ramp | 1 m | 0.879 | 0.943 (0.929) | −0.23 | 0.57–0.61 |
+| dropramp → kick | 1 m | 0.933 | 0.980 (0.974) | 0.62 | 0.75–0.79 |
+| dropramp → drop | 1 m | 0.777 | 0.826 (0.847) | −0.42 | −0.24 … −0.16 |
+| dropramp → tap | 1 m | 0.958 | 0.987 (0.987) | 0.85 | 0.89–0.93 |
+
+**F_track exceeds F_px on every pair, by 0.013 to 0.113.** The cloud
+predicted F_px understates the frames; the size is larger than
+precision alone explains, and the reason is a property of the floor's
+readout, found by ablation (`--diagnose`, noise seed 1, iid test):
+
+| pair @ W | F_px 0.5 px | F_px 0.08 px | F_px 0.5 px, no up | F_px 0.08 px, no up | F_track, no m4, centroid rule |
+|---|---|---|---|---|---|
+| kick → ramp @ 2 | 0.953 | 0.959 | 0.977 | 0.979 | 0.977 |
+| drop → tap @ 4 | 0.985 | 0.990 | 0.991 | 0.995 | 0.998 |
+| strike → scale @ 1 | 0.884 | 0.903 | 0.936 | 0.952 | 0.954 |
+| dropramp → ramp @ 0.5 | 0.823 | 0.840 | 0.840 | 0.922 | 0.937 |
+| dropramp → drop @ 0.5 | 0.784 | 0.799 | 0.834 | 0.850 | 0.848 |
+
+- **Precision** (0.5 → 0.08 px, the tracker's own) adds 0.005–0.019.
+- **The floor's up-vector columns lower it.** Dropping them raises F_px
+  at 0.5 px by up to 0.052 (strike) and 0.024 (kick), with less
+  information, not more; at 0.08 px by up to 0.082 (dropramp → ramp at
+  0.5 m). The one exception is the drop onto the ramp at 1 m and 0.5 px,
+  where it costs 0.007 on ramp and kick: there the box tumbles enough for
+  its up vector to carry signal above the angular noise. Each body contributes 250 × 3 up columns; for a
+  box that does not tumble they are near-constant plus the angular
+  noise, and standardized they become hundreds of noise dimensions that
+  one ridge penalty, or one kNN distance, cannot discount. F_px is
+  limited by its readout here, not by what T0 carries: the same
+  pathology as the noiseless reference (R1-W1 problem 3), in a milder
+  form.
+- With both (0.08 px, no up columns) the floor matches F_track stripped
+  to the same features (centroid and bit under the floor's visibility
+  rule) within 0.002–0.015. So the frames carry nothing beyond T0's
+  in-plane positions here, as they should; the gap is precision plus the
+  readout. m4 and edge frames (the tracker sees a box until its last
+  pixel leaves) move a pair by up to 0.052 and 0.017, in both directions
+  (m4 helps the dropramp's drop target at 0.5 m by 0.037 and hurts it at
+  1 m by 0.052: the same readout pathology, in m4's own columns).
+
+**Corrected expectation, from step (c):** the cut box at 0.5 m did not
+hurt the tracker: F_track's minimum over the dropramp's pairs is higher
+at 0.5 m (0.888 test; 0.890 CV) than at 1 m (0.826; 0.847), driven by
+the drop target. The visible part of a cut square, with m4, still
+locates it.
+
+**Corner skill is unstable for the drop onto the ramp.** Across five
+noise draws its ramp corner at 0.5 m reads 0.04 once and 0.64–0.69
+four times, its drop corner 0.05–0.53; the other corners vary by ≤ 0.09
+(strike by 1.3 around −14). A corner co-report rule with a 0.5
+threshold would classify those two cells by the noise draw; the corner
+cells need the five-draw mean (as R1-W2 (a) does for W\*), at least.
+
+**What this changes, for the owner (nothing adopted):**
+1. **H1's bar.** If F_track grades H1, as the cloud proposed, the bar
+   rises by 0.013–0.113: REACHES on kick → ramp needs S ≥ 0.924 instead
+   of 0.903, and on strike → scale S ≥ 0.917 instead of 0.834. The §10.7
+   odds were registered against F_px and would be re-registered before
+   any model is trained.
+2. **F_px as the W-chooser** carries the readout pathology, which varies
+   with W (it costs the dropramp 0.009–0.082 at 0.5 m and −0.007 to
+   0.056 at 1 m, depending on the noise level). Options: (A) keep F_px choosing W as registered; (B) choose W on
+   **F_track's CV inside the train split**, which needs frames at every
+   admissible rung (about 20 family × W sets, ~20 min to render and
+   track); (C) repair the floor (position-only features, or the best
+   over feature subsets chosen by CV) and rerun step (b). (B) grades and
+   chooses with the same instrument and is train-only; (C) keeps a
+   frame-free floor. The current W\* stands until one is chosen.
+3. **The corner co-report rule** (above) needs averaging over noise
+   draws before any threshold is read.
 
 ### 10.3 Model
 
