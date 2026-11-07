@@ -1150,8 +1150,8 @@ readout, found by ablation (`--diagnose`, noise seed 1, iid test):
   at 0.5 px by up to 0.052 (strike) and 0.024 (kick), with less
   information, not more; at 0.08 px by up to 0.082 (dropramp → ramp at
   0.5 m). The one exception is the drop onto the ramp at 1 m and 0.5 px,
-  where it costs 0.007 on ramp and kick: there the box tumbles enough for
-  its up vector to carry signal above the angular noise. Each body contributes 250 × 3 up columns; for a
+  where it costs 0.007 on ramp and kick; why is not measured (a guess:
+  at 1 m the up vector's tumbling signal outweighs its noise columns). Each body contributes 250 × 3 up columns; for a
   box that does not tumble they are near-constant plus the angular
   noise, and standardized they become hundreds of noise dimensions that
   one ridge penalty, or one kNN distance, cannot discount. F_px is
