@@ -183,3 +183,23 @@ def test_g1_scores_unoccluded_visible_frames_only():
     assert g["frames_used"] == 1 and g["frames_occluded"] == 1
     assert g["rms_px"] == pytest.approx(0.2) and g["pass"]
     assert g["presence_mismatch"] == 0
+
+
+def test_init_worker_is_idempotent_so_fork_does_not_recurse():
+    """A forked worker inherits the hooked module and calls init_worker
+    again; B.mjcf must still reach the real builder exactly once."""
+    from pseudomarble import materials as M
+
+    orig = (F.B.mjcf, F.B._record, dict(F._JOB))
+    try:
+        F.init_worker("D7")
+        F.init_worker("D7")                          # what a forked worker does
+        assert F._JOB["orig_mjcf"] is not F._mjcf_with_camera
+        F._JOB["cam"] = F.camera("kick", 2.0)
+        mat = M.MaterialSampler(seed=1234).sample(0).material
+        xml = F.B.mjcf(mat)
+        assert xml.count('name="r1cam"') == 1
+    finally:
+        F.B.mjcf, F.B._record = orig[0], orig[1]
+        F._JOB.clear()
+        F._JOB.update(orig[2])

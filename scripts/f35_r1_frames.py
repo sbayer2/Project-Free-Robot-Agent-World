@@ -334,10 +334,16 @@ def _record_with_frames(model, data, bodies, seconds=B.SIM_SECONDS, fps=B.FPS, f
 
 
 def init_worker(design: str) -> None:
+    """Set the battery design and install the two hooks, idempotently: under
+    a fork start method (Linux's default) a worker inherits the parent's
+    already-hooked module, and saving the hook as the original would make
+    _mjcf_with_camera call itself (found by the cloud session, note
+    2026-11-07-1454)."""
     (c, i, s), deg, hgt = B.DESIGNS[design]
     B.init_worker((c, i, s), deg, hgt)
-    _JOB["orig_mjcf"] = B.mjcf
-    B.mjcf = _mjcf_with_camera
+    if B.mjcf is not _mjcf_with_camera:
+        _JOB["orig_mjcf"] = B.mjcf
+        B.mjcf = _mjcf_with_camera
     B._record = _record_with_frames
 
 
