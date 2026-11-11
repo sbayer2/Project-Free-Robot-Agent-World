@@ -339,6 +339,24 @@ def render_views(shape: str, material: M.Material, renders_dir: str,
     renderer = mujoco.Renderer(model, render_cfg.resolution, render_cfg.resolution)
     cam = mujoco.MjvCamera()
     cam.lookat[:] = [0.0, 0.0, half_height(shape)]
+    if render_cfg.camera_layout == "above":
+        angles = samples.above_floor_camera_angles(
+            render_cfg.num_views, render_cfg.camera_elev_min_deg,
+            render_cfg.camera_elev_max_deg)
+        for i, (az, elev_up) in enumerate(angles):
+            # MuJoCo free camera: NEGATIVE elevation looks down from above.
+            cam.azimuth, cam.elevation, cam.distance = az, -elev_up, render_cfg.camera_radius
+            renderer.update_scene(data, camera=cam)
+            pos = samples.camera_world_position(cam.lookat, az, elev_up,
+                                                render_cfg.camera_radius)
+            if pos[2] <= 0.0:  # the floor plane is z = 0
+                raise RuntimeError(f"camera {i} below the floor: {pos}")
+            _save_png(os.path.join(renders_dir, f"view_{i:03d}.png"), renderer.render())
+            frames.append(samples.build_frame(i, f"view_{i:03d}.png", list(pos),
+                                              list(cam.lookat)))
+        return frames
+    if render_cfg.camera_layout != "sphere":
+        raise ValueError(f"unknown camera_layout {render_cfg.camera_layout!r}")
     for i, pos in enumerate(samples.fibonacci_sphere_poses(
             render_cfg.num_views, render_cfg.camera_radius)):
         az, el, dist = samples.pose_to_az_el_dist(pos)
@@ -612,6 +630,14 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
                         "top-down light + high ambient (historical pm_big, washes "
                         "out specular); 'oblique' = three oblique specular lights + "
                         "low ambient, so roughness/metallic cast legible highlights")
+    p.add_argument("--camera-layout", default="sphere", choices=["sphere", "above"],
+                   help="'sphere' = historical full-sphere layout (default; about 3 of "
+                        "8 views sit BELOW the floor); 'above' = every camera above "
+                        "the floor, looking down from an elevation band")
+    p.add_argument("--camera-elev-min", type=float, default=15.0,
+                   help="'above' layout: lowest camera elevation above the horizon (deg)")
+    p.add_argument("--camera-elev-max", type=float, default=65.0,
+                   help="'above' layout: highest camera elevation above the horizon (deg)")
     p.add_argument("--keep-trajectory", action="store_true",
                    help="store full per-probe trajectories (larger files)")
     p.add_argument("--topple-jitter-reps", type=int, default=0,
@@ -643,7 +669,9 @@ def main(argv: List[str]) -> None:
     args = parse_args(argv)
     shapes = [s.strip() for s in args.shapes.split(",") if s.strip()]
     render_cfg = RenderConfig(resolution=args.resolution, num_views=args.views,
-                              lighting=args.lighting)
+                              lighting=args.lighting, camera_layout=args.camera_layout,
+                              camera_elev_min_deg=args.camera_elev_min,
+                              camera_elev_max_deg=args.camera_elev_max)
     physics_cfg = PhysicsConfig(
         topple_jitter_reps=args.topple_jitter_reps,
         topple_jitter_impulse_rel=args.topple_jitter_impulse,
@@ -703,6 +731,18 @@ def main(argv: List[str]) -> None:
         "density": list(holdout.density or []),
         "friction": list(holdout.friction or []),
         "restitution": list(holdout.restitution or []),
+    }
+    # Record how the photos were made, so a world's camera layout is never
+    # inferred after the fact (the tilt-bug lesson: provenance in the manifest).
+    manifest["render"] = {
+        "resolution": render_cfg.resolution,
+        "num_views": render_cfg.num_views,
+        "lighting": render_cfg.lighting,
+        "camera_layout": render_cfg.camera_layout,
+        "camera_radius": render_cfg.camera_radius,
+        "camera_elev_min_deg": render_cfg.camera_elev_min_deg,
+        "camera_elev_max_deg": render_cfg.camera_elev_max_deg,
+        "mujoco_version": getattr(mujoco, "__version__", "unknown"),
     }
     with open(os.path.join(args.output, "manifest.json"), "w") as fh:
         json.dump(manifest, fh, indent=2)
