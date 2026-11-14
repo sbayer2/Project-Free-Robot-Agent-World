@@ -401,9 +401,14 @@ The nested readout adapts α to each z. It reduces a rank confound but
 does not remove it, hence the readout-dependent rule (§5).
 
 On the above-floor baseline the nested readout reads 0.398 (sd 0.057), the
-fixed α 0.378 (0.085). Its picks on loud runs are 10⁻⁵ to 10⁻³. 10⁻⁵ is
-the grid's lower edge, and the minimum-norm fit below it is worse on
-every run (§2). Ctrl runs pick 10 or 10² and read about −0.01.
+fixed α 0.378 (0.085). Its picks on loud runs are 10⁻⁵ to 10⁻³.
+- **Lower edge.** A pick at 10⁻⁵ is bracketed, not an under-read. The
+  excluded α = 0 (the minimum-norm fit) reads below 10⁻⁵ on every
+  50-epoch baseline run (0.168–0.324 vs 0.333–0.450).
+- **Upper edge.** Ctrl runs pick 10 or 10² and read about −0.01. A pick at
+  10² does not threaten G2: as α grows the prediction tends to the
+  training mean, whose out-of-fold R² sits just below 0, so a wider grid
+  cannot carry a ctrl run toward the 0.10 guard.
 
 A rank-controlled top-k readout (cloud-notes `93024de`) is not added (§8).
 
@@ -477,8 +482,9 @@ matched control), with Δ_h the same difference on the held-out readout:
 graded, by the same bars, on the fixed-α readout. If either readout grades
 RISES or FALLS and the other does not grade the same, the verdict is
 **READOUT-DEPENDENT**: both gradings are reported and no RISES or FALLS is
-claimed. If both grade NULL or INCONCLUSIVE, the primary's grade stands
-and both are reported. The two Δ's and the two arms' mean standardized
+claimed. For example, nested INCONCLUSIVE with fixed-α RISES is
+READOUT-DEPENDENT, not INCONCLUSIVE. Only when both grade NULL or
+INCONCLUSIVE does the primary's grade stand, with both reported. The two Δ's and the two arms' mean standardized
 ranks are reported with every verdict.
 
 ⚑ **Reachability of RISES, flagged, bar not changed; OPEN.** The bar was set
@@ -584,7 +590,7 @@ numbers. They are hashed in the freeze commit.
 
 ## 9. Reproduce
 
-Worlds (from `claude/camera-above-floor` @ `b7a62e2`):
+Worlds (generated from `claude/camera-above-floor` @ `b7a62e2`; the layout is on `main` since PR #48):
 
     for spec in "loud 1 8" "ctrl 0 1"; do set -- $spec
       python -m pseudomarble.data.generate_mujoco --output data/pm_f31fix_$1_cam \
@@ -592,7 +598,8 @@ Worlds (from `claude/camera-above-floor` @ `b7a62e2`):
         --coupling-alpha $2 --coupling-gain $3 --camera-layout above
     done
 
-Gate (`scripts/compare_worlds.py`, commit `7f9fc18`, on PR #48):
+Gate (`scripts/compare_worlds.py`, commit `7f9fc18`, on `main` since PR #48
+merged):
 
     python scripts/compare_worlds.py data/pm_f31fix_loud data/pm_f31fix_loud_cam
     python scripts/compare_worlds.py data/pm_f31fix_ctrl data/pm_f31fix_ctrl_cam
