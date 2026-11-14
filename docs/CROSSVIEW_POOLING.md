@@ -24,7 +24,9 @@ epochs). §3–§9 take the cloud session's review of the switch (cloud-notes
 and predictions that rest on old-camera numbers
 are **flagged, not re-derived**: they are marked ⚑ and must be settled
 before the freeze. Open owner decisions are marked OPEN. Decided since:
-the epoch budget is 50 (owner, 2026-11-14; §3, §5 G3).*
+the epoch budget is 50 (owner, 2026-11-14; §3, §5 G3); the focus stays
+on the pooling arms, P1/P2 against their matched controls, with D1 as the
+co-diagnostic (owner, 2026-11-14).*
 
 *⚑ **§1's second bullet is known wrong** (per-view readout, `9b7066e` and
 `98e87b4`; the cloud retracted `19a367f` in cloud-notes `f2c5e25`). Its
