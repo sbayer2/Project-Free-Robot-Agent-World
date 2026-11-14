@@ -123,7 +123,7 @@ escaped). Next: rescale the target before F31b; the w ≈ 0.36 arm is
 dropped. Pre-fix worlds were nearly friction-blind (friction explains 1% of
 pm_big's behavior variance before the fix, 25% after;
 `scripts/tilt_bug_oracle.py`); F17/F18/F22a re-baseline pending. 16-view
-worlds have 7 of 16 views below the floor; camera fix pending. Standing
+worlds have 7 of 16 views below the floor (camera fix: PR #48). Standing
 headline from F28/F29: unity has no internal and no measurable operational
 signature at this scale. Knowledge graph current through F27. Open: F30
 render-only data scaling; 256 px oblique legibility world; graded-push
