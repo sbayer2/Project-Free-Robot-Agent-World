@@ -113,13 +113,17 @@ first cloud-compute session, 4 vCPU / 15 GB / no GPU; setup in
 on the fixed ramp (`data/pm_f31fix_*`): the F31 pilot's "summaries discard
 friction" headline was mostly the bug (summary friction R² 0.34 → 0.83;
 trajectory 0.84 → 0.92; tilt block gain 2.70 → 16.16). **F31a rerun on
-the fixed worlds (Amendments 1–2): H1 RISES** (friction in z 0.236 → 0.383,
-t 3.31; leakage-adjusted +0.111; held-out 0.42 → 0.66; G1/G2 pass) while a
-friction-heavy summary target does not raise it (C1 NULL). Bounded: the
-traj head started at 19× the behavior loss, so a denser target and a
-stronger one can't be told apart. H2 is saturated (all arms gain ≈ 1.04;
-the escape gate set on the broken world is unreachable on the fixed one).
-Next: F31b plus an equal-starting-loss arm (w ≈ 0.36). Standing
+the fixed worlds:** torch H1 RISES by the frozen rule (friction in z 0.236 →
+0.383, t 3.31), but the trajectory head collapsed (one path for every scene)
+on torch and MLX, and MLX on byte-identical worlds reads NULL (FALLS with
+Adam bias correction). RISES is optimizer-dependent drift, not trajectory
+learning (`docs/F31A_MLX_REPLICATION.md`, PR #46). C1 NULL; H2 saturated or
+budget-limited at 50 epochs, not separable (all arms gain ≈ 1.04; no run
+escaped). Next: rescale the target before F31b; the w ≈ 0.36 arm is
+dropped. Pre-fix worlds were nearly friction-blind (friction explains 1% of
+pm_big's behavior variance before the fix, 25% after;
+`scripts/tilt_bug_oracle.py`); F17/F18/F22a re-baseline pending. 16-view
+worlds have 7 of 16 views below the floor (camera fix: PR #48). Standing
 headline from F28/F29: unity has no internal and no measurable operational
 signature at this scale. Knowledge graph current through F27. Open: F30
 render-only data scaling; 256 px oblique legibility world; graded-push
