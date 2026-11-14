@@ -114,13 +114,16 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--data", nargs="+", required=True)
     ap.add_argument("--seeds", type=int, default=3, help="outer-fold seeds")
+    ap.add_argument("--block", type=int, default=16,
+                    help="blocks per image side (16 = the cloud's 16x16x3 features)")
     ap.add_argument("--out", default=None)
     args = ap.parse_args()
 
-    report = {"grid": list(GRID), "axes": list(AXES), "seeds": args.seeds, "worlds": {}}
+    report = {"grid": list(GRID), "axes": list(AXES), "seeds": args.seeds,
+              "block": args.block, "worlds": {}}
     for data in args.data:
         imgs, E, _ = load_world(data)
-        F = block_features(imgs)
+        F = block_features(imgs, g=args.block)
         del imgs
         world = {}
         print(f"[perview] {data}: {len(E)} scenes, {F.shape[1]} views, {F.shape[2]} dims per view"
