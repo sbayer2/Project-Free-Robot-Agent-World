@@ -2554,6 +2554,9 @@ pseudomarble.models.train_torch --data data/pm_f31_loud --epochs 50 --lr
 > `data/pm_f31fix_*` under the same frozen rules.
 > **Rerun done 2026-10-24: see "F31a on the repaired ramp" below. On fixed
 > worlds H1 reads RISES (P6 wrong); the NULL below is a broken-ramp result.**
+> **Corrected 2026-10-26: that RISES is optimizer-dependent drift, not
+> trajectory learning (head collapsed; MLX reads NULL). See the correction
+> under that heading.**
 
 *(Run 2026-09-26 in the cloud session, all torch; written up 2026-10-23
 after a container restart; every run and the verdict file had completed
@@ -2617,7 +2620,51 @@ Reproduce: the run chain in `docs/TRAJECTORY_SUPERVISION.md` §3, then
 
 ---
 
-### F31a on the repaired ramp — trajectory supervision DOES raise friction in the latent (H1 RISES, P6 wrong); a friction-heavy summary target does not (C1 NULL)
+### F31a on the repaired ramp — H1 RISES on torch by the frozen rule, but the trajectory head never learned the trajectory (collapsed on torch and MLX) and MLX on identical worlds reads NULL: not evidence that trajectory supervision puts friction into z; a friction-heavy summary target does not either (C1 NULL)
+
+*(CORRECTION 2026-10-26, after the MLX replication
+(`docs/F31A_MLX_REPLICATION.md`, branch `claude/f31a-mlx-replication`) and
+the torch head diagnostic (`scripts/f31_head_diag.py`, PR #46). The frozen
+grading below is unchanged. Its mechanism reading is withdrawn.)*
+
+- **The trajectory head collapsed in all 8 torch traj seeds:** train gain
+  about 0.98, prediction std about 0.002 against a target std of 0.249,
+  held-out trajectory gain never above 1.014. It predicted one path for
+  every scene.
+- **MLX, same worlds** (renders byte-identical, targets equal to five
+  decimals), recipe and head: H1 NULL (joint 0.267, traj 0.242, Δ −0.025,
+  t −0.59), G1/G2 pass, Δ_L −0.012, all 5 heads collapsed. With Adam bias
+  correction on (post hoc, the one optimizer difference): Δ −0.216, t −4.47
+  (FALLS), heads still collapsed.
+- **So the torch traj arm's friction rise is not trajectory learning.** It
+  is where one optimizer's encoder drifted under a loss that starts 19×
+  louder than the behavior loss and that the head could not fit. Another
+  optimizer drifts the other way. Withdrawn: "supervising z with the drop +
+  tilt position paths raises how much friction z holds", the "What this
+  changes" sentence "on the repaired world, trajectory supervision at this
+  weight raises friction in z", and co-report (c)'s denser-versus-louder
+  framing (under raw MSE the head learns neither).
+- **Still stands:** an encoder trained on these photos reached friction
+  0.38 (0.66 held out, ctrl below 0), so Amendment 1's "C1 NULL → pixel
+  limit binding" stays refuted. C1 NULL, H2 saturation and non-escape are
+  unchanged.
+- **Two limits found later (2026-11-13).** (1) *Budget.* Every F31a arm ran
+  50 epochs at lr 2e-4, and no run escaped. On `pm_big` after the tilt fix
+  (20 seeds, lr 5e-4, 150 epochs), the essence head's held-out gain stays
+  near 1.0 until about epoch 75 and is still rising at 150 (density gain
+  1.70–1.73 at epoch 150, on both camera layouts). So H2's "saturated"
+  reads "saturated or budget-limited at 50 epochs; not separable", and H1
+  was also read at epoch 50. (2) *Cameras.* `fibonacci_sphere_poses` puts 7
+  of the 16 turntable views below the floor (1, 3, 6, 8, 9, 11, 14) and 2
+  level with the object (0, 15); only 7 look down from above. Every F31a
+  world uses this layout, and so do F31a's pixel ceiling (0.167) and the
+  F28/F31a legibility arguments.
+- **P6** stays graded WRONG on the frozen torch run. The MLX result is a
+  replication check, not a re-grade.
+- **For F31b:** replace "The equal-weight arm (w ≈ 0.36) comes first" with:
+  rescale the target first (per-probe-block standardization or log slide
+  distance). A quieter weight leaves a target that is 99% tilt path in
+  metres, which both backends' heads settled on the mean of.
 
 *(Runs 2026-10-23/24 in the cloud session, all torch, on `data/pm_f31fix_*`:
 the f27b worlds regenerated after PR #45's tilt fix, with drop, push,
