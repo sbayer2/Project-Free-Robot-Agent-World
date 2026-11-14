@@ -168,8 +168,11 @@ Loud joint, seeds 0–4, friction z R²:
   three times longer. Over the same 100 epochs the rank of standardized z
   rose in every seed (102–115 → 124–142; see the next block), which raises
   a near-least-squares readout's out-of-fold variance penalty, so the fall
-  need not mean less friction in z. That account fits the sign and rough
-  size; it is not measured. Each run is read at its final checkpoint only;
+  need not mean less friction in z. That account is not supported either:
+  tuning α does not remove the fall (extended-grid nested readout −0.061,
+  down in 5/5, t = −2.84), and it weakens (t ≈ −1.6) only under ridges
+  strong enough to discard most of the friction. A rank-controlled readout
+  (top-k principal directions at fixed k) would separate the two; not run. Each run is read at its final checkpoint only;
   epoch-to-epoch jitter of the z readout is not measured.
 - Registered predictions that failed: 150 epochs would add ≥ 0.05 (it
   lost 0.038); trained z would reach 0.408 at 150 epochs (0.341); at least
@@ -191,7 +194,7 @@ registered; `scripts/z_readout_alpha.py`, `fdb2147`, same z and folds as
 the primary readout). The primary readout is a ridge at a fixed α = 10⁻³
 on column-standardized z, close to least squares.
 
-| above-floor, mean over seeds | α 10⁻³ (primary) | α 0.1 | α 1 | α 10 | α 100 | nested α | std. rank of z |
+| above-floor, mean over seeds | α 10⁻³ (primary) | α 0.1 | α 1 | α 10 | α 100 | nested α, pilot grid | std. rank of z |
 |---|---|---|---|---|---|---|---|
 | loud, 50 ep | 0.378 | 0.242 | 0.117 | 0.025 | −0.005 | 0.378 | 102–115 |
 | loud, 150 ep | 0.341 | 0.200 | 0.087 | 0.008 | −0.012 | 0.341 | 124–142 |
@@ -201,9 +204,15 @@ on column-standardized z, close to least squares.
 - **Friction is linearly readable from z only along low-variance
   directions.** At α = 10, which halves any direction of standardized z
   holding under about 2.4 % of an average dimension's variance, the loud
-  readout falls from 0.378 to 0.025. The inner-CV choice of α (the pilot's
-  nested readout) picks 10⁻³ for every loud run, so the primary readout is
-  the one a tuned readout picks there.
+  readout falls from 0.378 to 0.025.
+- **The primary α is near, not at, the optimum.** On the pilot's grid the
+  nested readout picks 10⁻³, the grid's lowest value, on every loud run.
+  With the grid extended to 10⁻⁵ and the minimum-norm least-squares fit
+  (`fac9c7d`), it picks 10⁻⁴ or 10⁻⁵ at 50 epochs and mostly 10⁻³ at 150.
+  The unregularized fit is worse everywhere (0.258 at 50 epochs; it blows
+  up on two 150-epoch runs). Nested friction R², loud: 0.398 (sd 0.057) at
+  50 epochs, 0.337 (sd 0.085) at 150, against the primary's 0.378 and
+  0.341.
 - **On ctrl the fixed α is what makes the readout negative.** Nested α
   reads ctrl at −0.006 to −0.015, i.e. no friction, on every run. The
   fixed-α values (−0.09 to −0.22, apart from the outlier below) are its
@@ -226,7 +235,7 @@ pilot was not run on `pm_big`.
 
 **Epoch budget, OPEN (owner's decision at the freeze).** This draft
 writes 50. Measured (§2): 150 epochs lowers the primary readout in 5 of 5
-seeds (possibly through z's higher rank rather than less friction) and
+seeds (whether through z's higher rank or less friction is unresolved) and
 raises held-out in 4 of 5, both modestly, at three times the cost (about 3 min per 50-epoch run, about 9 min per 150-epoch run on the
 Mac; 65 runs ≈ 3.5 h vs ≈ 10 h, P2 and P2′ somewhat more). The case for
 150 is a separate, unpublished observation: on `pm_big` the held-out
@@ -283,9 +292,14 @@ the rank of standardized z rises, whatever z holds. P1, P1′, P2 and P2′
 change what produces z and may change its rank, so part of a Δ could be
 the readout's variance penalty, not friction. Draft 3 adds two
 co-reported quantities per checkpoint: the rank of standardized z, and
-friction R² under the nested readout (`scripts/z_readout_alpha.py`).
-Whether the nested readout should replace the fixed one as primary, or
-G2 be stated on it, is decided at the freeze.
+friction R² under the nested readout over the extended grid (0, 10⁻⁵ …
+10², `scripts/z_readout_alpha.py`). Nested α does not remove a rank
+confound. The cloud session proposes a third (cloud-notes `93024de`):
+friction R² from the top-k principal directions of z at one k for every
+arm, with P0's loss from full z to top-k reported, since friction sits in
+low-variance directions a top-k cut may drop. Whether the nested readout
+replaces the fixed one as primary, whether G2 is stated on it, and
+whether the top-k readout is added are decided at the freeze.
 
 **Density is compared only within the above-floor runs.** Its legibility
 on fixed features fell from 0.66 to 0.06 with the camera change alone, and
@@ -460,3 +474,4 @@ Readout-strength diagnostic (§2; needs MLX):
     python scripts/z_readout_alpha.py --data data/pm_f31fix_loud_cam \
       --runs runs/xv_cam/loud_joint_e50_s* runs/xv_cam/loud_joint_e150_s* \
       --out runs/xv_cam/readout_alpha_loud.json
+    # extended grid (fac9c7d): add --alphas 0 1e-5 1e-4 1e-3 1e-2 1e-1 1 10
