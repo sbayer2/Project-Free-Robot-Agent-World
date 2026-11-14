@@ -26,6 +26,16 @@ are **flagged, not re-derived**: they are marked ⚑ and must be settled
 before the freeze. Open owner decisions are marked OPEN. Decided since:
 the epoch budget is 50 (owner, 2026-11-14; §3, §5 G3).*
 
+*⚑ **§1's second bullet is known wrong** (per-view readout, `9b7066e` and
+`98e87b4`; the cloud retracted `19a367f` in cloud-notes `f2c5e25`). Its
+pixel-mean numbers came from an over-regularized readout. At 16 × 16
+block means, the view-averaged pixels read friction at 0.612 and 0.597 (old /
+above-floor), against 0.760 and 0.616 concatenated, so the camera fix did
+not raise what survives the average. A's 0.177 → 0.408 is a property of
+A's features. Density differs: on the above-floor photos the average loses
+it (log R² 0.328 against 0.53–0.58 concatenated). Revising §1–§2 for this
+is OPEN.*
+
 ## 1. Why this, why now
 
 The encoder averages its 16 per-view latents into z (`models/mlx_net.py`,
@@ -44,7 +54,7 @@ What the average costs, on the above-floor photos (§2):
   H); the same statistics averaged over views read 0.408 (A). The room
   over the view average on fixed features is about 0.14–0.16. On the old
   cameras it was 0.46 (0.636 vs 0.177).
-- The camera fix raised **what survives the average** (A: 0.177 → 0.408).
+- ⚑ *Known wrong; see the status note.* The camera fix raised **what survives the average** (A: 0.177 → 0.408).
   It did not raise what the photos carry. An unreproduced cloud diagnostic
   on MuJoCo 3.17 re-renders of the same 512 materials (cloud-notes
   `19a367f`) reads friction from concatenated per-view pixels at 0.649
