@@ -23,7 +23,8 @@ epochs). §3–§9 take the cloud session's review of the switch (cloud-notes
 `scripts/z_readout_alpha.py`) adds two co-reported readouts (§4). Bars
 and predictions that rest on old-camera numbers
 are **flagged, not re-derived**: they are marked ⚑ and must be settled
-before the freeze. Open owner decisions are marked OPEN.*
+before the freeze. Open owner decisions are marked OPEN. Decided since:
+the epoch budget is 50 (owner, 2026-11-14; §3, §5 G3).*
 
 ## 1. Why this, why now
 
@@ -233,14 +234,14 @@ on both backends). Worlds `data/pm_f31fix_loud_cam` (seeds 0–9) and
 old-camera pilot found nothing there to recover, and the above-floor
 pilot was not run on `pm_big`.
 
-**Epoch budget, OPEN (owner's decision at the freeze).** This draft
-writes 50. Measured (§2): 150 epochs lowers the primary readout in 5 of 5
-seeds (whether through z's higher rank or less friction is unresolved) and
-raises held-out in 4 of 5, both modestly, at three times the cost (about 3 min per 50-epoch run, about 9 min per 150-epoch run on the
-Mac; 65 runs ≈ 3.5 h vs ≈ 10 h, P2 and P2′ somewhat more). The case for
-150 is a separate, unpublished observation: on `pm_big` the held-out
-behavior gain for density kept rising to epoch 150; that readout is not
-primary here.
+**Epoch budget: 50 (owner's decision, 2026-11-14).** Measured (§2): 150
+epochs lowers the primary readout in 5 of 5 seeds (whether through z's
+higher rank or less friction is unresolved) and raises held-out in 4 of 5,
+both modestly, at three times the cost (about 3 min per 50-epoch run,
+about 9 min per 150-epoch run on the Mac; 65 runs ≈ 3.5 h vs ≈ 10 h, P2
+and P2′ somewhat more). Not chosen: 150, whose case was a separate,
+unpublished observation that on `pm_big` the held-out behavior gain for
+density kept rising to epoch 150; that readout is not primary here.
 
 Per-view latent v_i = relu(proj(GAP(CNN(image_i)))) ∈ ℝ²⁵⁶, unchanged. Only
 the step from {v_1 … v_16} to z changes, selected by a new
@@ -343,9 +344,8 @@ and their matched controls; that is not measured.
   so the same fitting would show there. A G2 failure withholds that arm's
   verdict.
 - G3 apparatus (reported, does not withhold): P0's loud mean is within
-  ±0.10 of the above-floor baseline at the chosen budget (0.378 at 50
-  epochs; 0.341 if the owner picks 150). Verdicts compare against the P0
-  rerun either way.
+  ±0.10 of the above-floor 50-epoch baseline, 0.378. Verdicts compare
+  against the P0 rerun either way.
 
 **H1 — stats mixing (P1 vs P1′)** and **H2 — attention mixing (P2 vs
 P2′)**, primary, each graded on Δ = mean friction z R²(mixer) − mean(its
@@ -462,7 +462,7 @@ Pilot:
     python scripts/crossview_pilot.py --data data/pm_f31fix_loud data/pm_f31fix_ctrl data/pm_big
 
 Trained baseline (trainer at `main` `7bb27ed`; loud seeds 0–4, ctrl 0–2;
-`--epochs 150` for the longer budget):
+the frozen budget is 50; §2's 150-epoch comparison used `--epochs 150`):
 
     python -m pseudomarble.models.train --data data/pm_f31fix_loud_cam \
       --epochs 50 --lr 2e-4 --batch-size 16 --seed $S --out runs/xv_cam/loud_joint_e50_s$S
