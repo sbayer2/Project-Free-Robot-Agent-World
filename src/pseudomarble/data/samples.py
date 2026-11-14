@@ -75,6 +75,50 @@ def pose_to_az_el_dist(pos: Pose) -> Tuple[float, float, float]:
     return (azimuth, elevation, distance)
 
 
+def above_floor_camera_angles(num_views: int, elev_min_deg: float = 15.0,
+                              elev_max_deg: float = 65.0) -> list[tuple[float, float]]:
+    """(azimuth°, elevation-above-horizon°) for cameras that all look DOWN at the
+    object from above the floor, spread evenly around it (deterministic).
+
+    The legacy layout (``fibonacci_sphere_poses`` + ``pose_to_az_el_dist``) covers
+    a whole sphere, so about half its cameras sit below the floor; and its
+    elevation sign is the opposite of MuJoCo's free camera (where a NEGATIVE
+    elevation looks down from above). In MuJoCo-rendered worlds that put 3 of 8
+    views under the floor, looking up through it at an object lit only from
+    above. This layout keeps every camera in a band above the horizon: azimuths
+    step by the golden angle (even coverage, no two views stacked), elevations
+    step evenly from ``elev_min_deg`` to ``elev_max_deg``. Elevations here are
+    positive-up; MuJoCo callers must pass ``-elevation``.
+    """
+    if num_views < 1:
+        raise ValueError("num_views must be >= 1")
+    if not 0.0 < elev_min_deg <= elev_max_deg < 90.0:
+        raise ValueError("need 0 < elev_min_deg <= elev_max_deg < 90 (above the floor)")
+    golden_deg = math.degrees(math.pi * (3.0 - math.sqrt(5.0)))
+    angles: list[tuple[float, float]] = []
+    for i in range(num_views):
+        frac = i / max(1, num_views - 1)
+        elev = elev_min_deg + frac * (elev_max_deg - elev_min_deg)
+        az = (i * golden_deg) % 360.0
+        angles.append((az, elev))
+    return angles
+
+
+def camera_world_position(lookat: Sequence[float], azimuth_deg: float,
+                          elevation_up_deg: float, distance: float) -> Pose:
+    """World position (z up) of a camera at ``distance`` from ``lookat``, at
+    ``azimuth_deg`` around the vertical axis and ``elevation_up_deg`` ABOVE the
+    horizon. Matches MuJoCo's free camera with ``elevation = -elevation_up_deg``
+    (camera = lookat - distance * forward)."""
+    a = math.radians(azimuth_deg)
+    e = math.radians(elevation_up_deg)
+    return (
+        float(lookat[0]) - distance * math.cos(e) * math.cos(a),
+        float(lookat[1]) - distance * math.cos(e) * math.sin(a),
+        float(lookat[2]) + distance * math.sin(e),
+    )
+
+
 # --------------------------------------------------------------------------- #
 # Physics labels (the "essence" target: density, friction, restitution).
 # --------------------------------------------------------------------------- #

@@ -240,3 +240,40 @@ if __name__ == "__main__":
         fn()
         print(f"ok  {fn.__name__}")
     print(f"\n{len(fns)} passed")
+
+
+def test_above_layout_renders_from_above_the_floor_with_real_mujoco():
+    """With the real renderer (skipped where mujoco is absent): every 'above'
+    view's recorded camera position is above the floor, and MuJoCo's own scene
+    camera agrees with it (so the sign convention is verified, not assumed)."""
+    try:
+        import mujoco  # noqa: F401
+    except Exception:
+        return  # no runtime here: the pure-Python layout tests still apply
+    import tempfile
+
+    from pseudomarble.config import RenderConfig
+    from pseudomarble.data import generate_mujoco as G
+
+    cfg = RenderConfig(resolution=32, num_views=8, camera_layout="above")
+    with tempfile.TemporaryDirectory() as d:
+        frames = G.render_views("box", M.MATERIALS["wood"], d, cfg)
+        assert len(frames) == 8
+        for f in frames:
+            assert f["position"][2] > 0.0
+            assert os.path.exists(os.path.join(d, f["file"]))
+    # Cross-check the convention against MuJoCo itself for one camera.
+    model = mujoco.MjModel.from_xml_string(G.build_mjcf("box", M.MATERIALS["wood"]))
+    data = mujoco.MjData(model)
+    mujoco.mj_forward(model, data)
+    renderer = mujoco.Renderer(model, 32, 32)
+    cam = mujoco.MjvCamera()
+    cam.lookat[:] = [0.0, 0.0, 0.1]
+    cam.azimuth, cam.elevation, cam.distance = 40.0, -30.0, 2.6
+    renderer.update_scene(data, camera=cam)
+    cams = renderer.scene.camera
+    eye = [(cams[0].pos[k] + cams[1].pos[k]) / 2 for k in range(3)]
+    from pseudomarble.data import samples
+    want = samples.camera_world_position((0.0, 0.0, 0.1), 40.0, 30.0, 2.6)
+    assert all(abs(e - w) < 1e-3 for e, w in zip(eye, want, strict=True)), (eye, want)
+    renderer.close()

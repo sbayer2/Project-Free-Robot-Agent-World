@@ -38,6 +38,14 @@ class RenderConfig:
     # oblique specular lights + low ambient, so roughness (shininess) and metallic
     # (specular/reflectance) cast legible highlights across the orbiting views.
     lighting: str = "flat"
+    # Camera layout. "sphere" = the historical full-sphere Fibonacci layout
+    # (default, so older worlds regenerate byte-identically; in MuJoCo worlds it
+    # puts about 3 of 8 views BELOW the floor, looking up through it). "above" =
+    # every camera above the floor, looking down at the object from an elevation
+    # band (samples.above_floor_camera_angles).
+    camera_layout: str = "sphere"
+    camera_elev_min_deg: float = 15.0
+    camera_elev_max_deg: float = 65.0
 
 
 @dataclass(frozen=True)

@@ -84,6 +84,67 @@ def test_manifest_summarizes_scenes():
     assert man["scenes"][0]["material"] == "wood"
 
 
+def test_above_floor_layout_puts_every_camera_above_the_floor():
+    """Regression pin for the camera bug: the legacy full-sphere layout put about
+    3 of 8 MuJoCo views under the floor. Every 'above' camera must sit above the
+    floor (z > 0), inside the elevation band, at the requested distance."""
+    lookat = (0.0, 0.0, 0.1)
+    for n in (1, 4, 8, 16):
+        angles = samples.above_floor_camera_angles(n, 15.0, 65.0)
+        assert len(angles) == n
+        for az, elev in angles:
+            assert 0.0 <= az < 360.0
+            assert 15.0 - 1e-9 <= elev <= 65.0 + 1e-9
+            x, y, z = samples.camera_world_position(lookat, az, elev, 2.6)
+            assert z > 0.0, f"camera below the floor at elevation {elev}"
+            d = ((x - lookat[0]) ** 2 + (y - lookat[1]) ** 2 + (z - lookat[2]) ** 2) ** 0.5
+            assert abs(d - 2.6) < 1e-9
+
+
+def test_above_floor_layout_spreads_views_around_the_object():
+    angles = samples.above_floor_camera_angles(8)
+    azimuths = sorted(az for az, _ in angles)
+    # No two views stacked on the same side: every gap under 120 degrees.
+    gaps = [b - a for a, b in zip(azimuths, azimuths[1:], strict=False)]
+    gaps.append(360.0 - azimuths[-1] + azimuths[0])
+    assert max(gaps) < 120.0
+    assert len({round(az, 6) for az in azimuths}) == 8
+    # Deterministic: the same call gives the same cameras.
+    assert angles == samples.above_floor_camera_angles(8)
+
+
+def test_above_floor_layout_rejects_bands_that_reach_the_floor():
+    for lo, hi in ((0.0, 60.0), (-10.0, 60.0), (20.0, 90.0), (50.0, 40.0)):
+        try:
+            samples.above_floor_camera_angles(8, lo, hi)
+        except ValueError:
+            continue
+        raise AssertionError(f"band ({lo}, {hi}) should be rejected")
+
+
+def test_camera_world_position_matches_mujoco_free_camera_convention():
+    """MuJoCo's free camera sits at lookat - distance * forward, with
+    forward = (cos e cos a, cos e sin a, sin e) and e = -elevation_up."""
+    import math
+    lookat = (0.2, -0.1, 0.3)
+    for az, up in ((0.0, 30.0), (137.5, 15.0), (275.0, 65.0)):
+        a, e = math.radians(az), math.radians(-up)
+        fwd = (math.cos(e) * math.cos(a), math.cos(e) * math.sin(a), math.sin(e))
+        want = tuple(c - 2.6 * f for c, f in zip(lookat, fwd, strict=True))
+        got = samples.camera_world_position(lookat, az, up, 2.6)
+        assert all(abs(g - w) < 1e-12 for g, w in zip(got, want, strict=True))
+
+
+def test_legacy_sphere_layout_is_unchanged():
+    """Older worlds must regenerate byte-identically: the legacy layout's first
+    and last poses are pinned."""
+    poses = samples.fibonacci_sphere_poses(8, 2.6)
+    assert abs(poses[0][0]) < 1e-12 and abs(poses[0][1] - 2.6) < 1e-12 and abs(poses[0][2]) < 1e-12
+    assert abs(poses[-1][1] + 2.6) < 1e-12
+    # The legacy view #2 (the one rendered from under the floor in pm_big) is pinned too.
+    assert [round(c, 2) for c in poses[2]] == [0.21, 1.11, -2.34]
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
