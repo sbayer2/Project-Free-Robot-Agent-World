@@ -100,6 +100,16 @@ def nested(X: np.ndarray, Y: np.ndarray, grid=GRID, k: int = 5, seed: int = 0) -
     return {"r2": _r2(Y, P), "best_of_grid": best_of_grid, "picks": picks}
 
 
+def log_density(E: np.ndarray) -> np.ndarray:
+    """Essence targets with density (column 0, kg/m^3 / 8000, sampled log-uniform) on a
+    log scale; the other axes unchanged."""
+    if (E[:, 0] <= 0).any():
+        raise ValueError("density target must be positive to take its log")
+    out = E.copy()
+    out[:, 0] = np.log(E[:, 0])
+    return out
+
+
 def readout_sets(F: np.ndarray) -> dict[str, np.ndarray]:
     """(B, V, D) per-view features -> the sets read: each view, the mean, the concatenation."""
     sets = {f"view {i}": F[:, i] for i in range(F.shape[1])}
@@ -116,13 +126,18 @@ def main() -> None:
     ap.add_argument("--seeds", type=int, default=3, help="outer-fold seeds")
     ap.add_argument("--block", type=int, default=16,
                     help="blocks per image side (16 = the cloud's 16x16x3 features)")
+    ap.add_argument("--log-density", action="store_true",
+                    help="read density on a log scale (the cloud's target) instead of linear")
     ap.add_argument("--out", default=None)
     args = ap.parse_args()
 
     report = {"grid": list(GRID), "axes": list(AXES), "seeds": args.seeds,
-              "block": args.block, "worlds": {}}
+              "block": args.block, "density_scale": "log" if args.log_density else "linear",
+              "worlds": {}}
     for data in args.data:
         imgs, E, _ = load_world(data)
+        if args.log_density:
+            E = log_density(E)
         F = block_features(imgs, g=args.block)
         del imgs
         world = {}

@@ -44,6 +44,15 @@ def test_nested_matches_the_single_target_readout():
     assert out["best_of_grid"][0] >= out["r2"][0] - 1e-12
 
 
+def test_log_density_changes_only_the_density_axis():
+    E = np.array([[50 / 8000, 0.4, 0.9], [1.0, 0.2, 0.1]])
+    out = pv.log_density(E)
+    assert out[:, 0] == pytest.approx([np.log(50 / 8000), 0.0])
+    assert np.array_equal(out[:, 1:], E[:, 1:]) and E[0, 0] == 50 / 8000
+    with pytest.raises(ValueError):
+        pv.log_density(np.array([[0.0, 0.1, 0.1]]))
+
+
 def test_readout_sets():
     F = np.zeros((4, 16, 5))
     sets = pv.readout_sets(F)
