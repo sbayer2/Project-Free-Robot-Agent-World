@@ -35,3 +35,22 @@ def test_signal_in_a_near_null_direction_is_lost_to_strong_ridge():
     sweep, _ = diag.alpha_sweep(z, y, diag.folds_for(len(y)), alphas=(1e-3, 100.0))
     assert sweep["0.001"] > 0.9
     assert sweep["100"] < 0.5
+
+
+def test_nested_grid_matches_the_pilot_on_its_grid():
+    pilot = pytest.importorskip("crossview_pilot")
+    rng = np.random.default_rng(3)
+    z = rng.normal(size=(150, 8))
+    y = z[:, 0] - 0.5 * z[:, 3] + rng.normal(size=150)
+    r2, picks = diag.nested_grid(z, y)
+    assert r2 == pytest.approx(pilot.nested_r2(z, y[:, None])[0], abs=1e-9)
+    assert len(picks) == 5 and set(picks) <= set(pilot.ALPHAS)
+
+
+def test_min_norm_fit_handles_rank_deficient_z():
+    rng = np.random.default_rng(4)
+    base = rng.normal(size=(100, 4))
+    z = np.concatenate([base, base[:, :1]], 1)  # exactly collinear column
+    y = base @ np.array([1.0, -2.0, 0.5, 0.0])
+    pred = diag.fit_predict(z[:80], y[:80], z[80:], 0.0)
+    assert np.allclose(pred, y[80:], atol=1e-8)
