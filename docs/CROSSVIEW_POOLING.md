@@ -4,8 +4,10 @@
 frozen.** It freezes in the commit that adds the implementation (all three
 backends, with cross-backend tests, per CLAUDE.md) and
 `scripts/crossview_verdicts.py`, before any pooling-variant model is
-trained. Until then every number, arm and bar here can change. F-number:
-unassigned (the owner assigns it at the freeze).
+trained on a loud world. The one pre-freeze training is the stability check
+on the ctrl world (§3), from which no essence readout is computed. Until
+then every number, arm and bar here can change. F-number: unassigned (the
+owner assigns it at the freeze).
 
 *Revision 2026-10-27 (draft 2), from the cloud session's review: matched
 no-mixing controls P1′/P2′ become the primary comparisons; D1 gains
@@ -21,29 +23,39 @@ the trained baseline re-measured on the new worlds (baseline at 50 and 150
 epochs). §3–§9 take the cloud session's review of the switch (cloud-notes
 `8b0fdbb`, `19a367f`, `f342299`). A readout-strength diagnostic (§2, end;
 `scripts/z_readout_alpha.py`) adds two co-reported readouts (§4). Bars
-and predictions that rest on old-camera numbers
-are **flagged, not re-derived**: they are marked ⚑ and must be settled
-before the freeze. Open owner decisions are marked OPEN. Decided since:
-the epoch budget is 50 (owner, 2026-11-14; §3, §5 G3); the focus stays
-on the pooling arms, P1/P2 against their matched controls, with D1 as the
-co-diagnostic (owner, 2026-11-14).*
+and predictions that rested on old-camera numbers were first flagged ⚑.
+All are now re-derived except one, the RISES bar's reachability (§5),
+which stays ⚑ and OPEN for the owner.*
 
-*⚑ **§1's second bullet is known wrong** (per-view readout, `9b7066e` and
-`98e87b4`; the cloud retracted `19a367f` in cloud-notes `f2c5e25`). Its
-pixel-mean numbers came from an over-regularized readout. At 16 × 16
-block means, the view-averaged pixels read friction at 0.612 and 0.597 (old /
-above-floor), against 0.760 and 0.616 concatenated, so the camera fix did
-not raise what survives the average. A's 0.177 → 0.408 is a property of
-A's features. Density differs: on the above-floor photos the average loses
-it (log R² 0.328 against 0.53–0.58 concatenated). Revising §1–§2 for this
-is OPEN.*
+*Owner decisions, 2026-11-14:
+- The epoch budget is 50 (§3).
+- The focus stays on the pooling arms, P1/P2 against their matched controls, with D1 as the co-diagnostic.
+- The primary readout is nested α on a frozen grid; the fixed α = 10⁻³ readout is co-reported, and a verdict that differs between them is READOUT-DEPENDENT (§4, §5).
+- The odds are re-registered (§6).
+- A ctrl-world stability check runs before the freeze (§3).
+- The rank-controlled top-k readout is dropped (§8).
+- The 15–65° camera band is kept (§8).*
+
+*Correction, 2026-11-14 (§1–§2 rewritten). The draft as pushed through
+`c08b173` said in §1 that the camera fix raised "what survives the
+average" (A: 0.177 → 0.408) and that the photos carry the same friction
+on both layouts. It cited the cloud's pixel-mean numbers 0.089 and 0.227.
+Those came from an over-regularized readout, which the cloud retracted in
+cloud-notes `f2c5e25`. The Mac's per-view readout (`9b7066e`, `08ed667`,
+`98e87b4`) shows that what survives the view average depends on how much
+spatial layout each view keeps. A's rise is a property of A's features.
+An intermediate reading, that this pointed away from pooling and at the
+per-view encoder, was also wrong: the encoder pools each view over
+H × W before the views are combined, so the coarse rows are its analogue
+(§1).*
 
 ## 1. Why this, why now
 
-The encoder averages its 16 per-view latents into z (`models/mlx_net.py`,
-`Encoder.__call__`, last line; mirrored at `numpy_net.py:126` and
-`torch_net.py:95`). Anything carried by how the views *differ* is discarded
-before z exists.
+The encoder reduces each view to one vector, then averages the 16 vectors
+into z (`models/mlx_net.py:63-65`: a global average over H × W, a ReLU
+projection, then the mean over views; mirrored at `numpy_net.py:126` and
+`torch_net.py:95`). Anything carried by how the views *differ* is
+discarded before z exists, and so is each view's spatial layout.
 
 Friction reaches the photos only through roughness, rendered as Phong
 shininess (`shininess = 1 − roughness`): the tightness of the specular
@@ -52,27 +64,28 @@ up, so it is a cross-view signal.
 
 What the average costs, on the above-floor photos (§2):
 
-- Fixed cross-view image statistics read friction at 0.547–0.565 (D, D′,
-  H); the same statistics averaged over views read 0.408 (A). The room
-  over the view average on fixed features is about 0.14–0.16. On the old
+- **Fixed cross-view statistics** read friction at 0.547–0.565 (D, D′, H).
+  The same statistics averaged over views read 0.408 (A). The room over
+  the view average on fixed features is about 0.14–0.16. On the old
   cameras it was 0.46 (0.636 vs 0.177).
-- ⚑ *Known wrong; see the status note.* The camera fix raised **what survives the average** (A: 0.177 → 0.408).
-  It did not raise what the photos carry. An unreproduced cloud diagnostic
-  on MuJoCo 3.17 re-renders of the same 512 materials (cloud-notes
-  `19a367f`) reads friction from concatenated per-view pixels at 0.649
-  (old layout) and 0.616 (above-floor), against 0.089 and 0.227 from the
-  pixel mean. The gap the mixer could close has narrowed from the mean's
-  side, not disappeared.
+- **What survives the view average depends on how much spatial layout
+  each view keeps** (per-view pixel readout, §2). With views reduced to
+  8 × 8 block means, the 16-view average reads friction at 0.005 and the
+  16 views side by side at 0.630. At 16 × 16 the average keeps most of it
+  (0.597 vs 0.616). The encoder keeps no layout at all: it averages each
+  view over H × W first. So it sits on the coarse side, unless its 256
+  nonlinear channels carry the highlight in a form that survives spatial
+  pooling. D1 (§4) reads exactly that.
 
 Two further facts make pooling the suspect:
 
 - z is already supervised on friction directly: the essence head (weight
   0.3, `mlx_net.loss_fn`) regresses all three essence axes from z. Under
-  that direct supervision, mean-pooled z holds friction at 0.378 on the
-  above-floor worlds (50 epochs, 5 seeds), close to the averaged-view
-  pixel readout (0.408) and below the fixed cross-view features. Training
-  to 150 epochs does not raise it (0.341). The target is not what is
-  missing.
+  that direct supervision, mean-pooled z holds friction at 0.398 on the
+  above-floor worlds (nested readout; 0.378 at fixed α; 50 epochs, 5
+  seeds). That is below the fixed cross-view features and below the 16
+  views side by side (0.616, a lower bound). Training to 150 epochs does
+  not raise it. The target is not what is missing.
 - The project's "pixel ceiling" (0.167, F19 pixel features) is computed on
   the averaged view, on the old cameras. The F28 and F31a legibility
   arguments rest on it.
@@ -144,16 +157,59 @@ Loud world, the other two axes, old → above:
 - **D ≈ D′:** shuffling the view order costs nothing (0.547 vs 0.565, |D − D′|
   = 0.018). The Fourier structure is not doing the work; |DFT| acts as a set
   of cross-view energy features. No Fourier arm is preregistered (§8).
-- **Density is camera-limited on the above-floor worlds**, not only pooled
-  away: every set falls to 0.00–0.08. Unreproduced cloud diagnostics on
-  MuJoCo 3.17 re-renders put photo-level density content (concatenated
-  per-view pixels) at 0.953 old vs 0.311 above-floor (a lower bound;
-  `19a367f`), and find density visible mainly at low elevations
-  (`3e51da7`, preliminary). Density numbers from the old worlds do not
+- **Density falls on every set** with the above-floor cameras (0.00–0.08).
+  The per-view readout below shows the photos still carry some, and that
+  the view average loses it. Density numbers from the old worlds do not
   carry over.
 - These are fixed hand-made features with a linear readout. They bound
   what the photos contain from below. They are not what a trained encoder
   will learn.
+
+**Per-view pixel readout**, post hoc, no training
+(`scripts/perview_readout.py`, `9b7066e`; `--block` `08ed667`;
+`--log-density` `98e87b4`). Each view is reduced to g × g × 3 block-mean
+pixels. Three readouts: each view alone, the 16-view mean, and the 16
+views concatenated. Nested 5-fold ridge on column-standardized features,
+grid 10⁻³ … 10⁶, mean of 3 fold seeds. The 16 × 16 predictions were
+registered before the run (Mac `runs/postfix/PREDICTIONS_cam.md` Step 8,
+hash timestamped in cloud-notes `31cf59a`). 5 of the 8 were correct.
+One miss was narrow (old minus above-floor concatenated density 0.291
+against a 0.30 bar). Two were anchored on the cloud's since-retracted
+pooled numbers. The block-size and log-density rows are unregistered
+checks.
+
+Loud world, friction (density in the last two rows):
+
+| | old cameras | above-floor |
+|---|---|---|
+| 8 × 8 blocks: 16-view mean / concatenated | 0.107 / 0.717 | 0.005 / 0.630 |
+| 16 × 16: mean / concatenated | 0.612 / 0.760 | 0.597 / 0.616 |
+| 32 × 32: mean / concatenated | 0.696 / 0.747 | 0.579 / 0.629 |
+| 16 × 16, best single views | 6 0.626, 8 0.589 | 2 0.572, 0 0.551, 14 0.518 |
+| log density, 16 × 16: mean / concatenated | 0.952 / 0.955 | 0.328 / 0.527 |
+| log density, best single views | 7 0.506, 10 0.426 | 15 0.596, 14 0.527, 0 0.454 |
+
+- **What the view average keeps depends on resolution.** Concatenated, friction is about
+  resolution-independent (0.62–0.76). Averaged, it is nearly gone at 8 × 8
+  and mostly kept at 16 × 16 and finer.
+- **Density.** The above-floor cameras lose about 40 % of the photos' density
+  (concatenated, log scale, 0.955 → 0.53–0.58; best of grid 0.577). Unlike
+  friction, the 16 × 16 average also loses it (0.328 vs the best single
+  view's 0.596). The best density views on this layout are the highest two
+  (views 15 and 14, 65° and 62°) and the lowest (view 0, 15°). On the
+  linear axis the levels are lower (concatenated 0.648 → 0.357) but the
+  ordering is the same.
+- Restitution reads ≥ 0.91 from every single view on both layouts. Ctrl
+  reads ≤ −0.004 everywhere.
+- The concatenation has p ≫ n (12,288 dims at 16 × 16, 512 scenes), so it
+  is a lower bound on what the photos carry. The averaged sets and the
+  informative single views pick the grid's lower edge, so they may
+  under-read.
+- **Replication.** The cloud session's MuJoCo 3.17 re-renders of the same
+  materials agree with these photos once readout and target match:
+  friction within 0.02, log density within 0.005 (cloud-notes `f2c5e25`,
+  `1c761f9`). Its earlier pooled numbers came from a penalty scaled by n
+  (λ·n·I, weakest effective α ≈ 0.41) and are retracted.
 
 **Trained baseline**, MLX, mean pooling, F27b recipe (lr 2e-4, batch 16,
 default `ModelConfig`), joint arm, trainer at `main` `7bb27ed`, readout
@@ -171,6 +227,11 @@ Loud joint, seeds 0–4, friction z R²:
 | above-floor, 50 ep | .435 .453 .243 .349 .411 | **0.378** (0.085) | .382 .605 .551 .566 .490 | 0.519 (0.087) |
 | above-floor, 150 ep | .373 .447 .214 .326 .346 | 0.341 (0.085) | .532 .523 .699 .604 .512 | 0.574 (0.079) |
 
+The per-seed values above use the fixed α = 10⁻³ readout. On the
+frozen-grid nested readout, now primary (§4), the above-floor 50-epoch
+seeds read .457 .449 .330 .351 .402, mean **0.398** (0.057). Ctrl reads
+−0.011 / −0.014 / −0.015 (`runs/xv_cam/readout_alpha_frozen_*.json`).
+
 - **Camera effect at 50 epochs:** +0.111, Welch t = 2.14 (below the
   project's 2.5). Held-out moves the other way (−0.079, t = −1.65). Not
   established at n = 5.
@@ -185,8 +246,10 @@ Loud joint, seeds 0–4, friction z R²:
   tuning α does not remove the fall (extended-grid nested readout −0.061,
   down in 5/5, t = −2.84), and it weakens (t ≈ −1.6) only under ridges
   strong enough to discard most of the friction. A rank-controlled readout
-  (top-k principal directions at fixed k) would separate the two; not run. Each run is read at its final checkpoint only;
-  epoch-to-epoch jitter of the z readout is not measured.
+  (top-k principal directions at fixed k) would separate the two. It is
+  not run: with the budget fixed at 50, the question no longer bears on a
+  decision (owner, 2026-11-14). Each run is read at its final checkpoint
+  only; epoch-to-epoch jitter of the z readout is not measured.
 - Registered predictions that failed: 150 epochs would add ≥ 0.05 (it
   lost 0.038); trained z would reach 0.408 at 150 epochs (0.341); at least
   3 of 5 runs would escape (gain ≥ 2) by 150 epochs (0 of 5; gain
@@ -199,15 +262,17 @@ Loud joint, seeds 0–4, friction z R²:
   0.975–0.987; participation 47–69 (50) and 50–73 (150).
 
 The held-out readout and the 5-fold readout disagree in level (0.52 vs 0.38
-for the same z) and, between budgets, in direction. Both are reported; the
-5-fold one is primary because it uses all 512 scenes and matches F31a's H1.
+for the same z) and, between budgets, in direction. Both are reported. The
+5-fold nested readout is primary because it uses all 512 scenes; the
+fixed-α 5-fold readout, which matches F31a's H1, is co-reported.
 
-**How the primary readout depends on its ridge strength** (diagnostic, not
+**How the fixed-α readout depends on its ridge strength** (diagnostic, not
 registered; `scripts/z_readout_alpha.py`, `fdb2147`, same z and folds as
-the primary readout). The primary readout is a ridge at a fixed α = 10⁻³
-on column-standardized z, close to least squares.
+the fixed readout). The fixed readout, primary until this revision and
+F31a's, is a ridge at α = 10⁻³ on column-standardized z, close to least
+squares. This diagnostic is why the nested readout is now primary (§4).
 
-| above-floor, mean over seeds | α 10⁻³ (primary) | α 0.1 | α 1 | α 10 | α 100 | nested α, pilot grid | std. rank of z |
+| above-floor, mean over seeds | α 10⁻³ (fixed) | α 0.1 | α 1 | α 10 | α 100 | nested α, pilot grid | std. rank of z |
 |---|---|---|---|---|---|---|---|
 | loud, 50 ep | 0.378 | 0.242 | 0.117 | 0.025 | −0.005 | 0.378 | 102–115 |
 | loud, 150 ep | 0.341 | 0.200 | 0.087 | 0.008 | −0.012 | 0.341 | 124–142 |
@@ -218,14 +283,15 @@ on column-standardized z, close to least squares.
   directions.** At α = 10, which halves any direction of standardized z
   holding under about 2.4 % of an average dimension's variance, the loud
   readout falls from 0.378 to 0.025.
-- **The primary α is near, not at, the optimum.** On the pilot's grid the
+- **The fixed α is near, not at, the optimum.** On the pilot's grid the
   nested readout picks 10⁻³, the grid's lowest value, on every loud run.
-  With the grid extended to 10⁻⁵ and the minimum-norm least-squares fit
-  (`fac9c7d`), it picks 10⁻⁴ or 10⁻⁵ at 50 epochs and mostly 10⁻³ at 150.
-  The unregularized fit is worse everywhere (0.258 at 50 epochs; it blows
-  up on two 150-epoch runs). Nested friction R², loud: 0.398 (sd 0.057) at
-  50 epochs, 0.337 (sd 0.085) at 150, against the primary's 0.378 and
-  0.341.
+  With the grid extended to 0 (the minimum-norm least-squares fit) and
+  10⁻⁵ … 10 (`fac9c7d`), it picks 10⁻⁴ or 10⁻⁵ at 50 epochs and mostly
+  10⁻³ at 150. The unregularized fit is worse everywhere (0.258 at 50
+  epochs; it blows up on two 150-epoch runs). Nested friction R², loud:
+  0.398 (sd 0.057) at 50 epochs, 0.337 (sd 0.085) at 150, against the
+  fixed α's 0.378 and 0.341. The frozen grid (10⁻⁵ … 10², §4) gives the
+  same 0.398 at 50 epochs.
 - **On ctrl the fixed α is what makes the readout negative.** Nested α
   reads ctrl at −0.006 to −0.015, i.e. no friction, on every run. The
   fixed-α values (−0.09 to −0.22, apart from the outlier below) are its
@@ -247,7 +313,7 @@ old-camera pilot found nothing there to recover, and the above-floor
 pilot was not run on `pm_big`.
 
 **Epoch budget: 50 (owner's decision, 2026-11-14).** Measured (§2): 150
-epochs lowers the primary readout in 5 of 5 seeds (whether through z's
+epochs lowers the friction readout, fixed α and nested, in 5 of 5 seeds (whether through z's
 higher rank or less friction is unresolved) and raises held-out in 4 of 5,
 both modestly, at three times the cost (about 3 min per 50-epoch run,
 about 9 min per 150-epoch run on the Mac; 65 runs ≈ 3.5 h vs ≈ 10 h, P2
@@ -287,32 +353,59 @@ test the mixing itself. Comparisons with P0 are reported as well.
 
 65 runs in all (5 arms × 13).
 
+**Stability check, before the freeze (owner, 2026-11-14).** The mixer arms
+have never been trained. Once `view_pool` is implemented, one run each of
+P1, P1′, P2 and P2′ trains on `data/pm_f31fix_ctrl_cam` at seed 100. Seed
+100 is not one of the experiment's seeds, and these runs are not among the
+65. On ctrl the photos carry no material, so these runs can show nothing
+about the hypotheses. From them, only these are read:
+- the training-loss curve;
+- the per-epoch latent PR;
+- any non-finite value.
+
+No essence, behavior or held-out readout is computed from them.
+
+An arm fails the check if it diverges, goes non-finite, or ends with
+PR < 8. A failed arm's recipe is revised before the freeze, and the
+revision is disclosed here.
+
 ## 4. Readouts
 
 From `scripts/f31_measure_mlx.py` (on `claude/f31a-mlx-replication`; it
 lands on this branch with the freeze), per checkpoint:
 
-- **friction z R²**: 5-fold ridge from z (all 512 scenes) to normalized
-  friction. Primary.
-- **held-out friction**: ridge on train-split z, R² on the 20 corner scenes.
-  Co-reported.
+- **friction z R², nested (primary)**: ridge from column-standardized z
+  (all 512 scenes) to normalized friction.
+  - Outer folds: 5, the same as the fixed readout's.
+  - α picked per outer fold by inner 4-fold CV on the frozen grid 10⁻⁵, 10⁻⁴, …, 10² (8 values).
+  - Code: `scripts/z_readout_alpha.nested_grid`.
+- **friction z R², fixed α = 10⁻³**: the same folds at F31a's α
+  (`probe_appearance.kfold_r2`). Co-reported.
+- **rank of standardized z** (`z_readout_alpha.std_rank`). Co-reported.
+- **held-out friction**: ridge (fixed α = 10⁻³) on train-split z, R² on the
+  20 corner scenes. Co-reported, and a condition for RISES (§5).
 - **PR**: final latent participation ratio.
 - **Descriptive:** density and restitution z R²; held-out behavior gain.
 
-⚑ **Readout strength, flagged, readout not changed.** The primary readout
-is a fixed, near-least-squares ridge (§2), and its out-of-fold R² falls as
-the rank of standardized z rises, whatever z holds. P1, P1′, P2 and P2′
-change what produces z and may change its rank, so part of a Δ could be
-the readout's variance penalty, not friction. Draft 3 adds two
-co-reported quantities per checkpoint: the rank of standardized z, and
-friction R² under the nested readout over the extended grid (0, 10⁻⁵ …
-10², `scripts/z_readout_alpha.py`). Nested α does not remove a rank
-confound. The cloud session proposes a third (cloud-notes `93024de`):
-friction R² from the top-k principal directions of z at one k for every
-arm, with P0's loss from full z to top-k reported, since friction sits in
-low-variance directions a top-k cut may drop. Whether the nested readout
-replaces the fixed one as primary, whether G2 is stated on it, and
-whether the top-k readout is added are decided at the freeze.
+**Why nested is primary (owner, 2026-11-14).** The fixed α is close to
+least squares (§2). Its out-of-fold R² falls as the rank of standardized
+z rises, whatever z holds. P1, P1′, P2 and P2′ change what produces z and
+may change its rank, so a fixed α can put a readout penalty into Δ.
+
+This has been seen. In the Mac's MLX replication of F31a the two arms'
+z differed in rank (mean 89 vs 136; Mac `runs/postfix/RESULTS.md` Step 9).
+- At α 10⁻³ and under the nested readout, H1 reads NULL (Δ −0.025 and −0.024).
+- At a fixed α of 0.1 the same checkpoints read +0.108, t 2.24.
+
+The nested readout adapts α to each z. It reduces a rank confound but
+does not remove it, hence the readout-dependent rule (§5).
+
+On the above-floor baseline the nested readout reads 0.398 (sd 0.057), the
+fixed α 0.378 (0.085). Its picks on loud runs are 10⁻⁵ to 10⁻³. 10⁻⁵ is
+the grid's lower edge, and the minimum-norm fit below it is worse on
+every run (§2). Ctrl runs pick 10 or 10² and read about −0.01.
+
+A rank-controlled top-k readout (cloud-notes `93024de`) is not added (§8).
 
 **Density is compared only within the above-floor runs.** Its legibility
 on fixed features fell from 0.66 to 0.06 with the camera change alone, and
@@ -320,15 +413,17 @@ P0-equivalent z reads it at about zero (§2). A density drop against any
 old-world number is expected from the cameras and is not an arm effect.
 
 **Diagnostic D1 (where friction is lost):** for every P0 checkpoint, the
-per-view latents v_1 … v_16 are read out by nested 5-fold ridge (the
-pilot's `nested_r2`) through five constructions: the plain concatenation
+per-view latents v_1 … v_16 are read out by the primary readout's nested
+5-fold ridge on the same frozen grid (`z_readout_alpha.nested_grid`; the
+pilot's grid stops at 10⁻³ and under-reads low-variance friction, §2),
+through five constructions: the plain concatenation
 (4096 dims, linear in v), and the pilot's nonlinear cross-view features C,
 D, G and H (§2) computed on v instead of on hand-made image statistics.
 A linear readout of the concatenation cannot compute a spread or a
 quantile, so the nonlinear constructions are what can show the information
 is present per view. (D here is a fixed readout feature, not an FNet model.)
 **D1** = the best of the five, mean over P0 seeds; **z₀** = P0's mean
-friction z R².
+friction z R² on the primary (nested) readout.
 - D1 high: D1 ≥ z₀ + 0.15. The information survives per view; the
   average discards it.
 - D1 ≈ z: D1 ≤ z₀ + 0.05. The per-view CNN has already lost it.
@@ -338,26 +433,35 @@ D1 needs a per-view encode helper (added with the freeze).
 
 ## 5. Gates, hypotheses and frozen rules
 
-Every Welch t is two-sample over the listed seeds. Power disclosure,
-recomputed on the above-floor P0-equivalent runs: friction sd 0.085 (MLX,
-5 seeds, at both 50 and 150 epochs). The smallest difference reaching
-t = 2.5 is about 0.134 at n = 5, 0.106 at n = 8 and 0.095 at n = 10 per
-arm; hence 10 loud seeds. Effects between 0.05 and 0.095 will read
-INCONCLUSIVE. The figures assume P0's spread carries over to the mixers
-and their matched controls; that is not measured.
+Every Welch t is two-sample over the listed seeds. Every bar is read on
+the primary (nested) readout unless stated.
+
+**Power disclosure,** recomputed on the above-floor P0-equivalent runs.
+Friction sd is 0.085 on the fixed-α readout (MLX, 5 seeds, at both 50 and
+150 epochs) and 0.057 on the nested one (50 epochs).
+
+The power figures use the larger sd, 0.085, because the variance ratio
+(2.2 on 4 and 4 df) is not established on 5 seeds. At that sd the smallest
+difference reaching t = 2.5 is about 0.134 at n = 5, 0.106 at n = 8 and
+0.095 at n = 10 per arm; hence 10 loud seeds. At sd 0.057 it would be
+0.064 at n = 10. Effects between 0.05 and the detectable difference will
+read INCONCLUSIVE. The figures assume P0's spread carries over to the
+mixers and their matched controls; that is not measured.
 
 **Gates (read first):**
 - G1 health: every run's final PR ≥ 8.
 - G2 control, **the memorisation guard**: every ctrl run of an arm has
-  friction z R² < 0.10. The essence head regresses friction from z on the
+  friction z R² < 0.10 (nested; on the above-floor baseline ctrl reads
+  −0.011 to −0.015, against −0.09 to −0.22 at the fixed α, whose negative
+  values are its variance penalty, §2). The essence head regresses friction from z on the
   training scenes, and the 5-fold readout covers those same scenes, so a
   higher-capacity mixer could raise the readout by fitting that target
   rather than by reading highlights. On ctrl the pixels carry no material,
   so the same fitting would show there. A G2 failure withholds that arm's
   verdict.
 - G3 apparatus (reported, does not withhold): P0's loud mean is within
-  ±0.10 of the above-floor 50-epoch baseline, 0.378. Verdicts compare
-  against the P0 rerun either way.
+  ±0.10 of the above-floor 50-epoch baseline, 0.398 nested (0.378 at the
+  fixed α, co-reported). Verdicts compare against the P0 rerun either way.
 
 **H1 — stats mixing (P1 vs P1′)** and **H2 — attention mixing (P2 vs
 P2′)**, primary, each graded on Δ = mean friction z R²(mixer) − mean(its
@@ -369,12 +473,21 @@ matched control), with Δ_h the same difference on the held-out readout:
 - FALLS: Δ ≤ −0.10 and t ≤ −2.5
 - otherwise INCONCLUSIVE
 
-⚑ **Reachability of RISES, flagged, bar not changed.** The bar was set
+**Readout-dependent rule (owner, 2026-11-14).** Each comparison is also
+graded, by the same bars, on the fixed-α readout. If either readout grades
+RISES or FALLS and the other does not grade the same, the verdict is
+**READOUT-DEPENDENT**: both gradings are reported and no RISES or FALLS is
+claimed. If both grade NULL or INCONCLUSIVE, the primary's grade stands
+and both are reported. The two Δ's and the two arms' mean standardized
+ranks are reported with every verdict.
+
+⚑ **Reachability of RISES, flagged, bar not changed; OPEN.** The bar was set
 when the best fixed cross-view features exceeded mean-pooled z by 0.37
-(0.636 vs 0.267). On the above-floor worlds the margin is 0.17–0.19
-(D 0.547, H 0.554, D′ 0.565 vs 0.378). RISES now needs a mixer to recover
-more than half of that margin over its control, and the detectable
-difference at n = 10 (0.095) sits close to the 0.10 bar. Separately, on
+(0.636 vs 0.267). On the above-floor worlds the margin is 0.15–0.17
+over nested z (D 0.547, H 0.554, D′ 0.565 vs 0.398; 0.17–0.19 over the
+fixed α's 0.378). RISES now needs a mixer to recover 60–67 % of that
+margin over its control, and the detectable difference at n = 10
+(0.095 at the conservative sd) sits close to the 0.10 bar. Separately, on
 fixed features the held-out sign favours the average on these worlds
 (§2), so Δ_h > 0 is not assured even when the 5-fold readout rises.
 Whoever freezes decides whether to keep the bar, justify a new one from
@@ -391,39 +504,51 @@ mixing beat order-free statistics?
 
 ## 6. Predictions (registered at real odds)
 
-⚑ **Draft 3: the probabilities below are draft 2's, not revised.** Their
-rationales rest on old-camera numbers as noted under each. They are
-re-registered, with new odds, in the freeze commit.
+Re-registered for the above-floor worlds (owner, 2026-11-14). They replace
+draft 2's (P1 45 %, P2 30 %), whose rationales rested on old-camera
+numbers. They are hashed in the freeze commit.
 
-- **P1: H2 (attention vs its matched control) RISES 45 %**, NULL or
-  INCONCLUSIVE 50 %, FALLS 5 %. The pilot shows cross-view structure worth
-  about +0.3 to +0.45 over the averaged view on fixed features. Against it:
-  the per-view CNN's global average may already have flattened the
-  highlight, which D1 will show.
-  ⚑ On the above-floor worlds that structure is worth +0.14 to +0.16 over
-  the averaged view (+0.17 to +0.19 over P0-equivalent z), and held-out
-  favours the average.
-- **P2: H1 (stats vs its matched control) RISES 30 %.** The pilot's C
-  (mean + std) gained only +0.13 over A on fixed features.
-  ⚑ On the above-floor worlds C reads 0.371 *below* A (0.037 vs 0.408):
-  the rationale's sign flips.
-- **P3: G2 passes for every arm, 90 %.**
+- **P1: H2 (attention vs its matched control) RISES 35 %**; NULL or
+  INCONCLUSIVE 55 %, READOUT-DEPENDENT 5 %, FALLS 5 %.
+  - For: on the above-floor photos, fixed cross-view statistics beat the
+    averaged set by +0.14 to +0.16 (+0.15 to +0.17 over P0-equivalent
+    nested z).
+  - For: on spatially coarse pixel features the view average loses nearly
+    all friction while the 16 views side by side keep it (8 × 8: 0.005 vs
+    0.630). The encoder pools each view over H × W first, which is the
+    coarse case (§1).
+  - Against: that room is only 1.5–1.7 times the 0.10 bar, so the mixer must
+    realise most of it over a control with the same capacity.
+  - Against: on fixed features the held-out sign favours the average.
+  - Against: the per-view CNN may already have lost the highlight (D1).
+- **P2: H1 (stats vs its matched control) RISES 20 %**; NULL or
+  INCONCLUSIVE 70 %, READOUT-DEPENDENT 5 %, FALLS 5 %.
+  - For: the spread of v_i across views is cross-view information the mean
+    lacks.
+  - Against: on fixed features the same construction (C, mean plus spread)
+    reads 0.037, far below the averaged set A (0.408). The mechanism is not
+    measured, but the pilot gives a stats mixer no support.
+- **P3: G2 passes for every arm, 90 %.** On the nested readout the
+  P0-equivalent ctrl runs read about −0.01; the risk is a higher-capacity
+  mixer fitting the essence target.
 - **P4 (descriptive):** restitution z R² stays ≥ 0.97 in every arm
   (brightness reads the same from every view; nothing to gain).
-  ⚑ Old-world-derived. Above-floor P0-equivalent z reads 0.975–0.987;
-  fixed features 0.939–0.975.
-- **P5: D1 reads "high" (≥ z₀ + 0.15), 55 %.** Thresholds are relative to
-  z₀, so the switch does not change the rule; the odds are draft 2's.
+  Above-floor P0-equivalent z reads 0.975–0.987; fixed features
+  0.939–0.975.
+- **P5: D1 reads "high" (≥ z₀ + 0.15), 55 %.** Kept from draft 2.
+  Thresholds are relative to z₀, now both on the nested readout.
 
 ## 7. What each outcome means
 
 - **H2 or H1 RISES:** the view average was a bottleneck *on the
-  above-floor cameras*, beyond what the camera fix already recovered (A
-  0.177 → 0.408, §2). The verdict is relative to the above-floor average
-  and to P0 on the same worlds; the camera fix's share is not credited to
-  the mixer. The F28/F31a legibility arguments, built on the old-camera
-  averaged view, need restating either way. Adopting a pooling variant as
-  the default is a separate decision.
+  above-floor cameras*. The verdict is relative to the mixer's matched
+  control and to P0 on the same worlds, never to an old-camera number.
+  The F28/F31a legibility arguments, built on the old-camera averaged
+  view, need restating either way. Adopting a pooling variant as the
+  default is a separate decision.
+- **READOUT-DEPENDENT:** whether the mixer helps depends on how z is read.
+  Typically that is because the arms' z differ in rank. Not established
+  either way. The ranks and both Δ's are the finding.
 - **NULL, D1 high:** the information survives per view but the mixer does
   not learn to use it under this loss. The next question is the training
   signal, not the architecture.
@@ -443,14 +568,19 @@ re-registered, with new odds, in the freeze commit.
   the view index has no principled content here.
 - No trajectory head (F31a collapse), no `pm_big` (old-camera pilot found
   nothing; above-floor pilot not run), no unity measurement.
-- **Density.** The 15–65° band costs most of the photos' density content
-  (§2). Whether to change the band is an owner decision, OPEN at this
-  draft; this preregistration takes the band as given and makes no
-  density claim.
-- The pilot's features are post hoc, chosen after seeing the
-  mean-view result; they motivate the arms but are not graded.
-- The cloud diagnostics cited in §1–§2 (MuJoCo 3.17 re-renders) are not
-  reproduced on the Mac's photos and carry no weight in any bar.
+- **Density.** The 15–65° band costs about 40 % of the photos' density
+  (§2). The owner keeps the band for this preregistration (2026-11-14). It
+  makes no density claim. Cameras chosen for density belong in a separate
+  world design.
+- **No rank-controlled (top-k) readout.** Dropped (owner, 2026-11-14).
+  Its main question, whether 150 epochs scored lower through rank or
+  through less friction, stopped bearing on a decision once the budget
+  was fixed at 50. The rank report and the readout-dependent rule (§4–§5)
+  cover the arms.
+- The pilot's features and the per-view pixel readout are post hoc. They
+  motivate the arms but are not graded.
+- The cloud's MuJoCo 3.17 re-renders agree with the Mac's photos (§2) but
+  carry no weight in any bar.
 
 ## 9. Reproduce
 
@@ -462,8 +592,7 @@ Worlds (from `claude/camera-above-floor` @ `b7a62e2`):
         --coupling-alpha $2 --coupling-gain $3 --camera-layout above
     done
 
-Gate (`scripts/compare_worlds.py`, commit `7f9fc18`; ⚑ local only at this
-draft, must be on GitHub before the freeze):
+Gate (`scripts/compare_worlds.py`, commit `7f9fc18`, on PR #48):
 
     python scripts/compare_worlds.py data/pm_f31fix_loud data/pm_f31fix_loud_cam
     python scripts/compare_worlds.py data/pm_f31fix_ctrl data/pm_f31fix_ctrl_cam
@@ -481,9 +610,16 @@ the frozen budget is 50; §2's 150-epoch comparison used `--epochs 150`):
     python scripts/f31_measure_mlx.py --data data/pm_f31fix_loud_cam \
       --runs runs/xv_cam/loud_joint_e50_s* --out runs/xv_cam/loud_joint_e50.json
 
+Per-view pixel readout (§2):
+
+    python scripts/perview_readout.py --data data/pm_f31fix_loud data/pm_f31fix_loud_cam \
+      data/pm_f31fix_ctrl data/pm_f31fix_ctrl_cam --out runs/postfix/perview.json
+    # block grid: add --block 8 or --block 32; density on a log scale: add --log-density
+
 Readout-strength diagnostic (§2; needs MLX):
 
     python scripts/z_readout_alpha.py --data data/pm_f31fix_loud_cam \
       --runs runs/xv_cam/loud_joint_e50_s* runs/xv_cam/loud_joint_e150_s* \
       --out runs/xv_cam/readout_alpha_loud.json
     # extended grid (fac9c7d): add --alphas 0 1e-5 1e-4 1e-3 1e-2 1e-1 1 10
+    # frozen primary grid (§4): --alphas 1e-5 1e-4 1e-3 1e-2 1e-1 1 10 100
