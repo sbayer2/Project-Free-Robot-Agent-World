@@ -106,6 +106,15 @@ def test_block_features_shape_and_means():
     assert np.isclose(f[0], img[:2, :2, 0].mean())
 
 
+def test_coarsen_equals_direct_block_means():
+    rng = np.random.default_rng(6)
+    img = rng.random((128, 128, 3))
+    f16 = S.block_features(img, 16)
+    assert np.allclose(S.coarsen(f16, 16, 8), S.block_features(img, 8))
+    stack = np.stack([f16, f16 * 0.5])[None]  # leading (views, scenes) dims
+    assert S.coarsen(stack, 16, 8).shape == (1, 2, 8 * 8 * 3)
+
+
 def test_sphere_layout_matches_render_views_driving():
     from pseudomarble.data import samples
 
@@ -118,8 +127,14 @@ def test_sphere_layout_matches_render_views_driving():
     assert abs(abs(ang[15][0]) - 90) < 1e-9 and abs(ang[15][1]) < 1e-9
 
 
-STEP8 = {"sphere": {"mean": 0.612, "concat": 0.760},
-         "above": {"mean": 0.597, "concat": 0.616}}
+# The Mac's Step 8 nested friction values on its 3.9.0 photos (runs/postfix/
+# perview.json at 16x16; perview_block8.json at 8x8). The 8x8 cells are the
+# regime CROSSVIEW_POOLING section 1 rests on, since the trained encoder pools
+# each view over H x W before the view mean.
+STEP8 = {16: {"sphere": {"mean": 0.612, "concat": 0.760},
+              "above": {"mean": 0.597, "concat": 0.616}},
+         8: {"sphere": {"mean": 0.107, "concat": 0.717},
+             "above": {"mean": 0.005, "concat": 0.630}}}
 
 
 @pytest.mark.skipif(os.environ.get("PM_SLOW") != "1", reason="slow: set PM_SLOW=1")
@@ -131,12 +146,18 @@ def test_reproduces_step8_friction_within_003(layout):
     if layout == "above" and not hasattr(samples, "above_floor_camera_angles"):
         pytest.skip("above layout lands with PR #48")
     mats = S.sample_materials(512, 1234, 1.0, 8.0)
-    feats = S.render_features(mats, {layout: S.layout_angles(layout)})[layout]
+    f16 = S.render_features(mats, {layout: S.layout_angles(layout)})[layout]
     fr = S.targets(mats)["friction"]
-    xm = feats.mean(0)
-    xc = feats.transpose(1, 0, 2).reshape(feats.shape[1], -1)
     alphas = tuple(10.0 ** k for k in range(-3, 7))  # the Mac's Step 8 grid
-    got = {"mean": S.cv_readout(xm, fr, alphas=alphas)["nested"],
-           "concat": S.cv_readout(xc, fr, alphas=alphas)["nested"]}
-    for pool, want in STEP8[layout].items():
-        assert abs(got[pool] - want) <= 0.03, (layout, pool, got[pool], want)
+    for block, feats in ((16, f16), (8, S.coarsen(f16, 16, 8))):
+        xm = feats.mean(0)
+        xc = feats.transpose(1, 0, 2).reshape(feats.shape[1], -1)
+        got = {"mean": S.cv_readout(xm, fr, alphas=alphas)["nested"],
+               "concat": S.cv_readout(xc, fr, alphas=alphas)["nested"]}
+        print(f"[step8] {layout} {block}x{block} {got}")
+        for pool, want in STEP8[block][layout].items():
+            assert abs(got[pool] - want) <= 0.03, (layout, block, pool, got[pool], want)
+    # The 8x8 gap (concat minus mean) is what section 1 rests on; at 16x16 the
+    # above-layout gap (0.019) sits inside the tolerance, at 8x8 it doesn't.
+    want_gap = STEP8[8][layout]["concat"] - STEP8[8][layout]["mean"]
+    assert got["concat"] - got["mean"] >= want_gap - 0.06

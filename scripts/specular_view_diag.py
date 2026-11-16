@@ -154,6 +154,18 @@ def block_features(img: np.ndarray, block: int) -> np.ndarray:
     return img.reshape(block, h // block, block, w // block, c).mean((1, 3)).ravel()
 
 
+def coarsen(feats: np.ndarray, block_from: int, block_to: int) -> np.ndarray:
+    """Exact block means at a coarser grid from finer block-mean features
+    (block means compose: an 8x8 block is the mean of 2x2 adjacent 16x16
+    blocks). ``feats``: (..., block_from*block_from*3)."""
+    if block_from % block_to:
+        raise ValueError("block_to must divide block_from")
+    r = block_from // block_to
+    lead = feats.shape[:-1]
+    x = feats.reshape(*lead, block_to, r, block_to, r, 3)
+    return x.mean(axis=(-4, -2)).reshape(*lead, block_to * block_to * 3)
+
+
 def render_features(mats, angle_sets: dict, resolution: int = 128,
                     block: int = 16, radius: float = 2.6, shape: str = "box",
                     lighting: str = "flat") -> dict:
