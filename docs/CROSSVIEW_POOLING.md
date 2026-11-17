@@ -1,13 +1,42 @@
 # Cross-view pooling: does replacing the view average let z hold friction?
 
-**Status: DRAFT preregistration, 2026-10-27; draft 3, 2026-11-14. Not
-frozen.** It freezes in a commit made once the implementation (all three
-backends, with cross-backend tests, per CLAUDE.md) and
-`scripts/crossview_verdicts.py` are committed, and before any
-pooling-variant model is trained on a loud world. The one pre-freeze training is the stability check
-on the ctrl world (§3), from which no essence readout is computed. Until
-then every number, arm and bar here can change. F-number: unassigned (the
-owner assigns it at the freeze).
+**Status: FROZEN preregistration, 2026-11-17.** Draft 1 is dated
+2026-10-27 and draft 3 2026-11-14. This commit is the freeze, made on the
+owner's go. F-number: assigned by the owner after the freeze, in a commit
+that changes nothing else.
+
+The freeze conditions are met:
+- **Implementation.** `view_pool` is in all three backends with
+  cross-backend tests. The numpy reference and MLX are tested on the Mac.
+  Torch parity passes for all five arms on the cloud (PR #52 head
+  `f66943a`, cloud-notes `9855e04`). Code changed after that commit
+  touches only the readout and verdict scripts, not the backends.
+- **Scripts.** `scripts/crossview_measure.py` and
+  `scripts/crossview_verdicts.py` are committed with rule tests.
+- **No loud-world training.** No pooling-variant model has been trained on
+  a loud world. The only pooling-variant runs are the four ctrl-world
+  stability runs (§3), and no essence readout was computed from them.
+
+**§6 is hashed.** Its SHA-256, over the bytes from the `## 6.` heading
+line up to, not including, the `## 7.` heading line, is
+
+    d4f58988fb900aac788ed889e1aa3e0e96a5a4f981939cea67adf643c10c0e6c
+
+Recompute it with:
+
+    awk '/^## 6\. /{p=1} /^## 7\. /{p=0} p' docs/CROSSVIEW_POOLING.md | shasum -a 256
+
+The cloud session records the freeze commit and this hash, with a
+timestamp, in `origin/claude/cloud-notes`. From here on, any change to
+§3–§6 (arms, readouts, gates, bars, rules or predictions) is a dated,
+disclosed amendment, and none is made after a loud pooling run starts.
+
+**Disclosed at the freeze.** §6 stands as the owner accepted it
+(2026-11-17), so it is hashed unchanged. Its P1 rationale cites the
+margin over P0-equivalent nested z as +0.15 to +0.17, or 1.5–1.7 times the
+0.10 bar. That margin came from the GPU-encoded baseline (0.398). On the
+frozen CPU baseline (0.402, §2) it is +0.15 to +0.16, or 1.5–1.6 times the
+bar. The odds are unchanged.
 
 *Revision 2026-10-27 (draft 2), from the cloud session's review: matched
 no-mixing controls P1′/P2′ become the primary comparisons; D1 gains
