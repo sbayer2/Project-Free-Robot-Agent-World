@@ -208,3 +208,15 @@ def test_encode_reads_an_mlx_run_and_check_cameras_guards_attn_runs(tmp_path):
     TV._world(str(other), layout="sphere")
     with pytest.raises(SystemExit, match="cameras differ"):
         M.check_cameras(enc["cfg"], str(other))
+
+
+def test_d1_refuses_a_world_whose_scenes_order_their_cameras_differently(tmp_path,
+                                                                         monkeypatch):
+    """D1's concat and DFT index views by position; the check runs before any
+    image is loaded (this world has none)."""
+    import test_view_pool as TV
+    TV._world(str(tmp_path), perturb=1)
+    monkeypatch.setattr(sys, "argv", ["crossview_measure.py", "--data", str(tmp_path),
+                                      "--runs", "unused", "--d1"])
+    with pytest.raises(ValueError, match="different cameras"):
+        M.main()

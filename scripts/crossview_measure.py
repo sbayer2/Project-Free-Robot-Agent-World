@@ -152,8 +152,13 @@ def main() -> None:
     ap.add_argument("--out", default=None)
     args = ap.parse_args()
 
+    ds = PseudoMarbleDataset(args.data)
+    if args.d1:
+        # D1's concat and DFT constructions index views by position, so every
+        # scene must store the same cameras in the same order (raises if not).
+        ds.camera_directions()
     imgs, E, splits = load_world(args.data)
-    Y = np.array([s.behavior_target(True) for s in PseudoMarbleDataset(args.data).scenes])
+    Y = np.array([s.behavior_target(True) for s in ds.scenes])
     report = {"data": args.data, "grid": list(FROZEN_GRID), "axes": list(AXES),
               "code": git_head(), "runs": {}}
     print(f"[xv-measure] {args.data}: {len(E)} scenes")

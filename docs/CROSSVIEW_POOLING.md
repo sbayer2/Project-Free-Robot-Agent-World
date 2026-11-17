@@ -411,6 +411,10 @@ revised.** The values below are read from each run's own `metrics.json`
 | P2 `attn` | 0.221 → 0.153 | 0.155 | 41.4–66.3 | 66.3 | none |
 | P2′ `attn_ctrl` | 0.220 → 0.153 | 0.155 | 13.7–55.4 | 55.4 | none |
 
+- P2′'s PR dipped to 13.7 during training before recovering to 55.4. That
+  is above the bar of 8, but no other arm dipped that far. It is recorded
+  here so it is no surprise later, and nothing is changed for it (cloud
+  review, `2291c16`).
 - Each run took about 3 min on the Mac (P2 and P2′ about 3.1 min).
 - The 115 runs therefore come to about 6 h.
 
@@ -537,7 +541,9 @@ The figures assume P0's spread carries over to the mixers and their
 matched controls; that is not measured.
 
 **Gates (read first). A G1 or G2 failure withholds every comparison that
-includes the failing arm (the F31a convention):**
+includes the failing arm.** For G1 this rule is new in this draft
+(2026-11-17), adopted from F31a ("any failure withholds the dependent
+verdicts") before the freeze; drafts 1–3 gave G1 no stated consequence.
 - G1 health: every run's final PR ≥ 8 (a non-finite PR fails).
 - G2 control, **the memorisation guard**: every ctrl run of an arm has
   friction z R² < 0.10 (nested; on the above-floor baseline ctrl reads
@@ -592,7 +598,11 @@ arm better than today's encoder, whatever the reason).
 beat order-free statistics?
 
 The secondary comparisons use the same bars (Δ_h > 0 included), the same
-readout-dependent rule and the same NULL bound as H1 and H2.
+readout-dependent rule and the same NULL bound as H1 and H2. Every arm is
+scored on the same 20 held-out scenes, so Δ_h is correlated across
+comparisons. When several comparisons pass or fail the Δ_h condition
+together, that is reported once, as shared, not as independent
+confirmations.
 `scripts/crossview_verdicts.py` applies every rule in this section, and
 `tests/test_crossview_verdicts.py` tests each one on synthetic reports.
 
