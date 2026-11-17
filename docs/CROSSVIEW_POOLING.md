@@ -497,8 +497,16 @@ is at most 0.05 + t₀.₉₅·SE, at sd 0.085:
 
 So at n = 20 every NULL also excludes an effect of the bar's size. That
 holds while the realised sd stays ≤ 0.094. `crossview_verdicts.py` reports
-the realised upper bound with every NULL, so a wider spread in the mixers
-shows. Other consequences, at sd 0.085:
+the realised bound with every NULL, so a wider spread in the mixers shows.
+The realised bound is |Δ| + t₀.₉₅·SE, with the Welch SE and df on the
+primary readout: the far end of the 90 % interval, either sign.
+
+**If a realised bound reaches 0.10** (the arms spread wider than
+assumed), the verdict stays NULL and is reported with its bound, labelled
+**NULL, bound above bar**. It does not exclude an effect of the bar's size.
+No seeds are added after the runs: a seed count chosen after seeing the
+spread would make the design depend on the data. (Cloud review, cloud-notes
+`e06f63f`.) Other consequences, at sd 0.085:
 - A true effect of 0.15 reaches Δ ≥ 0.10 with probability about 0.97
   (0.91 at n = 10). Δ_h > 0 is a further condition.
 - A true effect of exactly 0.10 still reaches the bar only about half the
