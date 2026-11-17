@@ -382,3 +382,17 @@ def test_every_arm_trains_on_a_fixed_batch_in_mlx(pool):
         mx.eval(model.parameters(), opt.state)
         losses.append(float(loss))
     assert all(math.isfinite(x) for x in losses) and losses[-1] < 0.5 * losses[0]
+
+
+def test_config_round_trips_through_metrics_json():
+    """train.py writes cfg.__dict__ to metrics.json; the loader must give the
+    same config back, view_dirs included, and an old run loads as "mean"."""
+    from pseudomarble.config import model_config_from_dict
+    cfg = _cfg("attn")
+    back = model_config_from_dict(json.loads(json.dumps(cfg.__dict__)))
+    assert back == cfg and isinstance(back.view_dirs[0], tuple)
+    hash(back)                                        # frozen and hashable again
+    old = {k: v for k, v in json.loads(json.dumps(ModelConfig().__dict__)).items()
+           if not k.startswith("view_")}
+    old["retired_field"] = 1
+    assert model_config_from_dict(old) == ModelConfig()

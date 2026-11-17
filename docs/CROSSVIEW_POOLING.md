@@ -499,7 +499,9 @@ So at n = 20 every NULL also excludes an effect of the bar's size. That
 holds while the realised sd stays ≤ 0.094. `crossview_verdicts.py` reports
 the realised bound with every NULL, so a wider spread in the mixers shows.
 The realised bound is |Δ| + t₀.₉₅·SE, with the Welch SE and df on the
-primary readout: the far end of the 90 % interval, either sign.
+primary readout: the far end of the 90 % interval, either sign. Each
+arm's realised sd is reported beside it, so a reader can see why a bound
+moved.
 
 **If a realised bound reaches 0.10** (the arms spread wider than
 assumed), the verdict stays NULL and is reported with its bound, labelled

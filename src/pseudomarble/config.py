@@ -182,6 +182,24 @@ VIEW_LN_EPS = 1e-5     # LayerNorm epsilon in the attn block (the MLX/torch defa
 VIEW_MASK_NEG = -1e9   # additive score for masked (cross-view) pairs in attn_ctrl
 
 
+def model_config_from_dict(d: dict) -> "ModelConfig":
+    """Rebuild a ModelConfig from a run's metrics.json ``config`` (JSON turns
+    tuples into lists). Unknown keys are dropped, so older and newer runs
+    both load; missing keys take their defaults (an old run is view_pool
+    "mean")."""
+    known = ModelConfig.__dataclass_fields__.keys()
+    out = {}
+    for k, v in d.items():
+        if k not in known:
+            continue
+        if k == "view_dirs":
+            v = tuple(tuple(float(x) for x in u) for u in v)
+        elif isinstance(v, list):
+            v = tuple(v)
+        out[k] = v
+    return ModelConfig(**out)
+
+
 def check_view_pool(cfg: "ModelConfig", num_views: int = 0) -> None:
     """Raise ValueError if the pooling settings cannot build or cannot take
     ``num_views`` views (0 = skip the view-count check)."""
