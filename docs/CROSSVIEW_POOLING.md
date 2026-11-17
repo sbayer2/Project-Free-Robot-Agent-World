@@ -24,8 +24,8 @@ epochs). §3–§9 take the cloud session's review of the switch (cloud-notes
 `8b0fdbb`, `19a367f`, `f342299`). A readout-strength diagnostic (§2, end;
 `scripts/z_readout_alpha.py`) adds two co-reported readouts (§4). Bars
 and predictions that rested on old-camera numbers were first flagged ⚑.
-All are now re-derived except one, the RISES bar's reachability (§5),
-which stays ⚑ and OPEN for the owner.*
+All are now re-derived. The last, the RISES bar's reachability (§5), was
+closed by the owner on 2026-11-17.*
 
 *Owner decisions, 2026-11-14:
 - The epoch budget is 50 (§3).
@@ -35,6 +35,12 @@ which stays ⚑ and OPEN for the owner.*
 - A ctrl-world stability check runs before the freeze (§3).
 - The rank-controlled top-k readout is dropped (§8).
 - The 15–65° camera band is kept (§8).*
+
+*Owner decisions, 2026-11-17:
+- §6 stands as written.
+- The RISES bar stays at Δ ≥ 0.10, and loud seeds go from 10 to 20 per
+  arm, so that a NULL means no effect of the bar's size, not too few
+  seeds to tell (§5). The reachability flag is closed.*
 
 *Correction, 2026-11-14 (§1–§2 rewritten). The draft as pushed through
 `c08b173` said in §1 that the camera fix raised "what survives the
@@ -307,7 +313,7 @@ squares. This diagnostic is why the nested readout is now primary (§4).
 
 MLX (canonical), F27b recipe: lr 2e-4, batch 16, 128 px, 16 views, **50
 epochs**. **Joint arm only: no trajectory head** (the F31a head collapsed
-on both backends). Worlds `data/pm_f31fix_loud_cam` (seeds 0–9) and
+on both backends). Worlds `data/pm_f31fix_loud_cam` (seeds 0–19) and
 `data/pm_f31fix_ctrl_cam` (seeds 0–2). `pm_big` is not run: the
 old-camera pilot found nothing there to recover, and the above-floor
 pilot was not run on `pm_big`.
@@ -316,8 +322,9 @@ pilot was not run on `pm_big`.
 epochs lowers the friction readout, fixed α and nested, in 5 of 5 seeds (whether through z's
 higher rank or less friction is unresolved) and raises held-out in 4 of 5,
 both modestly, at three times the cost (about 3 min per 50-epoch run,
-about 9 min per 150-epoch run on the Mac; 65 runs ≈ 3.5 h vs ≈ 10 h, P2
-and P2′ somewhat more). Not chosen: 150, whose case was a separate,
+about 9 min per 150-epoch run on the Mac; at the 10 seeds then planned,
+65 runs ≈ 3.5 h vs ≈ 10 h; at 20 seeds, 115 runs ≈ 6 h vs ≈ 17 h; P2 and
+P2′ somewhat more). Not chosen: 150, whose case was a separate,
 unpublished observation that on `pm_big` the held-out behavior gain for
 density kept rising to epoch 150; that readout is not primary here.
 
@@ -351,13 +358,15 @@ only mixing. P1′ and P2′ keep the added capacity and remove the mixing, so
 the primary hypotheses (§5) compare each mixer with its own control and
 test the mixing itself. Comparisons with P0 are reported as well.
 
-65 runs in all (5 arms × 13).
+115 runs in all: 5 arms × (20 loud + 3 ctrl). Ctrl stays at 3 seeds.
+G2 requires every ctrl run to pass, so more ctrl runs would add chances
+of a false failure without adding power to H1 or H2.
 
 **Stability check, before the freeze (owner, 2026-11-14).** The mixer arms
 have never been trained. Once `view_pool` is implemented, one run each of
 P1, P1′, P2 and P2′ trains on `data/pm_f31fix_ctrl_cam` at seed 100. Seed
 100 is not one of the experiment's seeds, and these runs are not among the
-65. On ctrl the photos carry no material, so these runs can show nothing
+115. On ctrl the photos carry no material, so these runs can show nothing
 about the hypotheses. From them, only these are read:
 - the training-loss curve;
 - the per-epoch latent PR;
@@ -447,11 +456,34 @@ Friction sd is 0.085 on the fixed-α readout (MLX, 5 seeds, at both 50 and
 
 The power figures use the larger sd, 0.085, because the variance ratio
 (2.2 on 4 and 4 df) is not established on 5 seeds. At that sd the smallest
-difference reaching t = 2.5 is about 0.134 at n = 5, 0.106 at n = 8 and
-0.095 at n = 10 per arm; hence 10 loud seeds. At sd 0.057 it would be
-0.064 at n = 10. Effects between 0.05 and the detectable difference will
-read INCONCLUSIVE. The figures assume P0's spread carries over to the
-mixers and their matched controls; that is not measured.
+difference reaching t = 2.5 is about 0.134 at n = 5, 0.095 at n = 10 and
+0.067 at n = 20 per arm (0.045 at n = 20 at sd 0.057). At 20 loud seeds
+the t condition binds below the 0.10 bar, so RISES turns on Δ ≥ 0.10
+itself.
+
+**Why 20 loud seeds (owner, 2026-11-17).** NULL is graded on the point
+estimate (|Δ| < 0.05). The one-sided 95 % upper bound on Δ for any NULL
+is at most 0.05 + t₀.₉₅·SE, at sd 0.085:
+
+| loud seeds per arm | NULL's largest upper bound | excludes Δ = 0.10 |
+|---|---|---|
+| 10 | 0.116 | no |
+| 15 | 0.103 | no |
+| 17 | 0.099 | yes (the minimum) |
+| 20 | 0.095 | yes |
+
+So at n = 20 every NULL also excludes an effect of the bar's size. That
+holds while the realised sd stays ≤ 0.094. `crossview_verdicts.py` reports
+the realised upper bound with every NULL, so a wider spread in the mixers
+shows. Other consequences, at sd 0.085:
+- A true effect of 0.15 reaches Δ ≥ 0.10 with probability about 0.97
+  (0.91 at n = 10). Δ_h > 0 is a further condition.
+- A true effect of exactly 0.10 still reaches the bar only about half the
+  time, since the bar is on the point estimate.
+- Effects between 0.05 and 0.10 read INCONCLUSIVE.
+
+The figures assume P0's spread carries over to the mixers and their
+matched controls; that is not measured.
 
 **Gates (read first):**
 - G1 health: every run's final PR ≥ 8.
@@ -487,20 +519,19 @@ READOUT-DEPENDENT, not INCONCLUSIVE. Only when both grade NULL or
 INCONCLUSIVE does the primary's grade stand, with both reported. The two Δ's and the two arms' mean standardized
 ranks are reported with every verdict.
 
-⚑ **Reachability of RISES, flagged, bar not changed; OPEN.** The bar was set
-when the best fixed cross-view features exceeded mean-pooled z by 0.37
-(0.636 vs 0.267). On the above-floor worlds the margin is 0.15–0.17
-over nested z (D 0.547, H 0.554, D′ 0.565 vs 0.398; 0.17–0.19 over the
-fixed α's 0.378). RISES now needs a mixer to recover 60–67 % of that
-margin over its control, and the detectable difference at n = 10
-(0.095 at the conservative sd) sits close to the 0.10 bar. Separately, on
-fixed features the held-out sign favours the average on these worlds
-(§2), so Δ_h > 0 is not assured even when the 5-fold readout rises.
-Whoever freezes decides whether to keep the bar, justify a new one from
-the new margin, or add seeds.
+**Reachability of RISES: closed (owner, 2026-11-17); bar kept at 0.10,
+seeds added.** The bar was set when the best fixed cross-view features
+exceeded mean-pooled z by 0.37 (0.636 vs 0.267). On the above-floor worlds
+the margin is 0.15–0.17 over nested z (D 0.547, H 0.554, D′ 0.565 vs
+0.398; 0.17–0.19 over the fixed α's 0.378). RISES needs a mixer to recover
+60–67 % of that margin over its control. At n = 10 the detectable
+difference (0.095 at the conservative sd) sat close to the 0.10 bar; at
+n = 20 it is 0.067, below it. Separately, on fixed features the held-out
+sign favours the average on these worlds (§2), so Δ_h > 0 is not assured
+even when the 5-fold readout rises.
 
-Two primary comparisons. At df ≈ 18, t ≥ 2.5 is about p = 0.011 one-sided
-per test, so about 0.02 family-wise; disclosed, not corrected.
+Two primary comparisons. At df ≈ 38, t ≥ 2.5 is about p = 0.008 one-sided
+per test, so about 0.017 family-wise; disclosed, not corrected.
 
 **Reported against P0, same bars, secondary:** P1, P1′, P2, P2′ each vs
 P0 (is any arm better than today's encoder, whatever the reason).
