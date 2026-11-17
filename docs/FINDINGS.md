@@ -2908,8 +2908,11 @@ banded by shrinkage at α 1e-3, f4f0933 → cccb82d, 1f0a43b).**
    - On Step 10, joint-trained z moved ≤ 0.012, so readouts of conventionally
      trained models are probably safe. **None outside F31a has been
      re-checked.**
-   - `docs/F31A_MLX_REPLICATION.md` exists only on unmerged PR #46 and still
-     reports the GPU readouts.
+   - `docs/F31A_MLX_REPLICATION.md` is not on main. It lives on branch
+     `claude/f31a-mlx-replication` (e5cbc19, no PR) and still reports the GPU
+     readouts. The Adam-bias-correction FALLS run (Δ −0.216, t −4.47) was
+     encoded by `f31_measure_mlx.py` on the default GPU, so it is the one that
+     stays unverified.
 
 **Open (owner calls, listed on PR #52):**
 - the pooling prereg's frozen encode device (CPU recommended);
