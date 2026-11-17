@@ -21,6 +21,9 @@ Rules, in order:
 - D1: the best of the five per-view constructions (mean over P0 seeds) against
   z0, P0's mean nested friction: high (>= z0 + 0.15), about z (<= z0 + 0.05),
   otherwise unresolved.
+- Every report must be encoded on the frozen device (MLX CPU, exact float32).
+  The friction readouts under 1e-4 relative input noise are descriptive and
+  grade nothing.
 
     python scripts/crossview_verdicts.py --root runs/xv
 """
@@ -34,6 +37,7 @@ import os
 import statistics as st
 
 ARMS = ("P0", "P1", "P1c", "P2", "P2c")
+FROZEN_DEVICE = "cpu"
 VIEW_POOL = {"P0": "mean", "P1": "stats", "P1c": "stats_ctrl", "P2": "attn",
              "P2c": "attn_ctrl"}
 MIN_PR = 8.0
@@ -145,12 +149,18 @@ def descriptive(reps: dict) -> dict:
         out[a] = {k: [r["z_r2_fixed"][k] for r in rows] for k in ("density", "restitution")}
         out[a]["heldout_gain"] = [r["heldout_gain"] for r in rows]
         out[a]["latent_pr"] = [r["latent_pr"] for r in rows]
+        if all("noise" in r for r in rows):
+            out[a]["noise"] = {k: [r["noise"][k] for r in rows]
+                               for k in ("rel", "friction_nested", "friction_fixed")}
     return out
 
 
 def check_arms(reps: dict) -> None:
     for a in ARMS:
         for w, rep in reps[a].items():
+            if rep.get("device") != FROZEN_DEVICE:
+                raise ValueError(f"{a}_{w}: encoded on {rep.get('device')}, "
+                                 f"the frozen device is {FROZEN_DEVICE}")
             pools = {r.get("view_pool") for r in rep["runs"].values()}
             if pools != {VIEW_POOL[a]}:
                 raise ValueError(f"{a}_{w}: view_pool {pools}, expected {VIEW_POOL[a]}")

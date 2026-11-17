@@ -27,7 +27,7 @@ def _rep(arm, nested, fixed=None, heldout=None, ctrl=False, pr=40.0, rank=100, d
             "z_r2_heldout": {"friction": (heldout or [0.5] * len(nested))[i]},
             "std_rank": rank, "latent_pr": pr, "heldout_gain": 1.0,
             **({"d1": d1[i]} if d1 else {})}
-    return {"runs": rows}
+    return {"device": "cpu", "runs": rows}
 
 
 def _spread(mean, sd=0.05, n=N_LOUD, seed=0):
@@ -143,6 +143,26 @@ def test_a_report_from_the_wrong_arm_is_refused():
     reps["P1"], reps["P1c"] = reps["P1c"], reps["P1"]
     with pytest.raises(ValueError, match="view_pool"):
         V.verdicts(reps)
+
+
+def test_a_report_not_encoded_on_the_frozen_device_is_refused():
+    reps = _reps()
+    reps["P2"]["loud"]["device"] = "gpu"
+    with pytest.raises(ValueError, match="frozen device"):
+        V.verdicts(reps)
+    del reps["P2"]["loud"]["device"]
+    with pytest.raises(ValueError, match="frozen device"):
+        V.verdicts(reps)
+
+
+def test_the_noise_readout_is_descriptive_only():
+    reps = _reps()
+    for r in reps["P2"]["loud"]["runs"].values():
+        r["noise"] = {"rel": 1e-4, "friction_nested": -0.5, "friction_fixed": -0.5}
+    v = V.verdicts(reps)
+    assert v["descriptive"]["P2"]["noise"]["friction_nested"] == [-0.5] * N_LOUD
+    assert "noise" not in v["descriptive"]["P1"]
+    assert v["primary"]["H2 attention mixing"]["verdict"] == "NULL"
 
 
 # -- crossview_measure ------------------------------------------------------- #
@@ -269,3 +289,46 @@ def test_the_split_encoder_matches_crossview_measure_on_each_device(tmp_path):
         assert np.allclose(z, ref, rtol=1e-6, atol=1e-6) and g.shape[0] == 5 * TV.N_VIEWS
     c = D.column_compare(z, z)
     assert c["disc_max"] == 0.0 and c["frac_disc_gt_0.1"] == 0.0
+
+
+def test_input_noise_is_seeded_small_and_restores_the_layers(tmp_path):
+    """The co-report's noise: relative 1e-4 on every Linear and Conv2d input,
+    the same draw for the same seed, and the layers exact again afterwards."""
+    from pseudomarble.models import mlx_net
+    if not mlx_net._HAVE_MLX:
+        pytest.skip("MLX runs on the Mac only")
+    import mlx.nn as nn
+
+    import test_view_pool as TV
+    cfg = TV._cfg("attn")
+    run = tmp_path / "run"
+    run.mkdir()
+    mlx_net.build_model(cfg).save_weights(str(run / "model.safetensors"))
+    (run / "metrics.json").write_text(json.dumps({"config": cfg.__dict__, "history": []}))
+    imgs = np.random.default_rng(5).random((4, TV.N_VIEWS, 16, 16, 3)).astype("float32")
+    linear, conv = nn.Linear.__call__, nn.Conv2d.__call__
+    exact = M.encode(str(run), imgs)["z"]                      # default: the frozen CPU
+    assert np.array_equal(exact, M.encode(str(run), imgs, device="cpu")["z"])
+    a = M.encode(str(run), imgs, noise=M.NOISE_REL)["z"]
+    b = M.encode(str(run), imgs, noise=M.NOISE_REL)["z"]
+    assert np.array_equal(a, b) and not np.array_equal(a, exact)
+    rel = np.abs(a - exact).max() / np.abs(exact).max()
+    assert 1e-7 < rel < 1e-2
+    assert nn.Linear.__call__ is linear and nn.Conv2d.__call__ is conv
+    assert np.array_equal(M.encode(str(run), imgs)["z"], exact)
+    with pytest.raises(RuntimeError), M.input_noise(1e-4):
+        raise RuntimeError
+    assert nn.Linear.__call__ is linear and nn.Conv2d.__call__ is conv
+
+
+def test_measure_reports_the_noise_readout_when_given():
+    rng = np.random.default_rng(6)
+    n = 120
+    z = rng.normal(size=(n, 8))
+    E = np.stack([rng.random(n), z[:, 0] + 0.1 * rng.normal(size=n), rng.random(n)], 1)
+    splits = np.array(["train"] * 100 + ["test"] * 20)
+    Y = rng.random((n, 3))
+    row = M.measure(z, E, splits, Y, Y.copy(), [], z_noise=z + 1e-3 * rng.normal(size=z.shape))
+    assert row["noise"]["rel"] == M.NOISE_REL
+    assert row["noise"]["friction_nested"] == pytest.approx(row["friction_nested"], abs=0.02)
+    assert "noise" not in M.measure(z, E, splits, Y, Y.copy(), [])
