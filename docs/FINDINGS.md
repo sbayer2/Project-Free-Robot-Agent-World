@@ -2627,6 +2627,13 @@ Reproduce: the run chain in `docs/TRAJECTORY_SUPERVISION.md` §3, then
 the torch head diagnostic (`scripts/f31_head_diag.py`, PR #46). The frozen
 grading below is unchanged. Its mechanism reading is withdrawn.)*
 
+*(SECOND CORRECTION 2026-11-17: the MLX bullets below were read from
+**GPU-encoded** z, and GPU matmul precision erases the traj arm's friction.
+Re-encoded on CPU, MLX reads traj above joint, the same direction as torch.
+"MLX on identical worlds reads NULL" and "another optimizer drifts the other
+way" are withdrawn. The head collapse stands. See "F31a, third reading"
+below.)*
+
 - **The trajectory head collapsed in all 8 torch traj seeds:** train gain
   about 0.98, prediction std about 0.002 against a target std of 0.249,
   held-out trajectory gain never above 1.014. It predicted one path for
@@ -2751,6 +2758,175 @@ that separates "better target" from "louder target".
 
 Reproduce: `bash scripts/f31_rerun.sh run <arm> <world> <seed> [traj]` for
 the 16 runs, then `bash scripts/f31_rerun.sh stage-b-report`.
+
+### F31a, third reading (2026-11-17) — the MLX NULL was GPU encode precision: at fp32 both backends read traj above joint, but the friction the trajectory loss adds sits in directions a 1e-4 perturbation erases
+
+*(Diagnostics, not registered. Predictions for each step were set before its
+result, in the commit or note named. The F31a frozen grading above is
+unchanged. Sources: Mac (MLX) commits 29f4c9a (`crossview_measure --device`)
+and f66943a (`encode_device_diag.py`) on PR #52, whose body carries the MLX
+table, and Mac `runs/postfix/RESULTS.md` Steps 9–10 (local). Cloud (torch)
+notes on `claude/cloud-notes`: e06f63f (gate), 343ecea, f87a210, f4f0933 /
+cccb82d / 1f0a43b (bands), 1036b47 / 3b53754 (precision). Code:
+`scripts/f31_precision_diag.py`.)*
+
+**Torch re-run.** The 10 loud runs were retrained in the cloud on
+`data/pm_f31fix_loud`, regenerated from main c92e927 with the original sphere
+camera layout, so F31a's numbers could be reproduced.
+
+- **Gate** (e06f63f): both means within ±0.03 of the values above. It
+  **passes**: joint 0.240 (was 0.236), traj 0.373 (was 0.383).
+- **Per seed it is not bit-identical:** joint s2 is 0.159 now against 0.301
+  above. The cause, the regenerated world or the thread count, is not
+  established.
+
+| torch, friction R² (5 seeds; mean) | joint | traj | traj − joint |
+|---|---|---|---|
+| fixed α 1e-3 (F31a's frozen readout) | 0.166 / 0.313 / 0.159 / 0.297 / 0.266 (0.240) | 0.287 / 0.478 / 0.317 / 0.392 / 0.391 (0.373) | +0.133, t 2.85 |
+| nested α on {0, 1e-5..1e2} | 0.330 / 0.369 / 0.367 / 0.369 / 0.319 (0.351) | 0.427 / 0.530 / 0.338 / 0.394 / 0.382 (0.414) | +0.063, t 1.86 |
+| held out (ridge on train z → 20 corner scenes) | 0.335 / 0.588 / 0.295 / 0.537 / 0.510 (0.453) | 0.479 / 0.608 / 0.691 / 0.567 / 0.703 (0.610) | +0.157, t 2.20 |
+
+- The fixed penalty under-reads joint by 0.111 and traj by 0.041.
+- Graded retrospectively by `docs/CROSSVIEW_POOLING.md` §5 (labelled; that
+  rule was written after F31a), this torch pattern would be
+  **READOUT-DEPENDENT**: fixed clears the bar, nested is INCONCLUSIVE.
+
+**The encode device (MLX, the 10 Step 9 checkpoints on the same world).** On
+the Mac, the same z was encoded on GPU and on CPU:
+
+| MLX, friction R² (mean of 5) | joint GPU | joint CPU | traj GPU | traj CPU |
+|---|---|---|---|---|
+| nested | 0.257 | 0.258 | 0.233 | **0.405** |
+| fixed 1e-3 | 0.267 | 0.270 | 0.242 | **0.371** |
+| held out | 0.598 | 0.614 | 0.596 | **0.705** |
+
+| MLX, traj − joint (Welch) | GPU | CPU |
+|---|---|---|
+| nested | −0.024, t −0.54 | **+0.148, t 3.24** |
+| fixed | −0.025, t −0.59 | +0.100, t 1.94 |
+| held out | −0.002, t −0.04 | +0.091, t 1.81 |
+
+- **The GPU column reproduces Step 9 and the MLX NULL above exactly.** GPU
+  encodes repeat bit-identically, and chunk size has no effect (prediction R
+  holds).
+- **Traj moves +0.10 to +0.30 per seed between devices** (s1 0.149 → 0.452).
+  **Joint moves at most 0.012.** Prediction A ("the device doesn't matter")
+  fails on traj. B holds by its letter, but most of the CPU gain shows at
+  fixed α too.
+- **The site is the projection matmul, not the convs.** Convs on GPU with proj
+  on CPU read like all-CPU (traj nested 0.403). The reverse split reads like
+  all-GPU (0.232). The pooled conv features agree to a median standardized
+  discrepancy of 1e-6.
+- **Per-column discrepancy:** median sd(gpu − cpu) / sd(cpu) is 7e-4 for joint
+  and 2e-3 to 7e-3 for traj. Prediction M (z-column ρ between discrepancy and
+  CV) fails: ρ is only −0.10 to −0.29.
+
+**Torch reproduces it by emulation.** The weights and input activations of the
+encoder's matmul layers were rounded to TF32 (10 stored mantissa bits,
+relative error ≤ 4.9e-4; Metal's measured error is 6.4–7.7e-4). The `proj`
+variant rounds only the projection, matching the Metal site:
+
+| torch, friction R² (mean of 5) | joint fp32 | joint proj-TF32 | traj fp32 | traj proj-TF32 |
+|---|---|---|---|---|
+| nested | 0.351 | 0.286 | 0.414 | **0.033** |
+| fixed 1e-3 | 0.240 | 0.224 | 0.373 | **−0.043** |
+| held out | 0.453 | 0.422 | 0.610 | **0.087** |
+| median sd(Δz) / sd(z) per column | — | 2e-4 | — | 7e-3 to 1.2e-2 |
+
+- **Rounding every encoder layer** gives nearly the same: traj nested 0.022,
+  joint 0.285. The per-scene |Δz| / |z| is 1–3e-4.
+- **Single-site ablation** on joint s0 / traj s1 (fixed readout; fp32
+  0.166 / 0.478):
+
+  | rounded | joint s0 | traj s1 |
+  |---|---|---|
+  | weights only | 0.166 | 0.476 |
+  | image input | 0.166 | 0.478 |
+  | conv1–3 inputs | 0.166 | 0.478 |
+  | **`proj` input** | **0.146** | **0.058** |
+
+- **Gaussian relative noise on every layer input:**
+
+  | noise | joint s0 | traj s1 |
+  |---|---|---|
+  | 1e-5 | 0.165 | 0.450 |
+  | 1e-4 | 0.152 | 0.138 |
+  | 3e-4 | 0.113 | −0.073 |
+
+  It is a noise sensitivity, not something specific to rounding.
+- **Graded** (1036b47):
+  - "no effect" WRONG;
+  - "joint-led" WRONG: traj collapses and joint moves modestly;
+  - the joint clause (nested −0.066, gap 0.111 → 0.065) is met by its letter.
+- **Torch over-shoots MLX-GPU here:** traj falls below joint. Torch's traj
+  columns are the more sensitive ones.
+
+**Where torch's friction sits (fp32; singular components of standardized z,
+banded by shrinkage at α 1e-3, f4f0933 → cccb82d, 1f0a43b).**
+
+- **Gain from α 1e-3 to 1e-5:** none comes from the unshrunk directions (B1,
+  about 20 per fold; ≤ 0.000 in every run).
+- **Joint's larger gain:** +0.067 more than traj in the shrunk bands, which
+  restates the under-read. It sits in about 68 weak but real directions per
+  fold.
+- **Components below `std_rank`'s 1e-6 threshold:** joint has 22.4 per fold,
+  matching its near-duplicate columns. They carry ≤ 0.0002 in all 10 runs.
+- **Friction from B1 alone:** joint 0.085, traj **0.259** (t 2.88; I had
+  predicted |Δ| < 0.05: WRONG). Traj puts more friction into its less-shrunk
+  directions. Yet that is the friction a 1e-4 perturbation at `proj`
+  removes. "Less-shrunk" in standardized units is not "robust".
+- **`std_rank`:** joint 113.4, traj 121.0 (t 1.64, 3 up / 1 down / 1 tie by
+  seed). MLX Step 9, GPU-encoded, had joint 136, traj 89.
+- **The rank rationale:** the Mac's Step 9 prediction (at a near-least-squares
+  α the higher-rank arm is under-read more) is wrong in direction on torch.
+  The pooling prereg's "rank confound" rationale is a hypothesis, not a
+  mechanism.
+
+**What this changes.**
+
+1. **The cross-backend disagreement was an apparatus artifact.** At fp32 both
+   backends read traj above joint: torch nested +0.063 and fixed +0.133;
+   MLX-CPU nested +0.148 and fixed +0.100.
+   - The 2026-10-26 reason for withdrawing the RISES reading ("another
+     optimizer drifts the other way") is withdrawn.
+   - The Adam-bias-correction FALLS run was also GPU-encoded and is
+     **unverified** until it is re-read on CPU.
+2. **It is still not evidence of trajectory learning.**
+   - The trajectory head collapsed on both backends.
+   - The 19.3× starting-loss confound (co-report (c)) stands.
+   - Bounded statement: on the repaired world, adding this unfittable,
+     louder trajectory loss raises friction in fp32 z on both backends, by a
+     mechanism that is not trajectory fitting.
+3. **The friction it adds is precision-fragile.** It is carried by per-column
+   variation about 1e-2 of each column's own sd. Relative noise of 1e-4 at the
+   projection input removes most of it, on held-out scenes too
+   (0.610 → 0.087). Joint's friction mostly survives. Any claim that "z holds
+   friction" now needs its encode precision stated.
+4. **Apparatus.**
+   - No MLX script before 29f4c9a selects the CPU, so every MLX-side z readout
+     in this file was GPU-encoded.
+   - On Step 10, joint-trained z moved ≤ 0.012, so readouts of conventionally
+     trained models are probably safe. **None outside F31a has been
+     re-checked.**
+   - `docs/F31A_MLX_REPLICATION.md` exists only on unmerged PR #46 and still
+     reports the GPU readouts.
+
+**Open (owner calls, listed on PR #52):**
+- the pooling prereg's frozen encode device (CPU recommended);
+- re-measuring its G3 baseline on CPU;
+- an optional 1e-4-noise co-report;
+- rewording the rank rationale.
+
+Reproduce (torch):
+
+```bash
+python scripts/f31_precision_diag.py --data data/pm_f31fix_loud \
+    --runs runs/f31fix/loud_joint_s{0,1,2,3,4} runs/f31fix/loud_traj_s{0,1,2,3,4} \
+    --out runs/f31fix/precision_diag.json
+```
+
+This runs after the 10 `f31_rerun.sh run` units. MLX: `crossview_measure
+--device {gpu,cpu}` and `encode_device_diag.py` on PR #52.
 
 ---
 
