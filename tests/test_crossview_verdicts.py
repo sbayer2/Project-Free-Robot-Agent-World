@@ -245,3 +245,27 @@ def test_d1_refuses_a_world_whose_scenes_order_their_cameras_differently(tmp_pat
                                       "--runs", "unused", "--d1"])
     with pytest.raises(ValueError, match="different cameras"):
         M.main()
+
+
+def test_the_split_encoder_matches_crossview_measure_on_each_device(tmp_path):
+    """encode_device_diag splits the encoder at the average pool; with both
+    halves on one device it is crossview_measure.encode on that device."""
+    from pseudomarble.models import mlx_net
+    if not mlx_net._HAVE_MLX:
+        pytest.skip("MLX runs on the Mac only")
+    import encode_device_diag as D
+
+    import test_view_pool as TV
+    cfg = TV._cfg("mean")
+    run = tmp_path / "run"
+    run.mkdir()
+    model = mlx_net.build_model(cfg)
+    model.save_weights(str(run / "model.safetensors"))
+    (run / "metrics.json").write_text(json.dumps({"config": cfg.__dict__, "history": []}))
+    imgs = np.random.default_rng(4).random((5, TV.N_VIEWS, 16, 16, 3)).astype("float32")
+    for d in ("cpu", "gpu"):
+        z, g = D.encode_split(model, imgs, d, d, chunk=2)
+        ref = M.encode(str(run), imgs, chunk=2, device=d)["z"]
+        assert np.allclose(z, ref, rtol=1e-6, atol=1e-6) and g.shape[0] == 5 * TV.N_VIEWS
+    c = D.column_compare(z, z)
+    assert c["disc_max"] == 0.0 and c["frac_disc_gt_0.1"] == 0.0
