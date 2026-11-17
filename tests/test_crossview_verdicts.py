@@ -210,6 +210,31 @@ def test_encode_reads_an_mlx_run_and_check_cameras_guards_attn_runs(tmp_path):
         M.check_cameras(enc["cfg"], str(other))
 
 
+def test_encode_runs_on_the_requested_device(tmp_path):
+    """CPU encoding is MLX's exact float32 path; the GPU agrees to its matmul
+    rounding (test_view_pool's loose tolerance)."""
+    from pseudomarble.models import mlx_net
+    if not mlx_net._HAVE_MLX:
+        pytest.skip("MLX runs on the Mac only")
+    import mlx.core as mx
+
+    import test_view_pool as TV
+    cfg = TV._cfg("stats")
+    run = tmp_path / "run"
+    run.mkdir()
+    model = mlx_net.build_model(cfg)
+    model.save_weights(str(run / "model.safetensors"))
+    (run / "metrics.json").write_text(json.dumps({"config": cfg.__dict__, "history": []}))
+    imgs = np.random.default_rng(3).random((4, TV.N_VIEWS, 16, 16, 3)).astype("float32")
+    cpu = M.encode(str(run), imgs, views=True, chunk=3, device="cpu")
+    gpu = M.encode(str(run), imgs, views=True, chunk=3, device="gpu")
+    with mx.stream(mx.cpu):
+        ref = np.array(model(mx.array(imgs))["z"])
+    assert np.allclose(cpu["z"], ref, rtol=1e-6, atol=1e-6)    # chunking moves an ulp
+    assert np.allclose(gpu["z"], cpu["z"], rtol=1e-2, atol=1e-2)
+    assert np.allclose(gpu["v"], cpu["v"], rtol=1e-2, atol=1e-2)
+
+
 def test_d1_refuses_a_world_whose_scenes_order_their_cameras_differently(tmp_path,
                                                                          monkeypatch):
     """D1's concat and DFT index views by position; the check runs before any

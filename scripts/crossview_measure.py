@@ -99,9 +99,12 @@ def measure(z: np.ndarray, E: np.ndarray, splits: np.ndarray, Y: np.ndarray,
     return row
 
 
-def encode(run: str, imgs: np.ndarray, views: bool = False, chunk: int = 32) -> dict:
+def encode(run: str, imgs: np.ndarray, views: bool = False, chunk: int = 32,
+           device: str = "gpu") -> dict:
     """Encode every scene with a run's checkpoint: z, behavior predictions and,
-    when ``views``, the per-view latents."""
+    when ``views``, the per-view latents. ``device`` "cpu" runs on MLX's CPU
+    stream (float32 to about 1e-7); the Metal GPU rounds matmul inputs to about
+    11 significant bits (relative error about 7e-4, tests/test_view_pool.py)."""
     import mlx.core as mx
 
     from pseudomarble.models.mlx_net import build_model
@@ -110,13 +113,14 @@ def encode(run: str, imgs: np.ndarray, views: bool = False, chunk: int = 32) -> 
     model = build_model(cfg)
     model.load_weights(os.path.join(run, "model.safetensors"))
     zs, beh, vs = [], [], []
-    for i in range(0, len(imgs), chunk):
-        x = mx.array(imgs[i:i + chunk])
-        out = model(x)
-        zs.append(np.array(out["z"]))
-        beh.append(np.array(out["behavior"]))
-        if views:
-            vs.append(np.array(model.encode_views(x)))
+    with mx.stream(mx.cpu if device == "cpu" else mx.gpu):
+        for i in range(0, len(imgs), chunk):
+            x = mx.array(imgs[i:i + chunk])
+            out = model(x)
+            zs.append(np.array(out["z"]))
+            beh.append(np.array(out["behavior"]))
+            if views:
+                vs.append(np.array(model.encode_views(x)))
     return {"z": np.concatenate(zs), "behavior": np.concatenate(beh),
             "v": np.concatenate(vs) if views else None, "cfg": cfg, "meta": meta}
 
@@ -149,6 +153,8 @@ def main() -> None:
     ap.add_argument("--data", required=True)
     ap.add_argument("--runs", nargs="+", required=True)
     ap.add_argument("--d1", action="store_true", help="also read D1 (the P0 runs)")
+    ap.add_argument("--device", choices=("gpu", "cpu"), default="gpu",
+                    help="MLX device that encodes the checkpoints")
     ap.add_argument("--out", default=None)
     args = ap.parse_args()
 
@@ -160,10 +166,10 @@ def main() -> None:
     imgs, E, splits = load_world(args.data)
     Y = np.array([s.behavior_target(True) for s in ds.scenes])
     report = {"data": args.data, "grid": list(FROZEN_GRID), "axes": list(AXES),
-              "code": git_head(), "runs": {}}
-    print(f"[xv-measure] {args.data}: {len(E)} scenes")
+              "code": git_head(), "device": args.device, "runs": {}}
+    print(f"[xv-measure] {args.data}: {len(E)} scenes, encoded on {args.device}")
     for r in args.runs:
-        enc = encode(r, imgs, views=args.d1)
+        enc = encode(r, imgs, views=args.d1, device=args.device)
         check_cameras(enc["cfg"], args.data)
         row = measure(enc["z"], E, splits, Y, enc["behavior"], enc["meta"]["history"],
                       enc["v"])
