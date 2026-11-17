@@ -159,6 +159,48 @@ class ModelConfig:
     coherence_dirs: int = 4        # perturbation directions per step
     coherence_eps: float = 0.1     # latent perturbation step size
 
+    # Cross-view pooling (docs/CROSSVIEW_POOLING.md): how the per-view latents
+    # v_1..v_N become z. "mean" (default) is the plain view average, with no
+    # parameters, so every existing config and checkpoint is unchanged.
+    #   "stats"      z = relu(W [mean_i v_i ; std_i v_i]), W: 2L -> L
+    #   "stats_ctrl" the same layer fed [mean ; mean] (no cross-view information)
+    #   "attn"       one pre-LayerNorm transformer block over the N tokens
+    #                v_i + E d_i (ReLU FFN, residual), then the mean over tokens
+    #   "attn_ctrl"  the same block with a self-only attention mask
+    # The attn arms need view_dirs: one unit camera direction per view, in view
+    # order, read from the world's stored frames (PseudoMarbleDataset.camera_directions).
+    view_pool: str = "mean"
+    view_attn_heads: int = 4
+    view_attn_ffn: int = 512
+    view_dirs: Tuple[Tuple[float, float, float], ...] = ()
+
+
+VIEW_POOLS = ("mean", "stats", "stats_ctrl", "attn", "attn_ctrl")
+ATTN_POOLS = ("attn", "attn_ctrl")
+VIEW_STD_EPS = 1e-5    # std_i v_i = sqrt(var_i v_i + eps): finite gradient at zero spread
+VIEW_LN_EPS = 1e-5     # LayerNorm epsilon in the attn block (the MLX/torch default)
+VIEW_MASK_NEG = -1e9   # additive score for masked (cross-view) pairs in attn_ctrl
+
+
+def check_view_pool(cfg: "ModelConfig", num_views: int = 0) -> None:
+    """Raise ValueError if the pooling settings cannot build or cannot take
+    ``num_views`` views (0 = skip the view-count check)."""
+    if cfg.view_pool not in VIEW_POOLS:
+        raise ValueError(f"unknown view_pool {cfg.view_pool!r}; one of {VIEW_POOLS}")
+    if cfg.view_pool not in ATTN_POOLS:
+        return
+    if cfg.latent_dim % cfg.view_attn_heads:
+        raise ValueError(f"latent_dim {cfg.latent_dim} is not divisible by "
+                         f"view_attn_heads {cfg.view_attn_heads}")
+    if not cfg.view_dirs:
+        raise ValueError(f"view_pool {cfg.view_pool!r} needs view_dirs (one unit camera "
+                         "direction per view, from PseudoMarbleDataset.camera_directions)")
+    if any(len(d) != 3 for d in cfg.view_dirs):
+        raise ValueError("each view_dirs entry must be a 3-vector")
+    if num_views and len(cfg.view_dirs) != num_views:
+        raise ValueError(f"view_dirs has {len(cfg.view_dirs)} directions for "
+                         f"{num_views} views")
+
 
 def trajectory_target_dim(cfg: "ModelConfig") -> int:
     """Width of the F31 trajectory target/head implied by the config."""

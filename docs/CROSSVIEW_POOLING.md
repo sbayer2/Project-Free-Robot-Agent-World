@@ -338,7 +338,7 @@ unchanged):
 | P0 | `mean` | mean_i v_i (today's encoder, rerun under the new code) | 0 |
 | P1 | `stats` | relu(W [mean_i v_i ; std_i v_i]), W: 512 → 256 | 131 k |
 | P1′ | `stats_ctrl` | relu(W [mean_i v_i ; mean_i v_i]): P1's layer and ReLU, no cross-view information | 131 k |
-| P2 | `attn` | mean_i of one pre-LayerNorm transformer block over the 16 tokens v_i + E·d_i (4 heads, FFN 512, residual), where d_i is camera i's unit direction and E: 3 → 256 is learned | ≈ 0.53 M |
+| P2 | `attn` | mean_i of one pre-LayerNorm transformer block over the 16 tokens v_i + E·d_i (4 heads, ReLU FFN 512, residual), where d_i is camera i's unit direction and E: 3 → 256 is learned | ≈ 0.53 M |
 | P2′ | `attn_ctrl` | P2's block with a diagonal (self-only) attention mask: same parameters and depth, no information passes between views | ≈ 0.53 M |
 
 **Camera direction d_i** = (position − look_at) / ‖position − look_at‖,
@@ -352,6 +352,28 @@ information as the view index, stated physically.
 
 P2 is the principled mixer: a highlight depends on where each camera sits
 relative to the light, so each view token carries its camera direction.
+
+**Implementation** (`ModelConfig.view_pool`; `tests/test_view_pool.py`):
+- std_i v_i = √(var_i v_i + 10⁻⁵), population variance. Dead ReLU units
+  are identical across views, where a plain square root has an infinite
+  gradient.
+- The attn block uses LayerNorm ε 10⁻⁵ and scores scaled by 1/√64.
+  `attn_ctrl` adds −10⁹ to every cross-view score, so the softmax puts all
+  weight on self. Its query and key layers then get no gradient; the
+  parameters and depth still match P2.
+- The directions come from `PseudoMarbleDataset.camera_directions`,
+  checked equal across every scene. They are stored in the run's config,
+  not in the weights.
+- The pooling layer is built after the heads, so at a given seed all five
+  arms start from the same CNN and head weights.
+- The numpy forward is the reference, and MLX matches it to 10⁻⁵ on its CPU
+  stream. On the Metal GPU a float32 matmul carries about 10⁻³ relative
+  error on this Mac (a plain product shows it). Every arm and every earlier
+  MLX run shares it.
+- The torch parity tests run where torch is installed; the Mac's project
+  venv has none.
+- Every arm trains on a fixed random batch: the loss falls, and the
+  gradients reach the pooling layer.
 
 **Matched controls.** P1 and P2 add capacity (a layer, a ReLU, depth), not
 only mixing. P1′ and P2′ keep the added capacity and remove the mixing, so
@@ -443,7 +465,8 @@ friction z R² on the primary (nested) readout.
 - D1 ≈ z: D1 ≤ z₀ + 0.05. The per-view CNN has already lost it.
 - In between: unresolved.
 
-D1 needs a per-view encode helper (added with the freeze).
+D1 reads v_1 … v_16 through `encode_views`, which all three backends now
+provide.
 
 ## 5. Gates, hypotheses and frozen rules
 

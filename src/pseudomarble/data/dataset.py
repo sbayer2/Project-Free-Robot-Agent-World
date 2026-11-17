@@ -94,6 +94,20 @@ class Scene:
         frames = self.record.get("appearance", {}).get("frames", [])
         return [os.path.join(self.directory, "renders", f["file"]) for f in frames]
 
+    def camera_directions(self) -> List[List[float]]:
+        """Unit vector from look_at to each camera, (position - look_at) / norm,
+        read from the stored frames in view order (the order view_files and
+        load_views use). Never from a pose function: the layout that rendered
+        the world is whatever the frames say."""
+        out = []
+        for f in self.record.get("appearance", {}).get("frames", []):
+            d = [float(p) - float(a) for p, a in zip(f["position"], f["look_at"], strict=True)]
+            n = sum(x * x for x in d) ** 0.5
+            if len(d) != 3 or n <= 0:
+                raise ValueError(f"scene {self.scene_id}: bad camera frame {f}")
+            out.append([x / n for x in d])
+        return out
+
 
 class PseudoMarbleDataset:
     """Indexable dataset over a generated run, optionally filtered by split."""
@@ -145,6 +159,22 @@ class PseudoMarbleDataset:
 
     def essence_targets(self) -> List[List[float]]:
         return [s.essence_target() for s in self.scenes]
+
+    def camera_directions(self, max_views: Optional[int] = None,
+                          tol: float = 1e-6) -> List[List[float]]:
+        """The world's camera directions (Scene.camera_directions), checked to be
+        the same in every scene; the first ``max_views`` when capped, matching
+        load_views. Raises ValueError if scenes disagree by more than ``tol``."""
+        if not self.scenes:
+            raise ValueError("no scenes to read camera directions from")
+        ref = self.scenes[0].camera_directions()
+        for s in self.scenes[1:]:
+            d = s.camera_directions()
+            if len(d) != len(ref) or any(abs(a - b) > tol for u, w in zip(d, ref, strict=True)
+                                         for a, b in zip(u, w, strict=True)):
+                raise ValueError(f"scene {s.scene_id} has different cameras from "
+                                 f"{self.scenes[0].scene_id}")
+        return ref[:max_views] if max_views is not None else ref
 
     # -- image loading (lazy; needs numpy + an image reader) ------------- #
     def load_views(self, scene: Scene, max_views: Optional[int] = None):

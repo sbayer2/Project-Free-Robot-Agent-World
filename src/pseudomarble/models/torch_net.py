@@ -48,6 +48,53 @@ if _HAVE_TORCH:
         def forward(self, x):
             return self.fc2(torch.relu(self.fc1(x)))
 
+    class _ViewMixer(nn.Module):
+        """view_pool "attn"/"attn_ctrl", mirroring mlx_net.ViewMixer (same
+        parameter names) and numpy_net.view_pool_forward."""
+
+        def __init__(self, cfg: ModelConfig) -> None:
+            super().__init__()
+            from pseudomarble.config import VIEW_LN_EPS, VIEW_MASK_NEG
+            L, F = cfg.latent_dim, cfg.view_attn_ffn
+            self._heads = cfg.view_attn_heads
+            self.dir_embed = nn.Linear(3, L)
+            self.ln1 = nn.LayerNorm(L, eps=VIEW_LN_EPS)
+            self.q_proj = nn.Linear(L, L)
+            self.k_proj = nn.Linear(L, L)
+            self.v_proj = nn.Linear(L, L)
+            self.out_proj = nn.Linear(L, L)
+            self.ln2 = nn.LayerNorm(L, eps=VIEW_LN_EPS)
+            self.ff1 = nn.Linear(L, F)
+            self.ff2 = nn.Linear(F, L)
+            n = len(cfg.view_dirs)
+            # Buffers, not parameters; persistent=False keeps them out of state_dict.
+            self.register_buffer("dirs", torch.tensor([list(d) for d in cfg.view_dirs],
+                                                      dtype=torch.float32), persistent=False)
+            mask = torch.where(torch.eye(n, dtype=torch.bool), 0.0, VIEW_MASK_NEG)
+            self.register_buffer("mask", mask.float() if cfg.view_pool == "attn_ctrl"
+                                 else None, persistent=False)
+
+        def forward(self, v):
+            B, N, L = v.shape
+            if N != self.dirs.shape[0]:
+                raise ValueError(f"{N} views but {self.dirs.shape[0]} view_dirs")
+            H = self._heads
+            dh = L // H
+
+            def split(t):  # (B, N, L) -> (B, H, N, dh)
+                return t.reshape(B, N, H, dh).permute(0, 2, 1, 3)
+
+            x = v + self.dir_embed(self.dirs)[None]
+            h = self.ln1(x)
+            q, k, vv = split(self.q_proj(h)), split(self.k_proj(h)), split(self.v_proj(h))
+            s = (q @ k.transpose(-1, -2)) * (1.0 / (dh ** 0.5))
+            if self.mask is not None:
+                s = s + self.mask
+            o = (torch.softmax(s, dim=-1) @ vv).permute(0, 2, 1, 3).reshape(B, N, L)
+            x = x + self.out_proj(o)
+            x = x + self.ff2(torch.relu(self.ff1(self.ln2(x))))
+            return x.mean(dim=1)
+
     class TorchModel(nn.Module):
         """Encoder + behavior head (+ aux essence head), mirroring mlx_net."""
 
@@ -84,15 +131,40 @@ if _HAVE_TORCH:
             )
             self.dec_final = nn.Conv2d(ch, 3, 3, padding=1)
 
-        def encode(self, images):
-            # images: (B, N, H, W, C) NHWC -> (B*N, C, H, W) NCHW for conv.
+            # Cross-view pooling, built last so turning it on leaves the initial
+            # weights above unchanged for a given seed; "mean" builds nothing.
+            from pseudomarble.config import ATTN_POOLS, check_view_pool
+            check_view_pool(cfg)
+            if cfg.view_pool in ("stats", "stats_ctrl"):
+                self.pool = nn.Linear(2 * cfg.latent_dim, cfg.latent_dim)
+            elif cfg.view_pool in ATTN_POOLS:
+                self.mixer = _ViewMixer(cfg)
+
+        def encode_views(self, images):
+            """images (B, N, H, W, C) -> per-view latents v (B, N, latent_dim)."""
             B, N = images.shape[0], images.shape[1]
-            x = images.reshape(B * N, *images.shape[2:]).permute(0, 3, 1, 2)
+            x = images.reshape(B * N, *images.shape[2:]).permute(0, 3, 1, 2)  # NCHW
             for conv in self.convs:
                 x = torch.relu(conv(x))
             x = x.mean(dim=(2, 3))                     # global average pool
-            z = torch.relu(self.proj(x))              # per-view latent
-            return z.reshape(B, N, -1).mean(dim=1)    # pool over views
+            v = torch.relu(self.proj(x))              # per-view latent
+            return v.reshape(B, N, -1)
+
+        def pool_views(self, v):
+            """Per-view latents (B, N, L) -> z (B, L), by cfg.view_pool."""
+            from pseudomarble.config import VIEW_STD_EPS
+            kind = self.cfg.view_pool
+            if kind == "mean":
+                return v.mean(dim=1)                   # pool over views
+            if kind in ("stats", "stats_ctrl"):
+                m = v.mean(dim=1)
+                second = (torch.sqrt(((v - m[:, None, :]) ** 2).mean(dim=1) + VIEW_STD_EPS)
+                          if kind == "stats" else m)
+                return torch.relu(self.pool(torch.cat([m, second], dim=-1)))
+            return self.mixer(v)
+
+        def encode(self, images):
+            return self.pool_views(self.encode_views(images))
 
         def decode(self, z):
             # z -> (B, ch, s, s) NCHW -> upsample/conv -> (B, S, S, 3) NHWC.
