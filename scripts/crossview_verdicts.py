@@ -9,7 +9,7 @@ Rules, in order:
 - Gates. G1: every run's final PR >= 8. G2: every ctrl run of an arm reads
   friction (nested) < 0.10. A G1 or G2 failure withholds every comparison
   that includes the failing arm. G3 (reported, withholds nothing): P0's loud
-  mean is within 0.10 of the above-floor baseline 0.398.
+  mean is within 0.10 of the above-floor baseline 0.402 (CPU-encoded).
 - Each comparison is graded on the primary (nested) readout and on the fixed
   alpha = 1e-3 readout, by the same bars: RISES (d >= 0.10, t >= 2.5 and the
   held-out difference > 0), NULL (|d| < 0.05), FALLS (d <= -0.10, t <= -2.5),
@@ -43,7 +43,7 @@ VIEW_POOL = {"P0": "mean", "P1": "stats", "P1c": "stats_ctrl", "P2": "attn",
 MIN_PR = 8.0
 CTRL_FRICTION_MAX = 0.10
 RISE, NULL, TBAR = 0.10, 0.05, 2.5
-BASELINE_P0, G3_TOL = 0.398, 0.10
+BASELINE_P0, G3_TOL = 0.402, 0.10  # CPU-encoded (0.398 on the GPU)
 D1_HIGH, D1_LOW = 0.15, 0.05
 PRIMARY = (("H1 stats mixing", "P1", "P1c"), ("H2 attention mixing", "P2", "P2c"))
 SECONDARY = (("P1 vs P0", "P1", "P0"), ("P1c vs P0", "P1c", "P0"),
