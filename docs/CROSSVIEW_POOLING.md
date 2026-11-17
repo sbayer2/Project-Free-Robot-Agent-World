@@ -1,10 +1,10 @@
 # Cross-view pooling: does replacing the view average let z hold friction?
 
 **Status: DRAFT preregistration, 2026-10-27; draft 3, 2026-11-14. Not
-frozen.** It freezes in the commit that adds the implementation (all three
+frozen.** It freezes in a commit made once the implementation (all three
 backends, with cross-backend tests, per CLAUDE.md) and
-`scripts/crossview_verdicts.py`, before any pooling-variant model is
-trained on a loud world. The one pre-freeze training is the stability check
+`scripts/crossview_verdicts.py` are committed, and before any
+pooling-variant model is trained on a loud world. The one pre-freeze training is the stability check
 on the ctrl world (§3), from which no essence readout is computed. Until
 then every number, arm and bar here can change. F-number: unassigned (the
 owner assigns it at the freeze).
@@ -402,8 +402,10 @@ revision is disclosed here.
 
 ## 4. Readouts
 
-From `scripts/f31_measure_mlx.py` (on `claude/f31a-mlx-replication`; it
-lands on this branch with the freeze), per checkpoint:
+From `scripts/crossview_measure.py`, per checkpoint. It reuses
+`f31_measure`'s fixed-α and held-out readouts and `z_readout_alpha`'s
+nested readout and rank, so `f31_measure_mlx.py` (draft PR #46) does not
+need to land here:
 
 - **friction z R², nested (primary)**: ridge from column-standardized z
   (all 512 scenes) to normalized friction.
@@ -450,8 +452,10 @@ old-world number is expected from the cameras and is not an arm effect.
 
 **Diagnostic D1 (where friction is lost):** for every P0 checkpoint, the
 per-view latents v_1 … v_16 are read out by the primary readout's nested
-5-fold ridge on the same frozen grid (`z_readout_alpha.nested_grid`; the
-pilot's grid stops at 10⁻³ and under-reads low-variance friction, §2),
+5-fold ridge on the same frozen grid (`z_readout_alpha.nested_grid`,
+computed in dual form by `perview_readout.nested`, which a test shows
+equal; the pilot's grid stops at 10⁻³ and under-reads low-variance
+friction, §2),
 through five constructions: the plain concatenation
 (4096 dims, linear in v), and the pilot's nonlinear cross-view features C,
 D, G and H (§2) computed on v instead of on hand-made image statistics.
@@ -518,8 +522,9 @@ spread would make the design depend on the data. (Cloud review, cloud-notes
 The figures assume P0's spread carries over to the mixers and their
 matched controls; that is not measured.
 
-**Gates (read first):**
-- G1 health: every run's final PR ≥ 8.
+**Gates (read first). A G1 or G2 failure withholds every comparison that
+includes the failing arm (the F31a convention):**
+- G1 health: every run's final PR ≥ 8 (a non-finite PR fails).
 - G2 control, **the memorisation guard**: every ctrl run of an arm has
   friction z R² < 0.10 (nested; on the above-floor baseline ctrl reads
   −0.011 to −0.015, against −0.09 to −0.22 at the fixed α, whose negative
@@ -566,11 +571,16 @@ even when the 5-fold readout rises.
 Two primary comparisons. At df ≈ 38, t ≥ 2.5 is about p = 0.008 one-sided
 per test, so about 0.017 family-wise; disclosed, not corrected.
 
-**Reported against P0, same bars, secondary:** P1, P1′, P2, P2′ each vs
-P0 (is any arm better than today's encoder, whatever the reason).
+**Reported against P0, secondary:** P1, P1′, P2, P2′ each vs P0 (is any
+arm better than today's encoder, whatever the reason).
 
-**H3 — mechanism (P2 vs P1)**, same bars, secondary: does direction-aware
-mixing beat order-free statistics?
+**H3 — mechanism (P2 vs P1)**, secondary: does direction-aware mixing
+beat order-free statistics?
+
+The secondary comparisons use the same bars (Δ_h > 0 included), the same
+readout-dependent rule and the same NULL bound as H1 and H2.
+`scripts/crossview_verdicts.py` applies every rule in this section, and
+`tests/test_crossview_verdicts.py` tests each one on synthetic reports.
 
 ## 6. Predictions (registered at real odds)
 
@@ -694,3 +704,21 @@ Readout-strength diagnostic (§2; needs MLX):
       --out runs/xv_cam/readout_alpha_loud.json
     # extended grid (fac9c7d): add --alphas 0 1e-5 1e-4 1e-3 1e-2 1e-1 1 10
     # frozen primary grid (§4): --alphas 1e-5 1e-4 1e-3 1e-2 1e-1 1 10 100
+
+Stability check (§3; ctrl world, seed 100, no essence readout):
+
+    for arm in stats stats_ctrl attn attn_ctrl; do
+      python -m pseudomarble.models.train --data data/pm_f31fix_ctrl_cam \
+        --epochs 50 --lr 2e-4 --batch-size 16 --seed 100 --view-pool $arm \
+        --out runs/xv_cam/stability/${arm}_s100
+    done
+
+The experiment (after the freeze). Arms P0 P1 P1c P2 P2c are view_pool mean,
+stats, stats_ctrl, attn and attn_ctrl. Loud seeds 0–19, ctrl seeds 0–2:
+
+    python -m pseudomarble.models.train --data data/pm_f31fix_${W}_cam \
+      --epochs 50 --lr 2e-4 --batch-size 16 --seed $S --view-pool $POOL \
+      --out runs/xv/${ARM}_${W}_s$S
+    python scripts/crossview_measure.py --data data/pm_f31fix_${W}_cam \
+      --runs runs/xv/${ARM}_${W}_s* --out runs/xv/${ARM}_${W}.json   # add --d1 for P0 loud
+    python scripts/crossview_verdicts.py --root runs/xv
