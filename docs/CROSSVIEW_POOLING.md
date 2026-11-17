@@ -400,6 +400,20 @@ An arm fails the check if it diverges, goes non-finite, or ends with
 PR < 8. A failed arm's recipe is revised before the freeze, and the
 revision is disclosed here.
 
+**Result (2026-11-17, code `77e6af3`): all four pass, so no recipe is
+revised.** The values below are read from each run's own `metrics.json`
+(`runs/xv_cam/stability/`); nothing else was computed.
+
+| arm | loss, epoch 0 → 49 | highest loss after epoch 5 | PR, min–max | final PR | non-finite |
+|---|---|---|---|---|---|
+| P1 `stats` | 0.261 → 0.153 | 0.155 | 40.9–44.8 | 44.8 | none |
+| P1′ `stats_ctrl` | 0.258 → 0.153 | 0.155 | 46.5–48.7 | 48.7 | none |
+| P2 `attn` | 0.221 → 0.153 | 0.155 | 41.4–66.3 | 66.3 | none |
+| P2′ `attn_ctrl` | 0.220 → 0.153 | 0.155 | 13.7–55.4 | 55.4 | none |
+
+- Each run took about 3 min on the Mac (P2 and P2′ about 3.1 min).
+- The 115 runs therefore come to about 6 h.
+
 ## 4. Readouts
 
 From `scripts/crossview_measure.py`, per checkpoint. It reuses
