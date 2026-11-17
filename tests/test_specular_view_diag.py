@@ -115,6 +115,23 @@ def test_coarsen_equals_direct_block_means():
     assert S.coarsen(stack, 16, 8).shape == (1, 2, 8 * 8 * 3)
 
 
+def test_feature_cache_rejects_mismatched_parameters(tmp_path):
+    import argparse
+
+    a = argparse.Namespace(scenes=4, seed=1, coupling_alpha=1.0, coupling_gain=8.0,
+                           resolution=128, block=16)
+    path = str(tmp_path / "f.npz")
+    feats = {"sphere": np.zeros((16, 4, 768))}
+    np.savez_compressed(path, _key=np.array(S.json.dumps(S.cache_key(a))), **feats)
+    assert S.load_cache(path, S.cache_key(a), {"sphere": None})["sphere"].shape == (16, 4, 768)
+    assert S.load_cache(str(tmp_path / "absent.npz"), S.cache_key(a), {"sphere": None}) is None
+    b = argparse.Namespace(**{**vars(a), "block": 8})
+    with pytest.raises(SystemExit):
+        S.load_cache(path, S.cache_key(b), {"sphere": None})
+    with pytest.raises(SystemExit):
+        S.load_cache(path, S.cache_key(a), {"above": None})
+
+
 def test_sphere_layout_matches_render_views_driving():
     from pseudomarble.data import samples
 
@@ -149,15 +166,17 @@ def test_reproduces_step8_friction_within_003(layout):
     f16 = S.render_features(mats, {layout: S.layout_angles(layout)})[layout]
     fr = S.targets(mats)["friction"]
     alphas = tuple(10.0 ** k for k in range(-3, 7))  # the Mac's Step 8 grid
+    got = {}
     for block, feats in ((16, f16), (8, S.coarsen(f16, 16, 8))):
         xm = feats.mean(0)
         xc = feats.transpose(1, 0, 2).reshape(feats.shape[1], -1)
-        got = {"mean": S.cv_readout(xm, fr, alphas=alphas)["nested"],
-               "concat": S.cv_readout(xc, fr, alphas=alphas)["nested"]}
-        print(f"[step8] {layout} {block}x{block} {got}")
+        got[block] = {"mean": S.cv_readout(xm, fr, alphas=alphas)["nested"],
+                      "concat": S.cv_readout(xc, fr, alphas=alphas)["nested"]}
+        print(f"[step8] {layout} {block}x{block} {got[block]}")
         for pool, want in STEP8[block][layout].items():
-            assert abs(got[pool] - want) <= 0.03, (layout, block, pool, got[pool], want)
+            g = got[block][pool]
+            assert abs(g - want) <= 0.03, (layout, block, pool, g, want)
     # The 8x8 gap (concat minus mean) is what section 1 rests on; at 16x16 the
     # above-layout gap (0.019) sits inside the tolerance, at 8x8 it doesn't.
     want_gap = STEP8[8][layout]["concat"] - STEP8[8][layout]["mean"]
-    assert got["concat"] - got["mean"] >= want_gap - 0.06
+    assert got[8]["concat"] - got[8]["mean"] >= want_gap - 0.06

@@ -218,6 +218,30 @@ def read_set(feats: np.ndarray, ys: dict, **kw) -> dict:
     return out
 
 
+CACHE_FIELDS = ("scenes", "seed", "coupling_alpha", "coupling_gain", "resolution", "block")
+
+
+def cache_key(args) -> dict:
+    """Everything the cached pixels depend on (the angles are checked per set)."""
+    return {f: getattr(args, f) for f in CACHE_FIELDS}
+
+
+def load_cache(path: str, key: dict, sets: dict):
+    """Cached features if ``path`` was written with the same render parameters
+    and holds every requested set; None if absent. A mismatch is an error, not
+    a silent re-use (a 16x16 cache must never be read as 8x8)."""
+    if not os.path.exists(path):
+        return None
+    cache = np.load(path)
+    stored = json.loads(str(cache["_key"])) if "_key" in cache.files else None
+    if stored != key:
+        raise SystemExit(f"{path}: cache was built with {stored}, this run needs {key}")
+    missing = [k for k in sets if k not in cache.files]
+    if missing:
+        raise SystemExit(f"{path}: cache lacks sets {missing}")
+    return {k: cache[k] for k in sets}
+
+
 def _brief(res: dict) -> str:
     return f"{res['nested']:+.3f} (best {res['best_of_grid']:+.3f}@{res['best_alpha']:g})"
 
@@ -241,19 +265,20 @@ def main(argv=None) -> None:
     ap.add_argument("--features", help="optional .npz cache (written if absent)")
     ap.add_argument("--out", required=True)
     args = ap.parse_args(argv)
+    if args.resolution % args.block:
+        ap.error(f"--block {args.block} must divide --resolution {args.resolution}")
 
     mats = sample_materials(args.scenes, args.seed, args.coupling_alpha, args.coupling_gain)
     if args.mode == "layouts":
         sets = {name: layout_angles(name) for name in args.layouts}
     else:
         sets = {f"el{e:+g}": [(a, e) for a in args.azimuths] for e in args.elevations}
-    if args.features and os.path.exists(args.features):
-        cache = np.load(args.features)
-        feats = {k: cache[k] for k in sets}
-    else:
+    feats = load_cache(args.features, cache_key(args), sets) if args.features else None
+    if feats is None:
         feats = render_features(mats, sets, args.resolution, args.block)
         if args.features:
-            np.savez_compressed(args.features, **feats)
+            np.savez_compressed(args.features, _key=np.array(json.dumps(cache_key(args))),
+                                **{k: v for k, v in feats.items()})
     ys = targets(mats, args.log_density)
     kw = dict(alphas=args.alphas, fold_seeds=tuple(args.fold_seeds))
 
