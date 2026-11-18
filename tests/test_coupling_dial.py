@@ -32,7 +32,7 @@ def _sample_n(n=64, **kw):
 def _corr(xs, ys):
     n = len(xs)
     mx, my = sum(xs) / n, sum(ys) / n
-    num = sum((a - mx) * (b - my) for a, b in zip(xs, ys))
+    num = sum((a - mx) * (b - my) for a, b in zip(xs, ys, strict=False))
     dx = sum((a - mx) ** 2 for a in xs) ** 0.5
     dy = sum((b - my) ** 2 for b in ys) ** 0.5
     return 0.0 if dx == 0 or dy == 0 else num / (dx * dy)
@@ -45,7 +45,7 @@ def test_defaults_are_byte_identical_to_the_historical_sampler():
     """Defaults must not perturb the RNG stream, or pm_big stops reproducing."""
     baseline = _sample_n()
     explicit = _sample_n(coupling_alpha=1.0, coupling_gain=1.0)
-    for a, b in zip(baseline, explicit):
+    for a, b in zip(baseline, explicit, strict=False):
         assert a.material.visual == b.material.visual
         assert a.material.physics == b.material.physics
         assert a.factors == b.factors
@@ -55,8 +55,8 @@ def test_alpha_changes_appearance_but_only_appearance():
     """α<1 must visibly move the appearance while leaving the scene identical."""
     same = _sample_n(coupling_alpha=1.0)
     diff = _sample_n(coupling_alpha=0.5)
-    assert any(a.material.visual != b.material.visual for a, b in zip(same, diff))
-    assert all(a.factors == b.factors for a, b in zip(same, diff))
+    assert any(a.material.visual != b.material.visual for a, b in zip(same, diff, strict=False))
+    assert all(a.factors == b.factors for a, b in zip(same, diff, strict=False))
 
 
 def test_decoys_use_a_separate_stream_so_arms_stay_matched():
@@ -77,7 +77,7 @@ def test_physics_is_identical_across_alpha():
     for alpha in (0.0, 0.5, 1.0):
         got = _sample_n(coupling_alpha=alpha)
         ref = _sample_n(coupling_alpha=1.0)
-        for a, b in zip(got, ref):
+        for a, b in zip(got, ref, strict=False):
             assert a.material.physics == b.material.physics
             assert a.factors == b.factors
 
@@ -86,7 +86,7 @@ def test_physics_is_identical_across_gain():
     for gain in (1.0, 3.0, 10.0):
         got = _sample_n(coupling_gain=gain)
         ref = _sample_n(coupling_gain=1.0)
-        for a, b in zip(got, ref):
+        for a, b in zip(got, ref, strict=False):
             assert a.material.physics == b.material.physics
 
 

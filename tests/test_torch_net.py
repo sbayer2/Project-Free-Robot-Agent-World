@@ -75,6 +75,7 @@ def test_shapes_match_numpy_backend():
         return
     try:
         import numpy as np
+
         from pseudomarble.models.numpy_net import NumpyModel
     except Exception:  # pragma: no cover
         print("numpy unavailable; skipping cross-backend check")

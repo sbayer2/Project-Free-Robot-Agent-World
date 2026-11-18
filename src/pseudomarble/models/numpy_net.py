@@ -19,8 +19,6 @@ Architecture (shared with mlx_net):
 
 from __future__ import annotations
 
-from typing import Dict
-
 from pseudomarble.config import ModelConfig
 
 
@@ -81,7 +79,7 @@ def _sigmoid(x):
 ATTN_LINEARS = ("dir_embed", "q_proj", "k_proj", "v_proj", "out_proj", "ff1", "ff2")
 
 
-def _init_view_pool(cfg: ModelConfig, rng) -> Dict:
+def _init_view_pool(cfg: ModelConfig, rng) -> dict:
     np = _np()
     from pseudomarble.config import check_view_pool
     check_view_pool(cfg)
@@ -113,7 +111,7 @@ def _softmax(s):
     return e / e.sum(axis=-1, keepdims=True)
 
 
-def view_pool_forward(v, params: Dict, cfg: ModelConfig):
+def view_pool_forward(v, params: dict, cfg: ModelConfig):
     """Per-view latents v (B, N, L) -> z (B, L). The reference the mlx and torch
     poolers are tested against (tests/test_view_pool.py)."""
     np = _np()
@@ -153,7 +151,7 @@ def view_pool_forward(v, params: Dict, cfg: ModelConfig):
 class NumpyModel:
     """Forward-only NumPy model mirroring the MLX network's architecture."""
 
-    def __init__(self, cfg: ModelConfig = ModelConfig(), seed: int = 0) -> None:
+    def __init__(self, cfg: ModelConfig = ModelConfig(), seed: int = 0) -> None:  # noqa: B008 (ModelConfig is frozen)
         np = _np()
         from pseudomarble.config import num_upsample_steps
         self.cfg = cfg
@@ -168,15 +166,23 @@ class NumpyModel:
 
         self.Wp, self.bp = _he((cin, cfg.latent_dim), rng), np.zeros((cfg.latent_dim,), "float32")
         if cfg.latent_trits > 0:  # FSQ bottleneck (mirrors mlx_net)
-            self.Wd, self.bd = _he((cfg.latent_dim, cfg.latent_trits), rng), np.zeros((cfg.latent_trits,), "float32")
-            self.Wu, self.bu = _he((cfg.latent_trits, cfg.latent_dim), rng), np.zeros((cfg.latent_dim,), "float32")
-        self.Wb1, self.bb1 = _he((cfg.latent_dim, cfg.behavior_head_width), rng), np.zeros((cfg.behavior_head_width,), "float32")
-        self.Wb2, self.bb2 = _he((cfg.behavior_head_width, cfg.behavior_dim), rng), np.zeros((cfg.behavior_dim,), "float32")
-        self.We1, self.be1 = _he((cfg.latent_dim, cfg.essence_head_width), rng), np.zeros((cfg.essence_head_width,), "float32")
-        self.We2, self.be2 = _he((cfg.essence_head_width, cfg.essence_dim), rng), np.zeros((cfg.essence_dim,), "float32")
+            self.Wd, self.bd = (_he((cfg.latent_dim, cfg.latent_trits), rng),
+                                np.zeros((cfg.latent_trits,), "float32"))
+            self.Wu, self.bu = (_he((cfg.latent_trits, cfg.latent_dim), rng),
+                                np.zeros((cfg.latent_dim,), "float32"))
+        self.Wb1, self.bb1 = (_he((cfg.latent_dim, cfg.behavior_head_width), rng),
+                              np.zeros((cfg.behavior_head_width,), "float32"))
+        self.Wb2, self.bb2 = (_he((cfg.behavior_head_width, cfg.behavior_dim), rng),
+                              np.zeros((cfg.behavior_dim,), "float32"))
+        self.We1, self.be1 = (_he((cfg.latent_dim, cfg.essence_head_width), rng),
+                              np.zeros((cfg.essence_head_width,), "float32"))
+        self.We2, self.be2 = (_he((cfg.essence_head_width, cfg.essence_dim), rng),
+                              np.zeros((cfg.essence_dim,), "float32"))
         if cfg.appearance_weight > 0:  # F20 aux head (mirrors mlx_net; gated)
-            self.Wa1, self.ba1 = _he((cfg.latent_dim, cfg.appearance_head_width), rng), np.zeros((cfg.appearance_head_width,), "float32")
-            self.Wa2, self.ba2 = _he((cfg.appearance_head_width, cfg.appearance_dim), rng), np.zeros((cfg.appearance_dim,), "float32")
+            self.Wa1, self.ba1 = (_he((cfg.latent_dim, cfg.appearance_head_width), rng),
+                                  np.zeros((cfg.appearance_head_width,), "float32"))
+            self.Wa2, self.ba2 = (_he((cfg.appearance_head_width, cfg.appearance_dim), rng),
+                                  np.zeros((cfg.appearance_dim,), "float32"))
         if cfg.trajectory_weight > 0:  # F31 head (mirrors mlx_net; gated)
             from pseudomarble.config import trajectory_target_dim
             td, tw = trajectory_target_dim(cfg), cfg.trajectory_head_width
@@ -186,8 +192,10 @@ class NumpyModel:
         # Render decoder: z -> seed feature map -> (upsample + conv)*k -> RGB.
         ch, s = cfg.render_channels, cfg.render_seed
         self.n_up = num_upsample_steps(cfg)
-        self.Ws, self.bs = _he((cfg.latent_dim, ch * s * s), rng), np.zeros((ch * s * s,), "float32")
-        self.dec = [(_he((3, 3, ch, ch), rng), np.zeros((ch,), "float32")) for _ in range(self.n_up)]
+        self.Ws, self.bs = (_he((cfg.latent_dim, ch * s * s), rng),
+                            np.zeros((ch * s * s,), "float32"))
+        self.dec = [(_he((3, 3, ch, ch), rng), np.zeros((ch,), "float32"))
+                    for _ in range(self.n_up)]
         self.Wf, self.bf = _he((3, 3, ch, 3), rng), np.zeros((3,), "float32")
 
         # Cross-view pooling. Drawn last, so turning it on leaves every weight
@@ -248,7 +256,7 @@ class NumpyModel:
         code = np.round(np.tanh(z @ self.Wd + self.bd))
         return code, np.maximum(code @ self.Wu + self.bu, 0.0)
 
-    def __call__(self, images) -> Dict:
+    def __call__(self, images) -> dict:
         code, z = self.bottleneck(self.encode(images))
         out = {"z": z, "behavior": self.behavior_from_z(z),
                "essence": self.essence_from_z(z), "render": self.decode(z)}

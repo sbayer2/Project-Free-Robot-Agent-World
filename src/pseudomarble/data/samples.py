@@ -34,21 +34,21 @@ Schema (one scene -> ``<scene_id>/sample.json``)::
 from __future__ import annotations
 
 import math
-from typing import Dict, List, Optional, Sequence, Tuple
+from collections.abc import Sequence
 
 from pseudomarble import materials as M
 from pseudomarble.config import PHYSICS_NORMALIZERS
 
 SCHEMA_VERSION = 2  # v2 adds the `behavior` block (probe outcomes) + material_truth
-Pose = Tuple[float, float, float]
+Pose = tuple[float, float, float]
 
 
 # --------------------------------------------------------------------------- #
 # Camera placement (shared so every generator covers the object identically).
 # --------------------------------------------------------------------------- #
-def fibonacci_sphere_poses(num_views: int, radius: float) -> List[Pose]:
+def fibonacci_sphere_poses(num_views: int, radius: float) -> list[Pose]:
     """Evenly distributed camera positions on a sphere (deterministic)."""
-    poses: List[Pose] = []
+    poses: list[Pose] = []
     golden = math.pi * (3.0 - math.sqrt(5.0))
     for i in range(num_views):
         y = 1.0 - (i / max(1, num_views - 1)) * 2.0
@@ -60,7 +60,7 @@ def fibonacci_sphere_poses(num_views: int, radius: float) -> List[Pose]:
     return poses
 
 
-def pose_to_az_el_dist(pos: Pose) -> Tuple[float, float, float]:
+def pose_to_az_el_dist(pos: Pose) -> tuple[float, float, float]:
     """Convert a Cartesian camera position to (azimuth°, elevation°, distance).
 
     MuJoCo's free camera is parameterized this way (looking at the origin), so
@@ -122,7 +122,7 @@ def camera_world_position(lookat: Sequence[float], azimuth_deg: float,
 # --------------------------------------------------------------------------- #
 # Physics labels (the "essence" target: density, friction, restitution).
 # --------------------------------------------------------------------------- #
-def _physics_labels(physics: "M.PhysicsProps", tags: Sequence[str]) -> Dict:
+def _physics_labels(physics: M.PhysicsProps, tags: Sequence[str]) -> dict:
     d, f, r = physics.density, physics.friction, physics.restitution
     return {
         "raw": {"density": d, "friction": f, "restitution": r},
@@ -135,7 +135,7 @@ def _physics_labels(physics: "M.PhysicsProps", tags: Sequence[str]) -> Dict:
     }
 
 
-def physics_labels(material) -> Dict:
+def physics_labels(material) -> dict:
     """Physics labels from a named material (str) OR a Material object.
 
     Accepting a Material object is what lets continuously-sampled materials —
@@ -153,10 +153,10 @@ ASSUMED_FRICTION = 0.5
 ASSUMED_RESTITUTION = 0.3
 
 
-def physics_labels_measured(mass_kg: float, density: Optional[float] = None,
-                            friction: Optional[float] = None,
-                            restitution: Optional[float] = None,
-                            mass_source: str = "measured") -> Dict:
+def physics_labels_measured(mass_kg: float, density: float | None = None,
+                            friction: float | None = None,
+                            restitution: float | None = None,
+                            mass_source: str = "measured") -> dict:
     """Thinner, honest physics labels for a REAL object (e.g. GSO).
 
     GSO ships **measured mass**; density is derivable from mass / watertight
@@ -187,7 +187,7 @@ def physics_labels_measured(mass_kg: float, density: Optional[float] = None,
     }
 
 
-def material_truth(sample) -> Dict:
+def material_truth(sample) -> dict:
     """Ground-truth essence for a continuously-sampled material (for analysis).
 
     Records the hidden latent factors, the appearance params actually rendered,
@@ -213,7 +213,7 @@ def material_truth(sample) -> Dict:
 # Record + manifest builders.
 # --------------------------------------------------------------------------- #
 def build_frame(index: int, file: str, position: Sequence[float],
-                look_at: Sequence[float]) -> Dict:
+                look_at: Sequence[float]) -> dict:
     return {
         "index": int(index),
         "file": file,
@@ -222,8 +222,8 @@ def build_frame(index: int, file: str, position: Sequence[float],
     }
 
 
-def build_probe_record(spec: Dict, outcome: Dict,
-                       trajectory: Optional[List[Dict]] = None) -> Dict:
+def build_probe_record(spec: dict, outcome: dict,
+                       trajectory: list[dict] | None = None) -> dict:
     """One probe's record: its spec, the summary outcome, optional raw trajectory."""
     rec = {"probe": spec.get("kind", "unknown"), "spec": spec, "outcome": outcome}
     if trajectory is not None:
@@ -235,19 +235,19 @@ def build_sample_record(
     scene_id: str,
     split: str,
     shape: str,
-    frames: List[Dict],
+    frames: list[dict],
     resolution: int,
     generator: str,
     *,
-    material_name: Optional[str] = None,
+    material_name: str | None = None,
     material=None,
-    material_id: Optional[str] = None,
-    physics_block: Optional[Dict] = None,
-    behavior: Optional[List[Dict]] = None,
-    material_truth_block: Optional[Dict] = None,
-    trajectory: Optional[List[Dict]] = None,
+    material_id: str | None = None,
+    physics_block: dict | None = None,
+    behavior: list[dict] | None = None,
+    material_truth_block: dict | None = None,
+    trajectory: list[dict] | None = None,
     fps: int = 60,
-) -> Dict:
+) -> dict:
     """Assemble one scene's ``sample.json`` record (identical across generators).
 
     Supply ONE of: ``material_name`` (discrete library), ``material`` + ``material_id``
@@ -283,9 +283,9 @@ def build_sample_record(
     return record
 
 
-def build_manifest(generator: str, split_summary: Dict,
+def build_manifest(generator: str, split_summary: dict,
                    held_out_pairs: Sequence[Sequence[str]],
-                   scenes: List[Dict]) -> Dict:
+                   scenes: list[dict]) -> dict:
     """Top-level dataset manifest (one per generation run)."""
     return {
         "version": SCHEMA_VERSION,

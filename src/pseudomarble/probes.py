@@ -31,8 +31,8 @@ without any quaternion math here.
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from dataclasses import asdict, dataclass, field
-from typing import Dict, List, Sequence, Tuple
 
 # Toppled if the object's up-axis has tilted more than this from world-up.
 TOPPLE_ANGLE_DEG = 50.0
@@ -63,12 +63,12 @@ class PushSpec:
     kind: str = field(default="push", init=False)
 
 
-def default_probes() -> List[object]:
+def default_probes() -> list[object]:
     """The standard drop+tilt+push battery applied to every object."""
     return [DropSpec(), TiltSpec(), PushSpec()]
 
 
-def spec_to_dict(spec) -> Dict:
+def spec_to_dict(spec) -> dict:
     d = asdict(spec)
     d["kind"] = spec.kind
     return d
@@ -87,7 +87,7 @@ class ProbeOutcome:
     path_length: float          # total 3D distance travelled (m)
     final_tilt_deg: float       # final angle of up-axis from world-up
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return asdict(self)
 
 
@@ -101,10 +101,10 @@ def _angle_from_up(up: Sequence[float]) -> float:
 
 
 def _dist(a: Sequence[float], b: Sequence[float]) -> float:
-    return math.sqrt(sum((ai - bi) ** 2 for ai, bi in zip(a, b)))
+    return math.sqrt(sum((ai - bi) ** 2 for ai, bi in zip(a, b)))  # noqa: B905 (mutation target)
 
 
-def summarize(trajectory: Sequence[Dict]) -> ProbeOutcome:
+def summarize(trajectory: Sequence[dict]) -> ProbeOutcome:
     """Reduce a recorded trajectory to a summary ProbeOutcome."""
     if len(trajectory) < 2:
         raise ValueError("trajectory needs at least two frames")
@@ -163,14 +163,14 @@ def soft_topple_probability(final_tilts: Sequence[float]) -> float:
 
 
 # Order of the numeric outcome fields when flattened to a model target vector.
-OUTCOME_FIELDS: Tuple[str, ...] = (
+OUTCOME_FIELDS: tuple[str, ...] = (
     "toppled", "settle_time", "slid_distance",
     "n_bounces", "max_height", "path_length", "final_tilt_deg",
 )
 
 # Per-field scales that map raw outcomes into roughly [0, 1] so a regression
 # target isn't dominated by the large-magnitude fields (tilt in degrees, etc.).
-OUTCOME_NORMALIZERS: Dict[str, float] = {
+OUTCOME_NORMALIZERS: dict[str, float] = {
     "toppled": 1.0,
     "settle_time": 2.0,
     "slid_distance": 1.0,
@@ -181,35 +181,35 @@ OUTCOME_NORMALIZERS: Dict[str, float] = {
 }
 
 # Canonical probe order for the flattened behavior target vector.
-PROBE_ORDER: Tuple[str, ...] = ("drop", "tilt", "push")
+PROBE_ORDER: tuple[str, ...] = ("drop", "tilt", "push")
 # Length of the full behavior target: one OUTCOME_FIELDS block per probe.
 BEHAVIOR_DIM: int = len(PROBE_ORDER) * len(OUTCOME_FIELDS)
 
 
-def _flatten(d: Dict, normalize: bool) -> List[float]:
+def _flatten(d: dict, normalize: bool) -> list[float]:
     if normalize:
         return [float(d[k]) / OUTCOME_NORMALIZERS[k] for k in OUTCOME_FIELDS]
     return [float(d[k]) for k in OUTCOME_FIELDS]
 
 
-def outcome_vector(outcome: ProbeOutcome, normalize: bool = False) -> List[float]:
+def outcome_vector(outcome: ProbeOutcome, normalize: bool = False) -> list[float]:
     """Flatten one outcome to floats (bool -> 0/1) in a fixed field order."""
     return _flatten(outcome.to_dict(), normalize)
 
 
-def outcome_vector_from_dict(d: Dict, normalize: bool = False) -> List[float]:
+def outcome_vector_from_dict(d: dict, normalize: bool = False) -> list[float]:
     """Same as ``outcome_vector`` but from a plain dict (as stored in sample.json)."""
     return _flatten(d, normalize)
 
 
-def behavior_vector(probe_records: Sequence[Dict], normalize: bool = True) -> List[float]:
+def behavior_vector(probe_records: Sequence[dict], normalize: bool = True) -> list[float]:
     """Assemble the full behavior target from a scene's probe records.
 
     Probes are emitted in ``PROBE_ORDER`` regardless of their order on disk, so
     the target vector layout is stable. Missing probes are zero-filled.
     """
     by_kind = {r.get("probe"): r.get("outcome", {}) for r in probe_records}
-    vec: List[float] = []
+    vec: list[float] = []
     for kind in PROBE_ORDER:
         outcome = by_kind.get(kind)
         if outcome:
@@ -232,9 +232,9 @@ def trajectory_dim(frames: int, probes: Sequence[str] = PROBE_ORDER,
     return len(probes) * frames * (3 if pos_only else TRAJECTORY_CHANNELS)
 
 
-def trajectory_vector(probe_records: Sequence[Dict], frames: int,
+def trajectory_vector(probe_records: Sequence[dict], frames: int,
                       probes: Sequence[str] = PROBE_ORDER,
-                      pos_only: bool = False) -> List[float]:
+                      pos_only: bool = False) -> list[float]:
     """Flattened F31 trajectory target, probes in the given order (default
     ``PROBE_ORDER``). ``pos_only`` drops the up-axis channels; the f31 oracle
     pilot found the essence-determined content in drop/tilt *positions*.
@@ -248,7 +248,7 @@ def trajectory_vector(probe_records: Sequence[Dict], frames: int,
     if unknown or not probes:
         raise ValueError(f"probes must be a non-empty subset of {PROBE_ORDER}")
     by_kind = {r.get("probe"): r.get("trajectory") for r in probe_records}
-    vec: List[float] = []
+    vec: list[float] = []
     for kind in probes:
         traj = by_kind.get(kind)
         if not traj or len(traj) < 2:
@@ -264,6 +264,6 @@ def trajectory_vector(probe_records: Sequence[Dict], frames: int,
     return vec
 
 
-def behavior_field_names() -> List[str]:
+def behavior_field_names() -> list[str]:
     """Human-readable name for each entry of the behavior vector (``probe.field``)."""
     return [f"{kind}.{field}" for kind in PROBE_ORDER for field in OUTCOME_FIELDS]

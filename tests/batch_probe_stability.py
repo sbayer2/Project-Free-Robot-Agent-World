@@ -36,12 +36,10 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
 import os
 import random
 import statistics
 import sys
-from typing import Dict, List, Optional
 
 from pseudomarble import materials as M
 from pseudomarble import probes as P
@@ -59,7 +57,7 @@ FOCUS = "cylinder"
 TOPPLE_DEG = P.TOPPLE_ANGLE_DEG   # the hard threshold whose neighbourhood is risky
 
 
-def classify_label(topple_fraction: float, crossover_h: Optional[float]) -> str:
+def classify_label(topple_fraction: float, crossover_h: float | None) -> str:
     """How well-posed is the binary `toppled` label for this shape's sweep?
       * never    — never crosses (squat: always slides)         → stable, always False
       * always   — always over threshold (rolls onto its side)  → stable, always True
@@ -86,7 +84,7 @@ def physics_material(heaviness: float, grip: float, hardness: float) -> M.Materi
 
 
 def push_final_tilt(shape: str, material: M.Material, cfg: PhysicsConfig,
-                    spec: Optional[P.PushSpec] = None) -> float:
+                    spec: P.PushSpec | None = None) -> float:
     """Run one PUSH and return final_tilt_deg (the quantity the topple label thresholds)."""
     traj = G.run_push(shape, material, spec or P.PushSpec(), cfg)
     return P.summarize(traj).final_tilt_deg
@@ -95,15 +93,16 @@ def push_final_tilt(shape: str, material: M.Material, cfg: PhysicsConfig,
 # --------------------------------------------------------------------------- #
 # Layer 1 — determinism control.
 # --------------------------------------------------------------------------- #
-def layer_determinism(cfg: PhysicsConfig) -> Dict:
+def layer_determinism(cfg: PhysicsConfig) -> dict:
     mat = physics_material(0.5, 0.5, 0.4)
     runs = [G.run_probes(FOCUS, mat, cfg) for _ in range(3)]
     base = runs[0]
     max_abs_diff = 0.0
     for other in runs[1:]:
-        for rb, ro in zip(base, other):
+        for rb, ro in zip(base, other, strict=False):
             for k in P.OUTCOME_FIELDS:
-                max_abs_diff = max(max_abs_diff, abs(float(rb["outcome"][k]) - float(ro["outcome"][k])))
+                max_abs_diff = max(max_abs_diff,
+                                   abs(float(rb["outcome"][k]) - float(ro["outcome"][k])))
     return {"reps": len(runs), "shape": FOCUS, "max_abs_field_diff": max_abs_diff,
             "deterministic": max_abs_diff == 0.0}
 
@@ -112,9 +111,9 @@ def layer_determinism(cfg: PhysicsConfig) -> Dict:
 # Layer 2 — topple-boundary sweep (how sharp is the discontinuity?).
 # --------------------------------------------------------------------------- #
 def layer_boundary_sweep(cfg: PhysicsConfig, n_points: int, grip: float,
-                         hardness: float) -> Dict:
+                         hardness: float) -> dict:
     hs = [i / (n_points - 1) for i in range(n_points)]
-    per_shape: Dict[str, Dict] = {}
+    per_shape: dict[str, dict] = {}
     for shape in SHAPES:
         tilts, densities, toppled = [], [], []
         for h in hs:
@@ -156,7 +155,7 @@ def layer_boundary_sweep(cfg: PhysicsConfig, n_points: int, grip: float,
 # Layer 3 — action-sensitivity: tiny push jitter near vs. far from the boundary.
 # --------------------------------------------------------------------------- #
 def _jittered_push_run(shape: str, mat: M.Material, cfg: PhysicsConfig, reps: int,
-                       eps_impulse_rel: float, eps_az_deg: float, seed: int) -> Dict:
+                       eps_impulse_rel: float, eps_az_deg: float, seed: int) -> dict:
     rng = random.Random(seed)
     base = P.PushSpec()
     tilts, toppled = [], []
@@ -180,8 +179,8 @@ def _jittered_push_run(shape: str, mat: M.Material, cfg: PhysicsConfig, reps: in
     }
 
 
-def layer_sensitivity(cfg: PhysicsConfig, sweep: Dict, reps: int,
-                      eps_impulse_rel: float, eps_az_deg: float) -> Dict:
+def layer_sensitivity(cfg: PhysicsConfig, sweep: dict, reps: int,
+                      eps_impulse_rel: float, eps_az_deg: float) -> dict:
     """Two complementary views of action-jitter sensitivity:
 
     (a) per_shape — jitter at each shape's own crossover heaviness (its most
@@ -192,7 +191,7 @@ def layer_sensitivity(cfg: PhysicsConfig, sweep: Dict, reps: int,
     """
     grip, hardness = sweep["grip"], sweep["hardness"]
 
-    per_shape: Dict[str, Dict] = {}
+    per_shape: dict[str, dict] = {}
     for shape in SHAPES:
         d = sweep["per_shape"][shape]
         cross = d["crossover_heaviness"]
@@ -212,7 +211,7 @@ def layer_sensitivity(cfg: PhysicsConfig, sweep: Dict, reps: int,
         "far_light": max(0.0, cross - 0.30),   # lighter than crossover → tends to topple
         "far_heavy": min(1.0, cross + 0.30),   # heavier than crossover → tends to resist
     }
-    profile: Dict[str, Dict] = {}
+    profile: dict[str, dict] = {}
     for label, h in profile_points.items():
         mat = physics_material(h, grip, hardness)
         res = _jittered_push_run(FOCUS, mat, cfg, reps, eps_impulse_rel, eps_az_deg,
@@ -230,12 +229,12 @@ def layer_sensitivity(cfg: PhysicsConfig, sweep: Dict, reps: int,
 DEADBANDS = (5.0, 10.0, 15.0)   # report label-ambiguity at several deadband widths
 
 
-def layer_population(cfg: PhysicsConfig, n: int, seed: int) -> Dict:
+def layer_population(cfg: PhysicsConfig, n: int, seed: int) -> dict:
     # Mirror assign_scenes: one rng drives both shape choice and material sampling.
     sampler = M.MaterialSampler(seed=seed)
     rng = random.Random(seed)
-    per_shape_topple: Dict[str, List[bool]] = {s: [] for s in SHAPES}
-    tilts: List[float] = []
+    per_shape_topple: dict[str, list[bool]] = {s: [] for s in SHAPES}
+    tilts: list[float] = []
     for i in range(n):
         shape = rng.choice(SHAPES)
         ms = sampler.sample(material_id=f"scene_{i:06d}")
@@ -260,12 +259,12 @@ def layer_population(cfg: PhysicsConfig, n: int, seed: int) -> Dict:
     }
 
 
-def multi_population(cfg: PhysicsConfig, n: int, seeds: List[int]) -> Dict:
+def multi_population(cfg: PhysicsConfig, n: int, seeds: list[int]) -> dict:
     """Run the population study over several seeds and aggregate (mean ± std), so
     the contamination bound is a multi-seed statistic, not a single draw."""
     runs = [layer_population(cfg, n, s) for s in seeds]
 
-    def agg(getter) -> Dict:
+    def agg(getter) -> dict:
         vals = [getter(r) for r in runs]
         return {"mean": statistics.mean(vals),
                 "std": statistics.pstdev(vals) if len(vals) > 1 else 0.0,
@@ -286,7 +285,7 @@ def multi_population(cfg: PhysicsConfig, n: int, seeds: List[int]) -> Dict:
             "deadband_fraction": deadbands, "per_shape": per_shape, "runs": runs}
 
 
-def _hist(values: List[float], edges: List[int]) -> List[int]:
+def _hist(values: list[float], edges: list[int]) -> list[int]:
     counts = [0] * (len(edges) - 1)
     for v in values:
         for b in range(len(edges) - 1):
@@ -297,15 +296,18 @@ def _hist(values: List[float], edges: List[int]) -> List[int]:
 
 
 # --------------------------------------------------------------------------- #
-def parse_args(argv: List[str]) -> argparse.Namespace:
+def parse_args(argv: list[str]) -> argparse.Namespace:
     p = argparse.ArgumentParser(description="probe-outcome stability study")
     p.add_argument("--out", default="runs/stability")
     p.add_argument("--sweep-points", type=int, default=25)
     p.add_argument("--grip", type=float, default=0.5, help="fixed friction factor for the sweep")
-    p.add_argument("--hardness", type=float, default=0.3, help="fixed restitution factor for the sweep")
+    p.add_argument("--hardness", type=float, default=0.3,
+                   help="fixed restitution factor for the sweep")
     p.add_argument("--jitter-reps", type=int, default=24)
-    p.add_argument("--eps-impulse-rel", type=float, default=0.03, help="relative push-impulse jitter (std)")
-    p.add_argument("--eps-az-deg", type=float, default=2.0, help="push azimuth jitter in degrees (std)")
+    p.add_argument("--eps-impulse-rel", type=float, default=0.03,
+                   help="relative push-impulse jitter (std)")
+    p.add_argument("--eps-az-deg", type=float, default=2.0,
+                   help="push azimuth jitter in degrees (std)")
     p.add_argument("--population", type=int, default=200, help="scenes per seed")
     p.add_argument("--pop-seeds", type=int, default=5,
                    help="number of seeds for the population study (multi-seed mean±std)")
@@ -314,7 +316,7 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
     return p.parse_args(argv)
 
 
-def main(argv: List[str]) -> None:
+def main(argv: list[str]) -> None:
     if not G._HAVE_MUJOCO:
         raise SystemExit("this study needs the 'mujoco' package: pip install -e \".[mujoco]\"")
     args = parse_args(argv)
@@ -353,12 +355,14 @@ def main(argv: List[str]) -> None:
     o = pop["overall_topple_rate"]
     print(f"           overall topple_rate = {o['mean']:.3f} ± {o['std']:.3f}")
     for db, agg in pop["deadband_fraction"].items():
-        print(f"           deadband |tilt-50|<={db[2:]:>2}°  fraction = {agg['mean']:.3f} ± {agg['std']:.3f}")
+        print(f"           deadband |tilt-50|<={db[2:]:>2}°  "
+              f"fraction = {agg['mean']:.3f} ± {agg['std']:.3f}")
     for s, d in pop["per_shape"].items():
         if d["topple_rate_mean"] is None:
             print(f"           {s:9s} topple_rate = n/a")
         else:
-            print(f"           {s:9s} topple_rate = {d['topple_rate_mean']:.3f} ± {d['topple_rate_std']:.3f}")
+            print(f"           {s:9s} topple_rate = "
+                  f"{d['topple_rate_mean']:.3f} ± {d['topple_rate_std']:.3f}")
 
     os.makedirs(args.out, exist_ok=True)
     result = {

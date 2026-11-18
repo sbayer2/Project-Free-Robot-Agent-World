@@ -12,18 +12,17 @@ says "unknown" rather than crashing, so the package stays importable in CI.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
 
 
 @dataclass
 class MeshReport:
     path: str
     available: bool  # was trimesh importable / mesh loadable?
-    watertight: Optional[bool] = None
-    winding_consistent: Optional[bool] = None
-    volume: Optional[float] = None  # m^3 (only trustworthy if watertight)
-    n_vertices: Optional[int] = None
-    n_faces: Optional[int] = None
+    watertight: bool | None = None
+    winding_consistent: bool | None = None
+    volume: float | None = None  # m^3 (only trustworthy if watertight)
+    n_vertices: int | None = None
+    n_faces: int | None = None
     note: str = ""
 
     @property
@@ -59,7 +58,7 @@ def validate_mesh(path: str) -> MeshReport:
     )
 
 
-def mass_from_mesh(path: str, density_kg_m3: float) -> Optional[float]:
+def mass_from_mesh(path: str, density_kg_m3: float) -> float | None:
     """Mass = density * volume, in kg. Returns None if the mesh is not usable.
 
     NOTE: this assumes *uniform* density and a watertight mesh. Hollow or

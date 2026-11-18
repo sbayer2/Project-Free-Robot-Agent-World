@@ -46,12 +46,11 @@ import gzip
 import json
 import os
 import sys
-from typing import Dict, List, Optional, Tuple
 
 # --------------------------------------------------------------------------- #
 # Pure: listing parsing, gates, selection.
 # --------------------------------------------------------------------------- #
-WEIGHT_TO_KG: Dict[str, float] = {
+WEIGHT_TO_KG: dict[str, float] = {
     "pounds": 0.45359237,
     "kilograms": 1.0,
     "grams": 1e-3,
@@ -76,7 +75,7 @@ DENSITY_MIN = 10.0
 DENSITY_MAX = 20000.0
 
 
-def weight_to_kg(item_weight: Optional[List[Dict]]) -> Optional[float]:
+def weight_to_kg(item_weight: list[dict] | None) -> float | None:
     """Listed item weight in kg from an ABO ``item_weight`` list, else None."""
     for entry in item_weight or []:
         nv = entry.get("normalized_value", entry)
@@ -91,7 +90,7 @@ def weight_to_kg(item_weight: Optional[List[Dict]]) -> Optional[float]:
     return None
 
 
-def parse_listing(record: Dict) -> Optional[Dict]:
+def parse_listing(record: dict) -> dict | None:
     """{model_id, kg, category} for a listing with a 3D model + usable weight."""
     mid = record.get("3dmodel_id")
     if not mid:
@@ -104,10 +103,10 @@ def parse_listing(record: Dict) -> Optional[Dict]:
     return {"model_id": mid, "kg": kg, "category": category}
 
 
-def load_listings(listings_dir: str) -> Dict[str, Dict]:
+def load_listings(listings_dir: str) -> dict[str, dict]:
     """Scan ABO ``listings_*.json.gz`` shards -> {model_id: {kg, category}}.
     First usable weight per model wins (duplicates across marketplaces)."""
-    models: Dict[str, Dict] = {}
+    models: dict[str, dict] = {}
     for path in sorted(glob.glob(os.path.join(listings_dir, "listings_*.json.gz"))):
         with gzip.open(path, "rt") as fh:
             for line in fh:
@@ -118,15 +117,15 @@ def load_listings(listings_dir: str) -> Dict[str, Dict]:
     return models
 
 
-def select_models(models: Dict[str, Dict], target: int = 450,
-                  cap_per_category: int = 12) -> Tuple[List[str], Dict[str, int]]:
+def select_models(models: dict[str, dict], target: int = 450,
+                  cap_per_category: int = 12) -> tuple[list[str], dict[str, int]]:
     """Deterministic gated selection: drop deformable categories, then take
     round-robin across alphabetical categories (lexicographic ids within each)
     up to ``cap_per_category`` per category and ``target`` total.
 
     Returns (selected ids, rejection/selection tally)."""
     tally = collections.Counter()
-    by_cat: Dict[str, List[str]] = collections.defaultdict(list)
+    by_cat: dict[str, list[str]] = collections.defaultdict(list)
     for mid, meta in models.items():
         if meta["category"] in DEFORMABLE_CATEGORIES:
             tally["rejected_deformable"] += 1
@@ -134,7 +133,7 @@ def select_models(models: Dict[str, Dict], target: int = 450,
             by_cat[meta["category"]].append(mid)
     for ids in by_cat.values():
         ids.sort()
-    selected: List[str] = []
+    selected: list[str] = []
     rank = 0
     while len(selected) < target and rank < cap_per_category:
         for cat in sorted(by_cat):
@@ -147,7 +146,7 @@ def select_models(models: Dict[str, Dict], target: int = 450,
     return selected, dict(tally)
 
 
-def density_gate(mass_kg: float, volume_m3: Optional[float]) -> Tuple[bool, Optional[float]]:
+def density_gate(mass_kg: float, volume_m3: float | None) -> tuple[bool, float | None]:
     """(passes, density). Non-watertight meshes (volume None) pass with
     density None — mass is still a real label; only a computable, implausible
     density rejects (listing/unit errors, packaging weights)."""
@@ -161,7 +160,7 @@ def density_gate(mass_kg: float, volume_m3: Optional[float]) -> Tuple[bool, Opti
 # Runtime: GLB -> object dir satisfying generate_gso's discovery contract.
 # --------------------------------------------------------------------------- #
 def prepare_object(glb_path: str, mass_kg: float, category: str,
-                   obj_dir: str) -> Optional[str]:
+                   obj_dir: str) -> str | None:
     """Convert one GLB into a GSO-shaped object dir. Returns a rejection
     reason string, or None on success. Needs trimesh."""
     import trimesh  # type: ignore
@@ -215,8 +214,8 @@ def prepare_object(glb_path: str, mass_kg: float, category: str,
     return None
 
 
-def prepare_all(glb_dir: str, models: Dict[str, Dict], selected: List[str],
-                prepared_root: str) -> Dict[str, int]:
+def prepare_all(glb_dir: str, models: dict[str, dict], selected: list[str],
+                prepared_root: str) -> dict[str, int]:
     """Prepare every selected object; returns the rejection tally (printed AND
     persisted — the design doc forbids silent drops)."""
     tally = collections.Counter()
@@ -235,7 +234,7 @@ def prepare_all(glb_dir: str, models: Dict[str, Dict], selected: List[str],
     return dict(tally)
 
 
-def parse_args(argv: List[str]) -> argparse.Namespace:
+def parse_args(argv: list[str]) -> argparse.Namespace:
     p = argparse.ArgumentParser(description="pseudo-marble ABO (real-product) generation")
     p.add_argument("--listings-dir", required=True,
                    help="dir of ABO listings_*.json.gz shards")
@@ -261,7 +260,7 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
     return p.parse_args(argv)
 
 
-def main(argv: List[str]) -> None:
+def main(argv: list[str]) -> None:
     from pseudomarble.data import generate_gso
 
     args = parse_args(argv)

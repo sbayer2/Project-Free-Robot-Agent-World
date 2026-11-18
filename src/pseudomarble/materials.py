@@ -27,14 +27,13 @@ import colorsys
 import math
 import random
 from dataclasses import asdict, dataclass, field
-from typing import Dict, Optional, Tuple
 
 
 @dataclass(frozen=True)
 class VisualProps:
     """Inputs to a Blender Principled BSDF (sRGB-ish 0..1 where applicable)."""
 
-    base_color: Tuple[float, float, float, float]  # RGBA
+    base_color: tuple[float, float, float, float]  # RGBA
     roughness: float
     metallic: float
     specular: float = 0.5
@@ -80,7 +79,7 @@ class Material:
     name: str
     visual: VisualProps
     physics: PhysicsProps
-    tags: Tuple[str, ...] = field(default_factory=tuple)
+    tags: tuple[str, ...] = field(default_factory=tuple)
 
     def to_dict(self) -> dict:
         d = asdict(self)
@@ -90,7 +89,7 @@ class Material:
 
 def _mat(
     name: str,
-    color: Tuple[float, float, float, float],
+    color: tuple[float, float, float, float],
     roughness: float,
     metallic: float,
     density: float,
@@ -99,7 +98,7 @@ def _mat(
     *,
     transmission: float = 0.0,
     ior: float = 1.45,
-    tags: Tuple[str, ...] = (),
+    tags: tuple[str, ...] = (),
 ) -> Material:
     return Material(
         name=name,
@@ -117,7 +116,7 @@ def _mat(
 
 # The library. Appearance and physics co-vary through material identity — that
 # co-variation *is* the signal the shared latent is supposed to discover.
-MATERIALS: Dict[str, Material] = {
+MATERIALS: dict[str, Material] = {
     "ceramic": _mat(
         "ceramic", (0.92, 0.90, 0.85, 1.0), roughness=0.20, metallic=0.0,
         density=2300, friction=0.40, restitution=0.30, tags=("brittle", "hard"),
@@ -173,12 +172,12 @@ def get(name: str) -> Material:
         ) from exc
 
 
-def names() -> Tuple[str, ...]:
+def names() -> tuple[str, ...]:
     """Stable, sorted tuple of material names (deterministic for splits)."""
     return tuple(sorted(MATERIALS))
 
 
-def physics_vector(name: str) -> Tuple[float, float, float]:
+def physics_vector(name: str) -> tuple[float, float, float]:
     """The (density, friction, restitution) target the physics decoder predicts.
 
     Density is returned in kg/m^3; callers that need a normalized target should
@@ -226,7 +225,7 @@ class MaterialSample:
     """
 
     material: Material
-    factors: Dict[str, float]      # heaviness/grip/hardness/clarity in [0,1]
+    factors: dict[str, float]      # heaviness/grip/hardness/clarity in [0,1]
     nearest_anchor: str            # closest named material, for interpretable eval
 
 
@@ -340,7 +339,7 @@ class MaterialSampler:
         return PhysicsProps(density=density, friction=friction, restitution=restitution)
 
     # -- public API ------------------------------------------------------- #
-    def sample(self, material_id: Optional[str] = None) -> MaterialSample:
+    def sample(self, material_id: str | None = None) -> MaterialSample:
         heaviness = self.rng.random()
         grip = self.rng.random()
         hardness = self.rng.random()
@@ -348,12 +347,13 @@ class MaterialSampler:
         return self._assemble(heaviness, grip, hardness, clarity, material_id)
 
     def sample_near(self, anchor: str, jitter: float = 0.15,
-                    material_id: Optional[str] = None) -> MaterialSample:
+                    material_id: str | None = None) -> MaterialSample:
         """Sample continuously *around* a named anchor (for controlled studies)."""
         base = get(anchor)
         heaviness = _clip01(_inv_log(base.physics.density, DENSITY_RANGE) + self._jit(jitter))
         grip = _clip01(_inv_lin(base.physics.friction, FRICTION_RANGE) + self._jit(jitter))
-        hardness = _clip01(_inv_lin(base.physics.restitution, RESTITUTION_RANGE) + self._jit(jitter))
+        hardness = _clip01(_inv_lin(base.physics.restitution, RESTITUTION_RANGE)
+                           + self._jit(jitter))
         clarity = _clip01(base.visual.transmission + self._jit(jitter))
         return self._assemble(heaviness, grip, hardness, clarity, material_id)
 
@@ -387,11 +387,11 @@ class MaterialSampler:
         return MaterialSample(mat, factors, nearest_anchor(physics))
 
 
-def _inv_log(value: float, rng: Tuple[float, float]) -> float:
+def _inv_log(value: float, rng: tuple[float, float]) -> float:
     return (math.log(value) - math.log(rng[0])) / (math.log(rng[1]) - math.log(rng[0]))
 
 
-def _inv_lin(value: float, rng: Tuple[float, float]) -> float:
+def _inv_lin(value: float, rng: tuple[float, float]) -> float:
     return (value - rng[0]) / (rng[1] - rng[0])
 
 
@@ -399,7 +399,7 @@ def nearest_anchor(physics: PhysicsProps) -> str:
     """Closest named material to a physics vector, in normalized essence space."""
     from pseudomarble.config import PHYSICS_NORMALIZERS as N
 
-    def norm(p: PhysicsProps) -> Tuple[float, float, float]:
+    def norm(p: PhysicsProps) -> tuple[float, float, float]:
         return (p.density / N["density"], p.friction / N["friction"],
                 p.restitution / N["restitution"])
 
@@ -407,7 +407,7 @@ def nearest_anchor(physics: PhysicsProps) -> str:
     best, best_d = "", float("inf")
     for name in names():
         a = norm(get(name).physics)
-        d = sum((qi - ai) ** 2 for qi, ai in zip(q, a))
+        d = sum((qi - ai) ** 2 for qi, ai in zip(q, a))  # noqa: B905 (mutation target)
         if d < best_d:
             best, best_d = name, d
     return best

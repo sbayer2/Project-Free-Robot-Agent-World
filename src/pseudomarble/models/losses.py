@@ -17,7 +17,7 @@ measure how well the model *recovers* the hidden essence from images alone.
 
 from __future__ import annotations
 
-from typing import Dict, Sequence
+from collections.abc import Sequence
 
 Matrix = Sequence[Sequence[float]]
 
@@ -25,10 +25,10 @@ Matrix = Sequence[Sequence[float]]
 def mse(pred: Matrix, target: Matrix) -> float:
     """Mean squared error over a (batch x dim) pair of nested lists."""
     total, n = 0.0, 0
-    for pr, tg in zip(pred, target):
+    for pr, tg in zip(pred, target):  # noqa: B905 (mutation target)
         if len(pr) != len(tg):
             raise ValueError(f"row length mismatch: {len(pr)} vs {len(tg)}")
-        for a, b in zip(pr, tg):
+        for a, b in zip(pr, tg):  # noqa: B905 (mutation target)
             total += (a - b) ** 2
             n += 1
     if n == 0:
@@ -68,7 +68,7 @@ def combined_loss(
     appearance_pred=None,
     appearance_target=None,
     appearance_weight: float = 0.0,
-) -> Dict[str, float]:
+) -> dict[str, float]:
     """Total + component losses; mirrors the MLX training objective.
 
     With the render head: total = behavior_weight * behavior MSE
@@ -101,7 +101,7 @@ def per_field_mse(pred: Matrix, target: Matrix) -> list:
         raise ValueError("empty batch")
     dim = len(pred[0])
     sums = [0.0] * dim
-    for pr, tg in zip(pred, target):
+    for pr, tg in zip(pred, target):  # noqa: B905 (mutation target)
         for j in range(dim):
             sums[j] += (pr[j] - tg[j]) ** 2
     n = len(pred)
