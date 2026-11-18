@@ -9,7 +9,8 @@ nothing and changes no frozen rule. It prints Markdown:
 - gates per arm, with each arm's lowest final PR per world and its highest
   ctrl nested friction (G2 is per run, so the maximum is the check);
 - the G1 failures by run, the counts per world, and Fisher's exact test of
-  P0's ctrl failures against the mixer and control arms' (descriptive);
+  P0's ctrl failures against the mixer and control arms' (descriptive;
+  computed from the hypergeometric, so this script needs no scipy);
 - per-arm friction z R^2 (nested, fixed alpha, held out, nested under 1e-4
   input noise) as mean +- sd, and the median final PR;
 - every comparison as d (t) on each readout and the held-out d, beside its
@@ -59,10 +60,22 @@ def g1_failures(reps: dict) -> list[dict]:
     return out
 
 
+def fisher_2x2(a: int, b: int, c: int, d: int) -> tuple[float, float]:
+    """Fisher's exact test of [[a, b], [c, d]] from the hypergeometric, with
+    no scipy: (two-sided p, one-sided p that row 1's a is this small).
+    Two-sided sums every table no more likely than the observed one, with
+    scipy's relative tolerance of 1e-7."""
+    n_all, k, n = a + b + c + d, a + c, a + b
+    lo, hi = max(0, n - (n_all - k)), min(n, k)
+    p = {x: math.comb(k, x) * math.comb(n_all - k, n - x) / math.comb(n_all, n)
+         for x in range(lo, hi + 1)}
+    two = sum(q for q in p.values() if q <= p[a] * (1 + 1e-7))
+    return min(1.0, two), sum(q for x, q in p.items() if x <= a)
+
+
 def g1_counts(reps: dict) -> dict:
     """Failures over runs per group, and Fisher's exact test of P0 ctrl
     against the mixer and control arms' ctrl runs (descriptive only)."""
-    from scipy import stats
     fails = g1_failures(reps)
 
     def count(arms, w):
@@ -70,11 +83,28 @@ def g1_counts(reps: dict) -> dict:
         k = sum(1 for f in fails if f["arm"] in arms and f["world"] == w)
         return k, n
     p0c, mxc = count(("P0",), "ctrl"), count(MIXERS, "ctrl")
-    table = [[p0c[0], p0c[1] - p0c[0]], [mxc[0], mxc[1] - mxc[0]]]
+    two, one = fisher_2x2(p0c[0], p0c[1] - p0c[0], mxc[0], mxc[1] - mxc[0])
     return {"P0_loud": count(("P0",), "loud"), "P0_ctrl": p0c,
             "mixers_loud": count(MIXERS, "loud"), "mixers_ctrl": mxc,
-            "fisher_two_sided": float(stats.fisher_exact(table)[1]),
-            "fisher_one_sided": float(stats.fisher_exact(table, alternative="less")[1])}
+            "fisher_two_sided": two, "fisher_one_sided": one}
+
+
+def fmt_pr(p: float | None, digits: int = 1) -> str:
+    """A PR for a table: a missing or non-finite one fails G1 and prints as such."""
+    return "non-finite" if p is None or not math.isfinite(p) else f"{p:.{digits}f}"
+
+
+def lowest(prs: list[float | None]) -> str:
+    """The lowest PR in a list, or "non-finite" if any is (min() is
+    unreliable with NaN, and None does not compare)."""
+    bad = [p for p in prs if p is None or not math.isfinite(p)]
+    return fmt_pr(bad[0]) if bad else fmt_pr(min(prs))
+
+
+def median_finite(xs: list[float | None]) -> float | None:
+    """The median over finite values; the G1 list already names the rest."""
+    ok = [x for x in xs if x is not None and math.isfinite(x)]
+    return st.median(ok) if ok else None
 
 
 def arm_rows(reps: dict) -> list[dict]:
@@ -85,7 +115,7 @@ def arm_rows(reps: dict) -> list[dict]:
             row = {"arm": a, "world": w, "n": len(rep["runs"]),
                    "nested": V.col(rep, "friction_nested"), "fixed": V.col(rep, "fixed"),
                    "heldout": V.col(rep, "heldout"),
-                   "pr_median": st.median(V.col(rep, "latent_pr"))}
+                   "pr_median": median_finite(V.col(rep, "latent_pr"))}
             runs = list(rep["runs"].values())
             if all("noise" in r for r in runs):
                 row["noise"] = [r["noise"]["friction_nested"] for r in runs]
@@ -144,15 +174,15 @@ def render(reps: dict) -> str:
          "|---|---|---|---|---|---|"]
     for a in V.ARMS:
         prs = {w: V.col(reps[a][w], "latent_pr") for w in WORLDS}
-        L.append(f"| {a} | {'PASS' if g['G1_health'][a] else 'FAIL'} | {min(prs['loud']):.1f} "
-                 f"| {min(prs['ctrl']):.1f} | {'PASS' if g['G2_control'][a] else 'FAIL'} "
+        L.append(f"| {a} | {'PASS' if g['G1_health'][a] else 'FAIL'} | {lowest(prs['loud'])} "
+                 f"| {lowest(prs['ctrl'])} | {'PASS' if g['G2_control'][a] else 'FAIL'} "
                  f"| {max(V.col(reps[a]['ctrl'], 'friction_nested')):+.3f} |")
     g3 = g["G3_apparatus"]
     L += ["", f"G3: P0 loud nested {g3['p0_mean']:.3f} vs {g3['baseline']} "
           f"({g3['p0_mean'] - g3['baseline']:+.3f}), {'PASS' if g3['pass'] else 'FAIL'}.",
           "", "## G1 failures (final PR < 8)", "", "| run | final PR |", "|---|---|"]
     for f in g1_failures(reps):
-        L.append(f"| {f['run']} | {f['pr']:.3f} |")
+        L.append(f"| {f['run']} | {fmt_pr(f['pr'], 3)} |")
     c = g1_counts(reps)
     L += ["", f"Mixer and control arms: {c['mixers_ctrl'][0]} of {c['mixers_ctrl'][1]} ctrl runs, "
           f"{c['mixers_loud'][0]} of {c['mixers_loud'][1]} loud. P0: {c['P0_ctrl'][0]} of "
@@ -165,7 +195,7 @@ def render(reps: dict) -> str:
     for r in arm_rows(reps):
         noise = ms(r["noise"]) if "noise" in r else "n/a"
         L.append(f"| {r['arm']} | {r['world']} | {r['n']} | {ms(r['nested'])} | {ms(r['fixed'])} "
-                 f"| {ms(r['heldout'])} | {noise} | {r['pr_median']:.1f} |")
+                 f"| {ms(r['heldout'])} | {noise} | {fmt_pr(r['pr_median'])} |")
     L += ["", "## Comparisons (loud world; Δ and Welch t)", "",
           "| comparison | arms | nested Δ (t) | fixed Δ (t) | held-out Δ | verdict |",
           "|---|---|---|---|---|---|"]

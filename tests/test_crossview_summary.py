@@ -1,7 +1,11 @@
 """The F36 tables (scripts/crossview_summary.py) on synthetic reports: the G1
 failure list and counts, Fisher's exact test, the per-arm means, that a
 WITHHELD comparison carries no grade word, D1's two orders, the restitution
-counts, and that every Markdown table row keeps its column count."""
+counts, and that every Markdown table row keeps its column count.
+
+Only the tests that render need scipy: render() runs crossview_verdicts,
+whose NULL bound uses scipy's t quantile. The rest run on the standard
+library, as on a plain `pip install -e ".[dev]"`."""
 
 import math
 import os
@@ -10,7 +14,6 @@ import sys
 
 import pytest
 
-pytest.importorskip("scipy")
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 V = pytest.importorskip("crossview_verdicts")
 S = pytest.importorskip("crossview_summary")
@@ -78,6 +81,7 @@ def test_arm_rows_are_the_mean_and_sd_of_each_readout():
 
 
 def test_a_withheld_comparison_names_its_gate_and_carries_no_grade_word():
+    pytest.importorskip("scipy")  # crossview_verdicts' NULL bound
     out = S.render(_reps(pr=_six_of_twelve()))
     rows = [ln for ln in out.splitlines() if "WITHHELD" in ln]
     assert len(rows) == 7  # every comparison includes a failing arm
@@ -87,6 +91,7 @@ def test_a_withheld_comparison_names_its_gate_and_carries_no_grade_word():
 
 
 def test_an_ungated_comparison_shows_its_verdict_and_both_grades():
+    pytest.importorskip("scipy")  # crossview_verdicts' NULL bound
     out = S.render(_reps())
     h1 = next(ln for ln in out.splitlines() if ln.startswith("| H1 stats mixing"))
     assert "NULL" in h1 and "(nested NULL, fixed NULL)" in h1 and "WITHHELD" not in h1
@@ -107,6 +112,7 @@ def test_restitution_counts_runs_below_the_p4_floor():
 
 
 def test_every_table_row_keeps_its_column_count():
+    pytest.importorskip("scipy")  # crossview_verdicts' NULL bound
     out = S.render(_reps(pr=_six_of_twelve()))
     for block in out.split("\n\n"):
         rows = [ln for ln in block.splitlines() if ln.startswith("|")]
@@ -114,3 +120,26 @@ def test_every_table_row_keeps_its_column_count():
             continue
         widths = {len(re.split(r"(?<!\\)\|", ln)) for ln in rows}
         assert len(widths) == 1, block
+
+
+def test_fisher_needs_no_scipy_and_agrees_with_it_where_installed():
+    two, one = S.fisher_2x2(0, 3, 6, 6)
+    assert (two, one) == (pytest.approx(104 / 455), pytest.approx(84 / 455))
+    stats = pytest.importorskip("scipy.stats")
+    for table in ([0, 3, 6, 6], [2, 5, 1, 9], [3, 0, 0, 3], [1, 1, 7, 3]):
+        a, b, c, d = table
+        two, one = S.fisher_2x2(a, b, c, d)
+        assert two == pytest.approx(stats.fisher_exact([[a, b], [c, d]])[1])
+        assert one == pytest.approx(
+            stats.fisher_exact([[a, b], [c, d]], alternative="less")[1])
+
+
+def test_a_missing_or_nan_pr_prints_and_still_fails_g1():
+    assert S.fmt_pr(None) == "non-finite" and S.fmt_pr(math.nan, 3) == "non-finite"
+    assert S.lowest([40.0, math.nan, 3.0]) == "non-finite"
+    assert S.lowest([40.0, 3.04]) == "3.0"
+    assert S.median_finite([None, 1.0, 3.0]) == 2.0
+    pytest.importorskip("scipy")
+    out = S.render(_reps(pr={("P2", "ctrl"): [None, 40, 40]}))
+    assert "| P2_ctrl_s0 | non-finite |" in out
+    assert "| P2 | FAIL | 40.0 | non-finite |" in out
