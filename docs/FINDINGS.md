@@ -2965,7 +2965,8 @@ carries no material in its pixels.
 
 **Disclosure.** The runs were interrupted by a power loss, from
 02:19:24Z to 03:07:43Z on 2026-11-18. The Mac ran on battery from about
-00:03Z, with throttled clocks from about 02:04Z.
+00:03Z. Run times rose from about 3 to about 5 minutes from about 02:04Z
+(likely low-battery throttling; not verified).
 - At the stop, 46 of 115 runs were intact. The one in progress
   (P1_loud_s9) left nothing and was retrained from scratch at the same
   seed.
@@ -3025,8 +3026,10 @@ control, ′):
 4. F31a's G1, which this rule was adopted from, was read over its ctrl
    runs too.
 
-§5 has no exception, no rerun clause and no partial-arm clause. Its
-no-added-seeds principle covers re-running failing seeds as well.
+§5 has no exception, no rerun clause and no partial-arm clause. By the
+reasoning of its no-added-seeds principle (a seed choice made after seeing
+results makes the design depend on the data), re-running the failing seeds
+would not be a registered remedy.
 
 **Comparisons (loud world): all WITHHELD.** The Δs are shown for the
 record only; none is graded.
@@ -3056,7 +3059,7 @@ record only; none is graded.
 | P2′ | loud | 20 | +0.443 ± 0.035 | +0.439 ± 0.030 | +0.150 ± 0.163 | +0.444 ± 0.034 | 79.4 |
 | P2′ | ctrl | 3 | −0.025 ± 0.012 | −0.283 ± 0.164 | −0.261 ± 0.132 | −0.066 ± 0.040 | 6.0 |
 
-Two numbers belong beside P2's loud 0.727:
+Beside P2's loud row in the table above:
 - P2′ reads 0.150 held out against its nested 0.443.
 - P2 on the ctrl world reads −0.655 ± 0.425 at the fixed α.
 
@@ -3122,9 +3125,10 @@ P1 0.969, P1′ 0.971, P2 0.967 and P2′ 0.977. The runs below 0.97 number
 **The stability check missed it.** Before the freeze, one ctrl run per
 mixer and control arm (seed 100) trained healthy: final PR 44.8, 48.7,
 66.3 and 55.4. Only P2′'s mid-run dip to 13.7, recorded in §3 and
-acknowledged in 2291c16, hinted at it. One seed per arm cannot detect a
-failure rate of about one in two per ctrl seed. That is a lesson for the
-next preregistration's stability design, not an amendment to this one.
+acknowledged in 2291c16, hinted at it. One seed per arm is a weak check
+for a failure that hit half of the ctrl seeds, and here it did not catch
+it. That is a lesson for the next preregistration's stability design, not
+an amendment to this one.
 
 **Open (owner's options):**
 - (a) nothing further;
@@ -3143,7 +3147,10 @@ python scripts/crossview_verdicts.py --root runs/xv
 python scripts/crossview_summary.py --root runs/xv > runs/xv/crossview_summary.md
 ```
 
-The full `crossview_verdicts` log is in the PR body.
+`crossview_verdicts` needs scipy, which no extra in `pyproject.toml`
+installs yet, so these commands fail on a plain install.
+`crossview_summary`'s own tests run without it. The full
+`crossview_verdicts` log is in the PR body.
 
 ---
 

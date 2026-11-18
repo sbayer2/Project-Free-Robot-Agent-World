@@ -128,7 +128,8 @@ prereg** (`docs/CROSSVIEW_POOLING.md`, frozen at be391d0; PR #52): every
 verdict is WITHHELD by the frozen G1 health gate. 7 of 92 mixer and
 control runs end with PR < 8, 6 of them on the ctrl world. D1 reads high:
 per-view features hold 0.641 against mean-pooled z's 0.421. Pre-fix
-worlds were nearly friction-blind (friction explains 1% of pm_big's behavior variance before the fix, 25% after;
+worlds were nearly friction-blind (friction explains 1% of pm_big's
+behavior variance before the fix, 25% after;
 `scripts/tilt_bug_oracle.py`); F17/F18/F22a re-baseline pending. 16-view
 worlds have 7 of 16 views below the floor (camera fix: PR #48). Standing
 headline from F28/F29: unity has no internal and no measurable operational
