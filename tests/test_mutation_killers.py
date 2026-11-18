@@ -6,7 +6,6 @@ core math is altered, so green means the computation is actually correct, not
 merely non-crashing.
 """
 
-import math
 import sys
 from pathlib import Path
 

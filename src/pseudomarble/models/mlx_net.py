@@ -13,8 +13,6 @@ otherwise. This keeps the package importable in CI / Linux sessions.
 
 from __future__ import annotations
 
-from typing import Dict
-
 from pseudomarble.config import ModelConfig
 
 try:
@@ -204,7 +202,7 @@ if _HAVE_MLX:
             code = self._fsq(self.bottleneck_down(z))
             return code, nn.relu(self.bottleneck_up(code))
 
-        def __call__(self, images) -> Dict:
+        def __call__(self, images) -> dict:
             code, z = self.bottleneck(self.encoder(images))
             out = {"z": z, "behavior": self.behavior(z),
                    "essence": self.essence(z), "render": self.decode(z)}
@@ -233,13 +231,13 @@ if _HAVE_MLX:
             return self.decode(z)
 
 
-def build_model(cfg: ModelConfig = ModelConfig()):
+def build_model(cfg: ModelConfig = ModelConfig()):  # noqa: B008 (ModelConfig is frozen)
     """Construct the MLX model (raises a clear error if MLX is unavailable)."""
     _require_mlx()
     return PseudoMarbleModel(cfg)
 
 
-def loss_fn(model, batch: Dict, cfg: ModelConfig):
+def loss_fn(model, batch: dict, cfg: ModelConfig):
     """Total = behavior_weight*behavior MSE + essence_weight*essence MSE
     + render_weight*recon MSE.
 
@@ -268,7 +266,7 @@ def loss_fn(model, batch: Dict, cfg: ModelConfig):
     return total
 
 
-def coherence_term(model, out: Dict, cfg: ModelConfig):
+def coherence_term(model, out: dict, cfg: ModelConfig):
     """1 - Pearson(|render response|, |behavior response|) under shared latent
     perturbations -- the differentiable analogue of models/coherence.py's metric
     (losses.coherence_alignment_loss is the framework-free reference).

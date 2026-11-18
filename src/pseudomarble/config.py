@@ -9,8 +9,6 @@ ability to run, perturb, and reason about the whole loop on commodity hardware.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Tuple
-
 
 # Targets for the physics decoder live on very different scales (density in the
 # thousands, friction/restitution in [0,1]). These normalizers map them into a
@@ -135,7 +133,7 @@ class ModelConfig:
     trajectory_frames: int = 16
     trajectory_head_width: int = 256
     trajectory_weight: float = 0.0
-    trajectory_probes: Tuple[str, ...] = ("drop", "tilt", "push")
+    trajectory_probes: tuple[str, ...] = ("drop", "tilt", "push")
     trajectory_pos_only: bool = False
 
     # Render head (z -> reconstructed canonical appearance). A lightweight conv
@@ -172,7 +170,7 @@ class ModelConfig:
     view_pool: str = "mean"
     view_attn_heads: int = 4
     view_attn_ffn: int = 512
-    view_dirs: Tuple[Tuple[float, float, float], ...] = ()
+    view_dirs: tuple[tuple[float, float, float], ...] = ()
 
 
 VIEW_POOLS = ("mean", "stats", "stats_ctrl", "attn", "attn_ctrl")
@@ -182,7 +180,7 @@ VIEW_LN_EPS = 1e-5     # LayerNorm epsilon in the attn block (the MLX/torch defa
 VIEW_MASK_NEG = -1e9   # additive score for masked (cross-view) pairs in attn_ctrl
 
 
-def model_config_from_dict(d: dict) -> "ModelConfig":
+def model_config_from_dict(d: dict) -> ModelConfig:
     """Rebuild a ModelConfig from a run's metrics.json ``config`` (JSON turns
     tuples into lists). Unknown keys are dropped, so older and newer runs
     both load; missing keys take their defaults (an old run is view_pool
@@ -200,7 +198,7 @@ def model_config_from_dict(d: dict) -> "ModelConfig":
     return ModelConfig(**out)
 
 
-def check_view_pool(cfg: "ModelConfig", num_views: int = 0) -> None:
+def check_view_pool(cfg: ModelConfig, num_views: int = 0) -> None:
     """Raise ValueError if the pooling settings cannot build or cannot take
     ``num_views`` views (0 = skip the view-count check)."""
     if cfg.view_pool not in VIEW_POOLS:
@@ -220,19 +218,19 @@ def check_view_pool(cfg: "ModelConfig", num_views: int = 0) -> None:
                          f"{num_views} views")
 
 
-def trajectory_target_dim(cfg: "ModelConfig") -> int:
+def trajectory_target_dim(cfg: ModelConfig) -> int:
     """Width of the F31 trajectory target/head implied by the config."""
     from pseudomarble.probes import trajectory_dim
     return trajectory_dim(cfg.trajectory_frames, cfg.trajectory_probes,
                           cfg.trajectory_pos_only)
 
 
-def conv_output_channels(cfg: "ModelConfig") -> int:
+def conv_output_channels(cfg: ModelConfig) -> int:
     """Channels after the conv stack (= last conv layer's channel count)."""
     return cfg.conv_channels[-1]
 
 
-def num_upsample_steps(cfg: "ModelConfig") -> int:
+def num_upsample_steps(cfg: ModelConfig) -> int:
     """How many 2x upsamples take the decoder seed to image_size (must be exact)."""
     ratio = cfg.image_size / cfg.render_seed
     steps = 0

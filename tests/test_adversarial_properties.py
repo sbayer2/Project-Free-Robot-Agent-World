@@ -103,8 +103,8 @@ if _HAVE:
         rng = random.Random(seed)
         Mr = [[rng.gauss(0, scale) for _ in range(dim)] for _ in range(3)]
         Mb = [[rng.gauss(0, scale) for _ in range(dim)] for _ in range(2)]
-        f_render = lambda z: [sum(w * x for w, x in zip(row, z)) for row in Mr]
-        f_behavior = lambda z: [sum(w * x for w, x in zip(row, z)) for row in Mb]
+        f_render = lambda z: [sum(w * x for w, x in zip(row, z, strict=False)) for row in Mr]
+        f_behavior = lambda z: [sum(w * x for w, x in zip(row, z, strict=False)) for row in Mb]
         z = [rng.gauss(0, 1) for _ in range(dim)]
         dirs = sample_directions(dim, 32, seed=seed)
         score = coherence_score_finite_diff(z, f_render, f_behavior, dirs)

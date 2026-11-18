@@ -57,14 +57,14 @@ adapts a ``NumpyModel``; the same shape works for the MLX model on the Mac.
 
 from __future__ import annotations
 
-from typing import Callable, Dict, List, Sequence, Tuple
+from collections.abc import Callable, Sequence
 
 from pseudomarble.models.coherence import (
     coherence_score_finite_diff,
     sample_directions,
 )
 
-Decoder = Callable[[Sequence[float]], List[float]]
+Decoder = Callable[[Sequence[float]], list[float]]
 
 
 def mean_coherence(zs: Sequence[Sequence[float]], f_render: Decoder,
@@ -81,7 +81,7 @@ def mean_coherence(zs: Sequence[Sequence[float]], f_render: Decoder,
     return sum(scores) / len(scores)
 
 
-def numpy_model_decoders(model, target: str = "behavior") -> Tuple[Decoder, Decoder]:
+def numpy_model_decoders(model, target: str = "behavior") -> tuple[Decoder, Decoder]:
     """Wrap a model's render head and a chosen physics-side head as z->flat-list.
 
     ``target`` selects the physics-side decoder:
@@ -98,11 +98,11 @@ def numpy_model_decoders(model, target: str = "behavior") -> Tuple[Decoder, Deco
 
     head = {"behavior": model.behavior_from_z, "essence": model.essence_from_z}[target]
 
-    def f_render(z: Sequence[float]) -> List[float]:
+    def f_render(z: Sequence[float]) -> list[float]:
         img = model.decode(np.asarray([z], dtype="float32"))[0]
         return [float(v) for v in np.asarray(img).reshape(-1)]
 
-    def f_target(z: Sequence[float]) -> List[float]:
+    def f_target(z: Sequence[float]) -> list[float]:
         out = head(np.asarray([z], dtype="float32"))[0]
         return [float(v) for v in np.asarray(out).reshape(-1)]
 
@@ -123,19 +123,19 @@ def independent_coherence(render_model, behavior_model,
     _, fb = numpy_model_decoders(behavior_model, target)
     dr = len(zs_render[0])
 
-    def f_render(z: Sequence[float]) -> List[float]:
+    def f_render(z: Sequence[float]) -> list[float]:
         return fr(z[:dr])
 
-    def f_behavior(z: Sequence[float]) -> List[float]:
+    def f_behavior(z: Sequence[float]) -> list[float]:
         return fb(z[dr:])
 
-    joint = [list(zr) + list(zb) for zr, zb in zip(zs_render, zs_behavior)]
+    joint = [list(zr) + list(zb) for zr, zb in zip(zs_render, zs_behavior, strict=False)]
     return mean_coherence(joint, f_render, f_behavior, n_dirs=n_dirs, seed=seed)
 
 
 def compare(shared_model, render_model, behavior_model, images,
             untrained_shared_model=None, n_dirs: int = 48,
-            seed: int = 0, target: str = "behavior") -> Dict[str, float]:
+            seed: int = 0, target: str = "behavior") -> dict[str, float]:
     """Run the coherence comparison on a batch of images.
 
     ``target`` ("behavior" | "essence") picks the physics-side head. "essence" is
@@ -175,7 +175,7 @@ def compare(shared_model, render_model, behavior_model, images,
 
 def compare_both_targets(shared_model, render_model, behavior_model, images,
                          untrained_shared_model=None, n_dirs: int = 48,
-                         seed: int = 0) -> Dict[str, Dict[str, float]]:
+                         seed: int = 0) -> dict[str, dict[str, float]]:
     """Run the comparison for BOTH targets — ``{"behavior": {...}, "essence": {...}}``.
 
     The recommended read: a high essence-coherence with a low behavior-coherence

@@ -43,7 +43,6 @@ import os
 import re
 import sys
 from dataclasses import dataclass, replace
-from typing import Dict, List, Optional, Tuple
 
 from pseudomarble import probes as P
 from pseudomarble.config import PhysicsConfig, RenderConfig
@@ -65,15 +64,15 @@ class GsoObject:
     directory: str
     mesh_path: str
     category: str
-    mass_kg: Optional[float]
+    mass_kg: float | None
     mass_source: str                 # "sdf" | "json" | "pbtxt" | "estimated" | "unknown"
-    texture_path: Optional[str] = None
+    texture_path: str | None = None
 
 
 # --------------------------------------------------------------------------- #
 # Metadata parsing (pure-Python, unit-tested).
 # --------------------------------------------------------------------------- #
-def read_mass(obj_dir: str) -> Tuple[Optional[float], str]:
+def read_mass(obj_dir: str) -> tuple[float | None, str]:
     """Return ``(mass_kg, source)``. GSO ships mass in model.sdf's <inertial>;
     fall back to JSON/pbtxt metadata, else unknown."""
     sdf = os.path.join(obj_dir, "model.sdf")
@@ -133,7 +132,7 @@ def read_category(obj_dir: str) -> str:
     return "unknown"
 
 
-def _find_first(obj_dir: str, exts: Tuple[str, ...]) -> Optional[str]:
+def _find_first(obj_dir: str, exts: tuple[str, ...]) -> str | None:
     # Prefer a conventional meshes/model.obj, else first matching file by walk.
     preferred = os.path.join(obj_dir, "meshes", "model.obj")
     if os.path.exists(preferred):
@@ -145,7 +144,7 @@ def _find_first(obj_dir: str, exts: Tuple[str, ...]) -> Optional[str]:
     return None
 
 
-def _find_texture(obj_dir: str) -> Optional[str]:
+def _find_texture(obj_dir: str) -> str | None:
     for dirpath, _, files in os.walk(obj_dir):
         for f in sorted(files):
             low = f.lower()
@@ -160,11 +159,11 @@ def _find_texture(obj_dir: str) -> Optional[str]:
     return None
 
 
-def discover_objects(root: str, max_objects: Optional[int] = None) -> List[GsoObject]:
+def discover_objects(root: str, max_objects: int | None = None) -> list[GsoObject]:
     """Scan a GSO root for object directories (each containing a mesh)."""
     if not os.path.isdir(root):
         raise FileNotFoundError(f"GSO root not found: {root!r}")
-    objects: List[GsoObject] = []
+    objects: list[GsoObject] = []
     for entry in sorted(os.listdir(root)):
         obj_dir = os.path.join(root, entry)
         if not os.path.isdir(obj_dir):
@@ -183,7 +182,7 @@ def discover_objects(root: str, max_objects: Optional[int] = None) -> List[GsoOb
     return objects
 
 
-def gso_truth_block(obj: GsoObject) -> Dict:
+def gso_truth_block(obj: GsoObject) -> dict:
     """Analysis-only ground truth (never seen by the model): category + mass provenance."""
     return {
         "object_id": obj.object_id,
@@ -197,8 +196,8 @@ def gso_truth_block(obj: GsoObject) -> Dict:
 # --------------------------------------------------------------------------- #
 # Runtime: mesh bounds, rendering, probes (require trimesh / mujoco).
 # --------------------------------------------------------------------------- #
-def mesh_halfheight_and_density(mesh_path: str, mass_kg: Optional[float],
-                                scale: float) -> Tuple[float, Optional[float]]:
+def mesh_halfheight_and_density(mesh_path: str, mass_kg: float | None,
+                                scale: float) -> tuple[float, float | None]:
     """Return (z half-extent after scaling, derived density or None). Needs trimesh."""
     import trimesh  # type: ignore
 
@@ -213,7 +212,7 @@ def mesh_halfheight_and_density(mesh_path: str, mass_kg: Optional[float],
 
 
 def to_mesh_asset(obj: GsoObject, half_height: float, scale: float, friction: float,
-                  collision_paths: Tuple[str, ...] = ()) -> "object":
+                  collision_paths: tuple[str, ...] = ()) -> object:
     from pseudomarble.data.generate_mujoco import MeshAsset
     tex = os.path.abspath(obj.texture_path) if obj.texture_path else None
     return MeshAsset(
@@ -225,7 +224,7 @@ def to_mesh_asset(obj: GsoObject, half_height: float, scale: float, friction: fl
     )
 
 
-def watertight(mesh_path: str) -> Optional[bool]:
+def watertight(mesh_path: str) -> bool | None:
     """Watertightness via mesh_validate (mass = density x volume needs it).
     Returns None if trimesh is unavailable. Needs trimesh at runtime."""
     from pseudomarble.data.mesh_validate import validate_mesh
@@ -233,7 +232,7 @@ def watertight(mesh_path: str) -> Optional[bool]:
 
 
 def build_collision(mesh_path: str, scene_dir: str, method: str,
-                    max_hulls: int) -> Tuple[Tuple[str, ...], Dict]:
+                    max_hulls: int) -> tuple[tuple[str, ...], dict]:
     """Exercise the concave path: decompose the mesh into convex parts so a real
     cavity (a mug, a bowl) survives, instead of collapsing to a convex hull.
 
@@ -265,7 +264,7 @@ def auto_camera_radius(half_height: float, configured: float) -> float:
     return 4.0 * max(half_height, 0.05)
 
 
-def render_views_mesh(mesh_asset, renders_dir: str, render_cfg: RenderConfig) -> List[Dict]:
+def render_views_mesh(mesh_asset, renders_dir: str, render_cfg: RenderConfig) -> list[dict]:
     """Static multi-view renders of the scanned object resting on the ground."""
     import mujoco  # type: ignore
 
@@ -275,7 +274,7 @@ def render_views_mesh(mesh_asset, renders_dir: str, render_cfg: RenderConfig) ->
     model = mujoco.MjModel.from_xml_string(build_mjcf(mesh=mesh_asset))
     data = mujoco.MjData(model)
     mujoco.mj_forward(model, data)
-    frames: List[Dict] = []
+    frames: list[dict] = []
     renderer = mujoco.Renderer(model, render_cfg.resolution, render_cfg.resolution)
     cam = mujoco.MjvCamera()
     cam.lookat[:] = [0.0, 0.0, mesh_asset.half_height]
@@ -291,7 +290,7 @@ def render_views_mesh(mesh_asset, renders_dir: str, render_cfg: RenderConfig) ->
 
 
 def run_probes_mesh(mesh_asset, physics_cfg: PhysicsConfig,
-                    keep_trajectory: bool = False) -> List[Dict]:
+                    keep_trajectory: bool = False) -> list[dict]:
     """Run the drop/tilt/push battery on the mesh (mirrors generate_mujoco.run_probes)."""
     import math
 
@@ -299,7 +298,7 @@ def run_probes_mesh(mesh_asset, physics_cfg: PhysicsConfig,
 
     from pseudomarble.data.generate_mujoco import _simulate, build_mjcf
 
-    records: List[Dict] = []
+    records: list[dict] = []
     for spec in P.default_probes():
         if spec.kind == "drop":
             z = mesh_asset.half_height + spec.height
@@ -325,8 +324,8 @@ def run_probes_mesh(mesh_asset, physics_cfg: PhysicsConfig,
             wrench = [fx, fy, 0.0, -rz * fy, rz * fx, 0.0]
             body = model.body("object").id
 
-            def force_fn(t, w=wrench, b=body):
-                return w if settle <= t < settle + window else [0.0] * 6
+            def force_fn(t, w=wrench, b=body, s0=settle, dw=window):
+                return w if s0 <= t < s0 + dw else [0.0] * 6
 
             traj = _simulate(model, data, physics_cfg.sim_seconds, physics_cfg.fps, force_fn)
         outcome = P.summarize(traj)
@@ -338,7 +337,7 @@ def run_probes_mesh(mesh_asset, physics_cfg: PhysicsConfig,
 
 def build_scene_gso(scene_id: str, obj: GsoObject, split: str, out_root: str,
                     render_cfg: RenderConfig, physics_cfg: PhysicsConfig,
-                    scale: float, friction: float, keep_trajectory: bool = False) -> Dict:
+                    scale: float, friction: float, keep_trajectory: bool = False) -> dict:
     """Generate one GSO scene (appearance + behavior + measured physics) -> sample.json."""
     scene_dir = os.path.join(out_root, scene_id)
     is_watertight = watertight(obj.mesh_path)            # mesh_validate gate
@@ -368,7 +367,7 @@ def build_scene_gso(scene_id: str, obj: GsoObject, split: str, out_root: str,
     return record
 
 
-def _build_scene_gso_task(task: Tuple) -> Dict:
+def _build_scene_gso_task(task: tuple) -> dict:
     """Module-level (picklable) worker: build one GSO scene from a packed task.
 
     Like the MuJoCo path, each scene is self-contained — its own mesh validation,
@@ -380,7 +379,7 @@ def _build_scene_gso_task(task: Tuple) -> Dict:
                            scale, friction, keep)
 
 
-def parse_args(argv: List[str]) -> argparse.Namespace:
+def parse_args(argv: list[str]) -> argparse.Namespace:
     p = argparse.ArgumentParser(description="pseudo-marble GSO (real-object) generation")
     p.add_argument("--gso-root", required=True, help="directory of scanned-object folders")
     p.add_argument("--output", default="data/pm_gso")
@@ -413,7 +412,7 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
     return p.parse_args(argv)
 
 
-def plan_split(objects: List[GsoObject], holdout_categories: str, holdout_frac: float,
+def plan_split(objects: list[GsoObject], holdout_categories: str, holdout_frac: float,
                seed: int, holdout_kind: str = "auto"):
     """Choose the holdout split.
 
@@ -440,7 +439,7 @@ def plan_split(objects: List[GsoObject], holdout_categories: str, holdout_frac: 
     return make_object_holdout([o.object_id for o in objects], holdout_frac, seed)
 
 
-def main(argv: List[str]) -> None:
+def main(argv: list[str]) -> None:
     args = parse_args(argv)
     objects = discover_objects(args.gso_root, args.num_objects)
     if not objects:
@@ -473,11 +472,11 @@ def main(argv: List[str]) -> None:
                       args.scale, args.friction, args.keep_trajectory))
         metas.append((scene_id, obj, sp))
 
-    def _progress(i: int, _record: Dict) -> None:
+    def _progress(i: int, _record: dict) -> None:
         scene_id, obj, sp = metas[i]
         print(f"[gso] built {scene_id} ({obj.object_id} / {obj.category} / {sp})")
 
-    scenes: List[Dict] = ordered_parallel_map(
+    scenes: list[dict] = ordered_parallel_map(
         _build_scene_gso_task, tasks, workers, on_done=_progress)
 
     n_test = sum(1 for s in scenes if s["split"] == "test")

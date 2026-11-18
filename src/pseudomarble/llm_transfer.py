@@ -39,7 +39,7 @@ import json
 import re
 import urllib.parse
 import urllib.request
-from typing import Callable, Dict, List, Optional, Sequence, Tuple
+from collections.abc import Callable, Sequence
 
 from pseudomarble.probes import (
     OUTCOME_FIELDS,
@@ -57,7 +57,8 @@ REST_SPEED = 0.03  # probes.REST_SPEED; restated next to its prompt description
 
 _FIELD_SPECS = f"""Report these outcome fields, measured over the {SIM_SECONDS:.0f}-second episode
 (the object's position means its CENTER; sampling at 60 Hz):
-- "toppled": true if the object's up-axis ends more than {TOPPLE_ANGLE_DEG:.0f} degrees from vertical.
+- "toppled": true if the object's up-axis ends more than {TOPPLE_ANGLE_DEG:.0f} \
+degrees from vertical.
 - "settle_time": seconds until the object's speed last drops below {REST_SPEED} m/s; if it is
   still moving when the episode ends, this is simply ~the episode length ({SIM_SECONDS:.2f}).
 - "slid_distance": horizontal displacement of the center from start to rest, in meters.
@@ -98,7 +99,7 @@ def _shape_text(shape: str) -> str:
     )
 
 
-def state_text(sample: Dict, condition: str, n_images: int = 0) -> str:
+def state_text(sample: dict, condition: str, n_images: int = 0) -> str:
     """The environment-state block for one scene, under one information condition."""
     if condition not in CONDITIONS:
         raise ValueError(f"condition must be one of {CONDITIONS}, got {condition!r}")
@@ -132,7 +133,7 @@ def state_text(sample: Dict, condition: str, n_images: int = 0) -> str:
     return "\n".join(lines)
 
 
-def scene_view_files(sample: Dict, k: int) -> List[str]:
+def scene_view_files(sample: dict, k: int) -> list[str]:
     """The first ``k`` render filenames of a scene (relative to the scene dir),
     in the dataset's deterministic fibonacci-sphere view order."""
     frames = sample.get("appearance", {}).get("frames", [])
@@ -147,7 +148,7 @@ def encode_image_data_url(path: str) -> str:
         return "data:image/png;base64," + base64.b64encode(fh.read()).decode()
 
 
-def action_text(probe_record: Dict) -> str:
+def action_text(probe_record: dict) -> str:
     """Describe one probe exactly as the generator executes it (generate_mujoco)."""
     kind = probe_record["probe"]
     spec = probe_record.get("spec", {})
@@ -170,8 +171,8 @@ def action_text(probe_record: Dict) -> str:
     raise ValueError(f"unknown probe kind {kind!r}")
 
 
-def build_messages(sample: Dict, probe_record: Dict, condition: str,
-                   image_paths: Optional[Sequence[str]] = None) -> List[Dict]:
+def build_messages(sample: dict, probe_record: dict, condition: str,
+                   image_paths: Sequence[str] | None = None) -> list[dict]:
     """OpenAI-style chat messages for one (scene, probe, condition) query.
 
     For ``condition="vision"``, ``image_paths`` (rendered views of the scene)
@@ -185,7 +186,7 @@ def build_messages(sample: Dict, probe_record: Dict, condition: str,
         f"{action_text(probe_record)}\n\nPredict the outcome fields."
     )
     if condition == "vision":
-        content: List[Dict] = [
+        content: list[dict] = [
             {"type": "image_url", "image_url": {"url": encode_image_data_url(p)}}
             for p in image_paths
         ]
@@ -204,7 +205,7 @@ def build_messages(sample: Dict, probe_record: Dict, condition: str,
 _FENCE_RE = re.compile(r"```(?:json)?\s*(\{.*?\})\s*```", re.DOTALL)
 
 
-def _candidate_jsons(text: str) -> List[str]:
+def _candidate_jsons(text: str) -> list[str]:
     """JSON-object candidates, later-in-text last (fenced blocks preferred)."""
     fenced = _FENCE_RE.findall(text)
     if fenced:
@@ -223,7 +224,7 @@ def _candidate_jsons(text: str) -> List[str]:
     return spans
 
 
-def _coerce_field(name: str, value) -> Optional[float]:
+def _coerce_field(name: str, value) -> float | None:
     if name == "toppled":
         if isinstance(value, bool):
             return 1.0 if value else 0.0
@@ -239,7 +240,7 @@ def _coerce_field(name: str, value) -> Optional[float]:
         return None
 
 
-def extract_prediction(text: str) -> Optional[Dict[str, float]]:
+def extract_prediction(text: str) -> dict[str, float] | None:
     """The LAST parseable outcome JSON in a model reply, fields coerced to float.
 
     Returns None when no candidate parses to an object containing at least one
@@ -268,7 +269,7 @@ def extract_prediction(text: str) -> Optional[Dict[str, float]]:
 # --------------------------------------------------------------------------- #
 # Scoring — same normalization as the trained model's behavior target.
 # --------------------------------------------------------------------------- #
-def probe_outcomes(sample: Dict) -> Dict[str, Dict]:
+def probe_outcomes(sample: dict) -> dict[str, dict]:
     """{probe kind -> ground-truth outcome dict} for one scene (PROBE_ORDER kinds)."""
     return {
         r["probe"]: r["outcome"]
@@ -277,11 +278,11 @@ def probe_outcomes(sample: Dict) -> Dict[str, Dict]:
     }
 
 
-def train_mean_outcomes(train_samples: Sequence[Dict]) -> Dict[str, Dict[str, float]]:
+def train_mean_outcomes(train_samples: Sequence[dict]) -> dict[str, dict[str, float]]:
     """Per-(probe, field) mean over the train split — the predict-the-mean baseline."""
-    sums: Dict[str, Dict[str, float]] = {k: {f: 0.0 for f in OUTCOME_FIELDS}
+    sums: dict[str, dict[str, float]] = {k: {f: 0.0 for f in OUTCOME_FIELDS}
                                          for k in PROBE_ORDER}
-    counts: Dict[str, int] = {k: 0 for k in PROBE_ORDER}
+    counts: dict[str, int] = {k: 0 for k in PROBE_ORDER}
     for s in train_samples:
         for kind, outcome in probe_outcomes(s).items():
             counts[kind] += 1
@@ -295,9 +296,9 @@ def train_mean_outcomes(train_samples: Sequence[Dict]) -> Dict[str, Dict[str, fl
 
 
 def score_predictions(
-    rows: Sequence[Tuple[str, str, Optional[Dict[str, float]], Dict]],
-    train_mean: Dict[str, Dict[str, float]],
-) -> Dict:
+    rows: Sequence[tuple[str, str, dict[str, float] | None, dict]],
+    train_mean: dict[str, dict[str, float]],
+) -> dict:
     """Score (scene_id, probe_kind, prediction-or-None, truth_outcome) rows.
 
     Per entry the error is ``((pred - truth) / OUTCOME_NORMALIZERS[field])**2`` —
@@ -305,12 +306,12 @@ def score_predictions(
     predicts the train-split mean. Missing predictions (parse failure or absent
     field) are imputed with the baseline value and counted in ``imputed``.
     """
-    field_err: Dict[str, List[float]] = {}
-    field_base: Dict[str, List[float]] = {}
-    brier: List[float] = []
+    field_err: dict[str, list[float]] = {}
+    field_base: dict[str, list[float]] = {}
+    brier: list[float] = []
     n_parse_failures = 0
     n_imputed = 0
-    for scene_id, kind, pred, truth in rows:
+    for _scene_id, kind, pred, truth in rows:
         if pred is None:
             n_parse_failures += 1
             pred = {}
@@ -363,12 +364,12 @@ def score_predictions(
 def chat_completion(
     base_url: str,
     model: str,
-    messages: List[Dict],
+    messages: list[dict],
     temperature: float = 0.0,
     max_tokens: int = 4096,
     timeout: float = 600.0,
-    api_key: Optional[str] = None,
-    transport: Optional[Callable[[str, bytes, Dict[str, str]], bytes]] = None,
+    api_key: str | None = None,
+    transport: Callable[[str, bytes, dict[str, str]], bytes] | None = None,
 ) -> str:
     """POST /chat/completions and return the reply text.
 
@@ -398,7 +399,7 @@ def chat_completion(
             raise ValueError(
                 f"chat endpoint must be http(s); got scheme {scheme!r} in {url!r}")
 
-        def transport(u: str, b: bytes, h: Dict[str, str]) -> bytes:  # pragma: no cover - network
+        def transport(u: str, b: bytes, h: dict[str, str]) -> bytes:  # pragma: no cover - network
             req = urllib.request.Request(u, data=b, headers=h)
             with urllib.request.urlopen(req, timeout=timeout) as resp:  # nosec B310 - scheme validated above
                 return resp.read()

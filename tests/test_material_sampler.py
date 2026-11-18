@@ -24,7 +24,7 @@ from pseudomarble.materials import (  # noqa: E402
 def _pearson(xs, ys):
     n = len(xs)
     mx, my = sum(xs) / n, sum(ys) / n
-    cov = sum((x - mx) * (y - my) for x, y in zip(xs, ys))
+    cov = sum((x - mx) * (y - my) for x, y in zip(xs, ys, strict=False))
     vx = sum((x - mx) ** 2 for x in xs)
     vy = sum((y - my) ** 2 for y in ys)
     return cov / ((vx * vy) ** 0.5 or 1.0)
@@ -83,9 +83,12 @@ def test_appearance_formula_directions():
 
 def test_physics_formula_directions():
     s = MaterialSampler(seed=0, appearance_noise=0.0)
-    assert s._physics_from_factors(0.9, 0.5, 0.5).density > s._physics_from_factors(0.1, 0.5, 0.5).density
-    assert s._physics_from_factors(0.5, 0.9, 0.5).friction > s._physics_from_factors(0.5, 0.1, 0.5).friction
-    assert s._physics_from_factors(0.5, 0.5, 0.9).restitution > s._physics_from_factors(0.5, 0.5, 0.1).restitution
+    assert (s._physics_from_factors(0.9, 0.5, 0.5).density
+            > s._physics_from_factors(0.1, 0.5, 0.5).density)
+    assert (s._physics_from_factors(0.5, 0.9, 0.5).friction
+            > s._physics_from_factors(0.5, 0.1, 0.5).friction)
+    assert (s._physics_from_factors(0.5, 0.5, 0.9).restitution
+            > s._physics_from_factors(0.5, 0.5, 0.1).restitution)
 
 
 def test_nearest_anchor_recovers_seed_material():
@@ -111,7 +114,7 @@ def test_generator_appearance_noise_flag_is_appearance_only():
     a0 = assign_scenes(["box", "sphere"], H, 8, seed=0, appearance_noise=0.0)
     a7 = assign_scenes(["box", "sphere"], H, 8, seed=0, appearance_noise=0.07)
     # physics + split invariant across the noise knob
-    for r0, r7 in zip(a0, a7):
+    for r0, r7 in zip(a0, a7, strict=False):
         p0, p7 = r0["sample"].material.physics, r7["sample"].material.physics
         assert (p0.density, p0.friction, p0.restitution) == \
                (p7.density, p7.friction, p7.restitution)

@@ -38,10 +38,10 @@ exact) is provided when ``mlx`` is importable.
 from __future__ import annotations
 
 import random
-from typing import Callable, List, Sequence
+from collections.abc import Callable, Sequence
 
 
-def sample_directions(dim: int, n: int, seed: int = 0) -> List[List[float]]:
+def sample_directions(dim: int, n: int, seed: int = 0) -> list[list[float]]:
     """Sample ``n`` iid Gaussian directions in ``dim`` dimensions.
 
     Gaussian (NOT unit-normalized) — see the module docstring for why this
@@ -57,7 +57,7 @@ def _pearson(xs: Sequence[float], ys: Sequence[float]) -> float:
         raise ValueError("xs and ys must be non-empty and equal length")
     mx = sum(xs) / n
     my = sum(ys) / n
-    cov = sum((x - mx) * (y - my) for x, y in zip(xs, ys))
+    cov = sum((x - mx) * (y - my) for x, y in zip(xs, ys))  # noqa: B905 (mutation target)
     vx = sum((x - mx) ** 2 for x in xs)
     vy = sum((y - my) ** 2 for y in ys)
     denom = (vx * vy) ** 0.5
@@ -80,13 +80,13 @@ def coherence_score_finite_diff(
     """
 
     def _l2(a: Sequence[float], b: Sequence[float]) -> float:
-        return sum((ai - bi) ** 2 for ai, bi in zip(a, b)) ** 0.5
+        return sum((ai - bi) ** 2 for ai, bi in zip(a, b)) ** 0.5  # noqa: B905 (mutation target)
 
     r0 = f_render(z)
     p0 = f_physics(z)
     rmag, pmag = [], []
     for d in directions:
-        zp = [zi + eps * di for zi, di in zip(z, d)]
+        zp = [zi + eps * di for zi, di in zip(z, d)]  # noqa: B905 (mutation target)
         rmag.append(_l2(f_render(zp), r0) / eps)
         pmag.append(_l2(f_physics(zp), p0) / eps)
     return _pearson(rmag, pmag)

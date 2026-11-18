@@ -29,7 +29,6 @@ import argparse
 import json
 import os
 import sys
-from typing import Dict, List
 
 # ``bpy`` only exists inside Blender. Keep the import soft so CI can import the
 # file for linting without a Blender runtime.
@@ -161,7 +160,7 @@ def setup_world_and_light() -> None:
 
 
 def render_views(obj, out_dir: str, num_views: int, radius: float, res: int,
-                 engine: str, samples: int) -> List[Dict]:
+                 engine: str, samples: int) -> list[dict]:
     _require_bpy()
     scene = bpy.context.scene
     scene.render.engine = engine
@@ -176,7 +175,7 @@ def render_views(obj, out_dir: str, num_views: int, radius: float, res: int,
 
     os.makedirs(out_dir, exist_ok=True)
     target = obj.location
-    frames: List[Dict] = []
+    frames: list[dict] = []
     for i, pos in enumerate(samples.fibonacci_sphere_poses(num_views, radius)):
         cam.location = Vector(pos)
         _look_at(cam, target)
@@ -195,7 +194,7 @@ def _look_at(cam, target) -> None:
     cam.rotation_euler = direction.to_track_quat("-Z", "Y").to_euler()
 
 
-def simulate_drop(obj, cfg_seconds: float, fps: int) -> List[Dict]:
+def simulate_drop(obj, cfg_seconds: float, fps: int) -> list[dict]:
     """Bake a short rigid-body drop and record the object's trajectory."""
     _require_bpy()
     scene = bpy.context.scene
@@ -211,7 +210,7 @@ def simulate_drop(obj, cfg_seconds: float, fps: int) -> List[Dict]:
     scene.rigidbody_world.point_cache.frame_end = n_frames
     bpy.ops.ptcache.bake_all(bake=True)
 
-    traj: List[Dict] = []
+    traj: list[dict] = []
     for f in range(1, n_frames + 1):
         scene.frame_set(f)
         loc = obj.matrix_world.translation
@@ -220,7 +219,7 @@ def simulate_drop(obj, cfg_seconds: float, fps: int) -> List[Dict]:
 
 
 def build_scene(scene_id: str, shape_id: str, material_name: str, split: str,
-                out_root: str, render_cfg, physics_cfg) -> Dict:
+                out_root: str, render_cfg, physics_cfg) -> dict:
     """Generate one paired sample and return its manifest record."""
     _require_bpy()
     reset_scene()
@@ -247,7 +246,7 @@ def build_scene(scene_id: str, shape_id: str, material_name: str, split: str,
     return record
 
 
-def parse_args(argv: List[str]) -> argparse.Namespace:
+def parse_args(argv: list[str]) -> argparse.Namespace:
     p = argparse.ArgumentParser(description="pseudo-marble Blender data generation")
     p.add_argument("--output", default="data/pseudo_marble")
     p.add_argument("--num-scenes", type=int, default=16)
@@ -265,7 +264,7 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
     return p.parse_args(argv)
 
 
-def main(argv: List[str]) -> None:
+def main(argv: list[str]) -> None:
     _require_bpy()
     from pseudomarble.config import PhysicsConfig, RenderConfig
     from pseudomarble.splits import assign_scene_materials, make_combination_split
@@ -286,7 +285,7 @@ def main(argv: List[str]) -> None:
     physics_cfg = PhysicsConfig()
 
     os.makedirs(args.output, exist_ok=True)
-    scenes: List[Dict] = []
+    scenes: list[dict] = []
     for rec in assignments:
         out = build_scene(
             rec["scene_id"], rec["shape"], rec["material"], rec["split"],

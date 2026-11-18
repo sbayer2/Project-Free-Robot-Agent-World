@@ -24,8 +24,8 @@ from __future__ import annotations
 import json
 import os
 import random
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
-from typing import Dict, Iterator, List, Optional, Sequence
 
 from pseudomarble import probes as P
 
@@ -38,7 +38,7 @@ APPEARANCE_FIELDS = ("color_r", "color_g", "color_b", "color_a",
                      "roughness", "metallic", "transmission", "ior")
 
 
-def appearance_vector(appearance_params: Dict) -> List[float]:
+def appearance_vector(appearance_params: dict) -> list[float]:
     """Normalized 8-dim appearance target from material_truth.appearance_params."""
     c = list(appearance_params.get("base_color", [0.0, 0.0, 0.0, 1.0]))
     return c[:4] + [
@@ -49,7 +49,7 @@ def appearance_vector(appearance_params: Dict) -> List[float]:
     ]
 
 
-def _read_json(path: str) -> Dict:
+def _read_json(path: str) -> dict:
     with open(path) as fh:
         return json.load(fh)
 
@@ -62,39 +62,39 @@ class Scene:
     split: str
     shape: str
     directory: str
-    record: Dict
+    record: dict
 
     # -- targets (pure-Python) ------------------------------------------- #
-    def behavior_target(self, normalize: bool = True) -> List[float]:
+    def behavior_target(self, normalize: bool = True) -> list[float]:
         probes = self.record.get("behavior", {}).get("probes", [])
         return P.behavior_vector(probes, normalize=normalize)
 
-    def essence_target(self) -> List[float]:
+    def essence_target(self) -> list[float]:
         norm = self.record.get("physics", {}).get("normalized", {})
         return [float(norm.get(k, 0.0)) for k in ESSENCE_FIELDS]
 
-    def appearance_target(self) -> List[float]:
+    def appearance_target(self) -> list[float]:
         ap = self.record.get("material_truth", {}).get("appearance_params", {})
         return appearance_vector(ap)
 
     def trajectory_target(self, frames: int, probes: Sequence[str] = P.PROBE_ORDER,
-                          pos_only: bool = False) -> List[float]:
+                          pos_only: bool = False) -> list[float]:
         """F31 target: probes.trajectory_vector (needs --keep-trajectory data)."""
         records = self.record.get("behavior", {}).get("probes", [])
         return P.trajectory_vector(records, frames, probes, pos_only)
 
-    def factors_target(self) -> Optional[List[float]]:
+    def factors_target(self) -> list[float] | None:
         factors = self.record.get("material_truth", {}).get("factors")
         if not factors:
             return None
         return [float(factors[k]) for k in FACTOR_FIELDS]
 
     # -- appearance (paths now, pixels on demand) ------------------------ #
-    def view_files(self) -> List[str]:
+    def view_files(self) -> list[str]:
         frames = self.record.get("appearance", {}).get("frames", [])
         return [os.path.join(self.directory, "renders", f["file"]) for f in frames]
 
-    def camera_directions(self) -> List[List[float]]:
+    def camera_directions(self) -> list[list[float]]:
         """Unit vector from look_at to each camera, (position - look_at) / norm,
         read from the stored frames in view order (the order view_files and
         load_views use). Never from a pose function: the layout that rendered
@@ -112,16 +112,16 @@ class Scene:
 class PseudoMarbleDataset:
     """Indexable dataset over a generated run, optionally filtered by split."""
 
-    def __init__(self, root: str, split: Optional[str] = None,
+    def __init__(self, root: str, split: str | None = None,
                  normalize_targets: bool = True) -> None:
         self.root = root
         self.split = split
         self.normalize_targets = normalize_targets
         self.behavior_dim = P.BEHAVIOR_DIM
-        self.scenes: List[Scene] = self._load(root, split)
+        self.scenes: list[Scene] = self._load(root, split)
 
     @staticmethod
-    def _load(root: str, split: Optional[str]) -> List[Scene]:
+    def _load(root: str, split: str | None) -> list[Scene]:
         manifest_path = os.path.join(root, "manifest.json")
         if not os.path.exists(manifest_path):
             raise FileNotFoundError(
@@ -129,7 +129,7 @@ class PseudoMarbleDataset:
                 "(python -m pseudomarble.data.generate_mujoco ...)"
             )
         manifest = _read_json(manifest_path)
-        scenes: List[Scene] = []
+        scenes: list[Scene] = []
         for entry in manifest.get("scenes", []):
             if split is not None and entry.get("split") != split:
                 continue
@@ -154,14 +154,14 @@ class PseudoMarbleDataset:
         return self.scenes[i]
 
     # -- bulk target access (no images needed) --------------------------- #
-    def behavior_targets(self) -> List[List[float]]:
+    def behavior_targets(self) -> list[list[float]]:
         return [s.behavior_target(self.normalize_targets) for s in self.scenes]
 
-    def essence_targets(self) -> List[List[float]]:
+    def essence_targets(self) -> list[list[float]]:
         return [s.essence_target() for s in self.scenes]
 
-    def camera_directions(self, max_views: Optional[int] = None,
-                          tol: float = 1e-6) -> List[List[float]]:
+    def camera_directions(self, max_views: int | None = None,
+                          tol: float = 1e-6) -> list[list[float]]:
         """The world's camera directions (Scene.camera_directions), checked to be
         the same in every scene; the first ``max_views`` when capped, matching
         load_views. Raises ValueError if scenes disagree by more than ``tol``."""
@@ -177,7 +177,7 @@ class PseudoMarbleDataset:
         return ref[:max_views] if max_views is not None else ref
 
     # -- image loading (lazy; needs numpy + an image reader) ------------- #
-    def load_views(self, scene: Scene, max_views: Optional[int] = None):
+    def load_views(self, scene: Scene, max_views: int | None = None):
         """Return an array of shape (n_views, H, W, 3), float32 in [0, 1]."""
         import numpy as np  # type: ignore
 
@@ -195,13 +195,13 @@ class PseudoMarbleDataset:
         shuffle: bool = True,
         seed: int = 0,
         with_images: bool = False,
-        max_views: Optional[int] = None,
+        max_views: int | None = None,
         as_mlx: bool = False,
         drop_last: bool = False,
         trajectory_frames: int = 0,
         trajectory_probes: Sequence[str] = P.PROBE_ORDER,
         trajectory_pos_only: bool = False,
-    ) -> Iterator[Dict]:
+    ) -> Iterator[dict]:
         """Yield batches of ``{scene_ids, behavior, essence[, images]}``.
 
         Targets are always provided. Images are loaded only if ``with_images``.
@@ -219,7 +219,7 @@ class PseudoMarbleDataset:
             if drop_last and len(idx) < batch_size:
                 break
             scenes = [self.scenes[i] for i in idx]
-            batch: Dict = {
+            batch: dict = {
                 "scene_ids": [s.scene_id for s in scenes],
                 "behavior": [s.behavior_target(self.normalize_targets) for s in scenes],
                 "essence": [s.essence_target() for s in scenes],
@@ -256,7 +256,7 @@ def _load_image(path: str):
     return arr.astype("float32") / 255.0
 
 
-def _to_mlx(batch: Dict) -> Dict:
+def _to_mlx(batch: dict) -> dict:
     import mlx.core as mx  # type: ignore
 
     out = dict(batch)

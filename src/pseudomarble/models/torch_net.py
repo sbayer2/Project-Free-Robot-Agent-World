@@ -16,8 +16,6 @@ Quick in-session smoke (overfits a tiny synthetic batch; loss should plummet)::
 
 from __future__ import annotations
 
-from typing import Dict, List
-
 from pseudomarble.config import ModelConfig
 
 try:
@@ -98,7 +96,7 @@ if _HAVE_TORCH:
     class TorchModel(nn.Module):
         """Encoder + behavior head (+ aux essence head), mirroring mlx_net."""
 
-        def __init__(self, cfg: ModelConfig = ModelConfig()) -> None:
+        def __init__(self, cfg: ModelConfig = ModelConfig()) -> None:  # noqa: B008 (ModelConfig is frozen)
             super().__init__()
             self.cfg = cfg
             convs = []
@@ -184,7 +182,7 @@ if _HAVE_TORCH:
             code = c + (torch.round(c) - c).detach()   # STE
             return code, torch.relu(self.bottleneck_up(code))
 
-        def forward(self, images) -> Dict:
+        def forward(self, images) -> dict:
             code, z = self.bottleneck(self.encode(images))
             out = {"z": z, "behavior": self.behavior(z),
                    "essence": self.essence(z), "render": self.decode(z)}
@@ -213,12 +211,12 @@ if _HAVE_TORCH:
             return self.decode(z)
 
 
-def build_model(cfg: ModelConfig = ModelConfig()):
+def build_model(cfg: ModelConfig = ModelConfig()):  # noqa: B008 (ModelConfig is frozen)
     _require_torch()
     return TorchModel(cfg)
 
 
-def loss_fn(out: Dict, behavior_t, essence_t, cfg: ModelConfig, render_t=None,
+def loss_fn(out: dict, behavior_t, essence_t, cfg: ModelConfig, render_t=None,
             appearance_t=None, model=None, trajectory_t=None):
     """behavior_weight*behavior MSE + essence_weight*essence MSE
     (+ render_weight*recon MSE) (+ appearance_weight*appearance MSE)
@@ -247,7 +245,7 @@ def loss_fn(out: Dict, behavior_t, essence_t, cfg: ModelConfig, render_t=None,
     return loss
 
 
-def coherence_term(model, out: Dict, cfg: ModelConfig):
+def coherence_term(model, out: dict, cfg: ModelConfig):
     """F25 coherence objective, mirroring mlx_net.coherence_term exactly:
     1 - Pearson(|render response|, |behavior response|) under shared latent
     perturbations (framework-free reference: losses.coherence_alignment_loss)."""
@@ -273,7 +271,7 @@ def coherence_term(model, out: Dict, cfg: ModelConfig):
 
 
 def overfit_smoke(cfg: ModelConfig, images, behavior_t, essence_t,
-                  steps: int = 200, lr: float = 1e-3, seed: int = 0) -> List[float]:
+                  steps: int = 200, lr: float = 1e-3, seed: int = 0) -> list[float]:
     """Train on one fixed batch (incl. the render head); returns loss per step.
     Loss should fall sharply if gradients flow through the whole network."""
     _require_torch()
@@ -281,7 +279,7 @@ def overfit_smoke(cfg: ModelConfig, images, behavior_t, essence_t,
     model = TorchModel(cfg)
     opt = torch.optim.Adam(model.parameters(), lr=lr)
     render_t = images.mean(dim=1)  # mean over the N views = canonical appearance
-    history: List[float] = []
+    history: list[float] = []
     for _ in range(steps):
         opt.zero_grad()
         loss = loss_fn(model(images), behavior_t, essence_t, cfg, render_t)

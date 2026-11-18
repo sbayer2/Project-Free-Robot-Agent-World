@@ -16,14 +16,13 @@ from __future__ import annotations
 
 import warnings
 from dataclasses import dataclass, field
-from typing import List, Optional
 
 
 @dataclass
 class CollisionResult:
     method: str  # "coacd" | "vhacd" | "convex_hull"
     n_parts: int
-    part_paths: List[str] = field(default_factory=list)
+    part_paths: list[str] = field(default_factory=list)
     degraded: bool = False  # True if we fell back from the requested method
     note: str = ""
 
@@ -64,7 +63,7 @@ def compute_collision(
     raise RuntimeError(f"no collision backend succeeded; last: {last_note}")
 
 
-def _fallback_order(method: str) -> List[str]:
+def _fallback_order(method: str) -> list[str]:
     if method == "convex_hull":
         return ["convex_hull"]
     if method == "vhacd":
@@ -82,7 +81,7 @@ def _coacd(mesh_path: str, out_dir: str, max_hulls: int, degraded: bool) -> Coll
     cmesh = coacd.Mesh(mesh.vertices, mesh.faces)
     parts = coacd.run_coacd(cmesh, max_convex_hull=max_hulls)
     os.makedirs(out_dir, exist_ok=True)
-    paths: List[str] = []
+    paths: list[str] = []
     for i, (verts, faces) in enumerate(parts):
         p = os.path.join(out_dir, f"hull_{i:03d}.obj")
         trimesh.Trimesh(verts, faces).export(p)

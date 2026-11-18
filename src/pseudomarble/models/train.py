@@ -18,13 +18,12 @@ from __future__ import annotations
 import argparse
 import json
 import os
-from typing import Dict, List
 
 from pseudomarble.config import ModelConfig
 from pseudomarble.data.dataset import PseudoMarbleDataset
 
 
-def parse_args(argv: List[str]) -> argparse.Namespace:
+def parse_args(argv: list[str]) -> argparse.Namespace:
     p = argparse.ArgumentParser(description="train pseudo-marble encoder + behavior head")
     p.add_argument("--data", default="data/pseudo_marble", help="dataset root")
     p.add_argument("--epochs", type=int, default=30)
@@ -135,7 +134,7 @@ def with_view_dirs(cfg: ModelConfig, data_root: str, max_views=None) -> ModelCon
     return replace(cfg, view_dirs=tuple(tuple(d) for d in dirs))
 
 
-def trajectory_kwargs(cfg: ModelConfig) -> Dict:
+def trajectory_kwargs(cfg: ModelConfig) -> dict:
     """iter_batches kwargs for the F31 target: loaded only when its head is on."""
     if cfg.trajectory_weight <= 0:
         return {}
@@ -167,7 +166,7 @@ def latent_pr(model, dataset: PseudoMarbleDataset, batch_size: int, max_views,
 
 
 def evaluate(model, dataset: PseudoMarbleDataset, cfg: ModelConfig,
-             batch_size: int, max_views) -> Dict[str, float]:
+             batch_size: int, max_views) -> dict[str, float]:
     """Mean behavior / essence MSE over a split (no shuffling)."""
     import mlx.core as mx  # type: ignore
 
@@ -184,7 +183,7 @@ def evaluate(model, dataset: PseudoMarbleDataset, cfg: ModelConfig,
     return {"behavior_mse": nb / n, "essence_mse": ne / n, "render_mse": nr / n}
 
 
-def main(argv: List[str]) -> None:
+def main(argv: list[str]) -> None:
     import mlx.core as mx  # type: ignore
     import mlx.nn as nn  # type: ignore
     import mlx.optimizers as optim  # type: ignore
@@ -219,7 +218,7 @@ def main(argv: List[str]) -> None:
     model = build_model(cfg)
     optimizer = optim.AdamW(learning_rate=args.lr)
     os.makedirs(args.out, exist_ok=True)
-    history: List[Dict] = []
+    history: list[dict] = []
 
     from dataclasses import replace
 
@@ -230,7 +229,7 @@ def main(argv: List[str]) -> None:
         scale = behavior_warmup_scale(epoch, args.behavior_warmup_epochs)
         epoch_cfg = replace(cfg, behavior_weight=cfg.behavior_weight * scale)
         running, steps = 0.0, 0
-        for batch in train.iter_batches(args.batch_size, shuffle=True, seed=epoch,
+        for batch in train.iter_batches(args.batch_size, shuffle=True, seed=epoch,  # noqa: B007 (read by batch_loss)
                                         with_images=True, max_views=args.max_views,
                                         as_mlx=True, **trajectory_kwargs(cfg)):
             loss, grads = nn.value_and_grad(model, batch_loss)(model)

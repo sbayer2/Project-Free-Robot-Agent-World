@@ -46,7 +46,6 @@ import math
 import os
 import sys
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple
 
 from pseudomarble import materials as M
 from pseudomarble import probes as P
@@ -78,7 +77,7 @@ except Exception:  # pragma: no cover - depends on runtime
 # asset — the GSO/Objaverse path (docs/GSO_EXPERIMENT.md). ``half_height`` is the
 # object's half-extent in z, used to place it on the ground and to find where a
 # push lands.
-SHAPE_TO_GEOM: Dict[str, Dict] = {
+SHAPE_TO_GEOM: dict[str, dict] = {
     "box": {"type": "box", "size": "0.15 0.15 0.15", "half_height": 0.15},
     "cube": {"type": "box", "size": "0.15 0.15 0.15", "half_height": 0.15},
     "sphere": {"type": "sphere", "size": "0.18", "half_height": 0.18},
@@ -131,12 +130,12 @@ class MeshAsset:
     scale: float = 1.0
     friction: float = 0.5                     # ASSUMED (not measured)
     restitution: float = 0.3                  # ASSUMED (not measured)
-    collision_paths: Tuple[str, ...] = field(default_factory=tuple)
-    rgba: Tuple[float, float, float, float] = (0.7, 0.7, 0.7, 1.0)
-    texture_path: Optional[str] = None
+    collision_paths: tuple[str, ...] = field(default_factory=tuple)
+    rgba: tuple[float, float, float, float] = (0.7, 0.7, 0.7, 1.0)
+    texture_path: str | None = None
 
 
-def _lighting_block(lighting: str) -> Tuple[str, str]:
+def _lighting_block(lighting: str) -> tuple[str, str]:
     """(headlight, lights) MJCF fragments. 'flat' = the historical single
     top-down light + high ambient; 'oblique' = low ambient + three fixed oblique
     specular lights so shininess/specular (roughness/metallic) cast legible
@@ -161,13 +160,13 @@ def _lighting_block(lighting: str) -> Tuple[str, str]:
 
 
 def build_mjcf(
-    shape: Optional[str] = None,
-    material: Optional[M.Material] = None,
-    object_z: Optional[float] = None,
-    ground_euler: Tuple[float, float, float] = (0.0, 0.0, 0.0),
+    shape: str | None = None,
+    material: M.Material | None = None,
+    object_z: float | None = None,
+    ground_euler: tuple[float, float, float] = (0.0, 0.0, 0.0),
     gravity: float = -9.81,
     *,
-    mesh: Optional[MeshAsset] = None,
+    mesh: MeshAsset | None = None,
     lighting: str = "flat",
 ) -> str:
     """Build a single-scene MJCF string. Pure-Python: unit-testable, no runtime.
@@ -231,8 +230,8 @@ def build_mjcf(
 
 def build_mesh_mjcf(
     mesh: MeshAsset,
-    object_z: Optional[float] = None,
-    ground_euler: Tuple[float, float, float] = (0.0, 0.0, 0.0),
+    object_z: float | None = None,
+    ground_euler: tuple[float, float, float] = (0.0, 0.0, 0.0),
     gravity: float = -9.81,
 ) -> str:
     """Build a single-scene MJCF for a real mesh object. Pure-Python, testable.
@@ -306,7 +305,7 @@ def build_mesh_mjcf(
 # --------------------------------------------------------------------------- #
 # Runtime: rendering + probe simulation (require mujoco).
 # --------------------------------------------------------------------------- #
-def _quat_to_up(quat) -> List[float]:
+def _quat_to_up(quat) -> list[float]:
     """World-frame direction of the body's local +Z axis, from a (w,x,y,z) quat."""
     w, x, y, z = quat
     return [2 * (x * z + w * y), 2 * (y * z - w * x), 1 - 2 * (x * x + y * y)]
@@ -326,7 +325,7 @@ def _save_png(path: str, rgb) -> None:
 
 
 def render_views(shape: str, material: M.Material, renders_dir: str,
-                 render_cfg: RenderConfig) -> List[Dict]:
+                 render_cfg: RenderConfig) -> list[dict]:
     """Static multi-view renders of the object resting on the ground."""
     _require_mujoco()
     os.makedirs(renders_dir, exist_ok=True)
@@ -335,7 +334,7 @@ def render_views(shape: str, material: M.Material, renders_dir: str,
     data = mujoco.MjData(model)
     mujoco.mj_forward(model, data)
 
-    frames: List[Dict] = []
+    frames: list[dict] = []
     renderer = mujoco.Renderer(model, render_cfg.resolution, render_cfg.resolution)
     cam = mujoco.MjvCamera()
     cam.lookat[:] = [0.0, 0.0, half_height(shape)]
@@ -368,14 +367,14 @@ def render_views(shape: str, material: M.Material, renders_dir: str,
 
 
 def _simulate(model, data, sim_seconds: float, fps: int,
-              force_fn=None) -> List[Dict]:
+              force_fn=None) -> list[dict]:
     """Step the sim, recording (t, pos, up) at ``fps``. ``force_fn(t)`` may set
     ``data.xfrc_applied`` for the object body to deliver a push."""
     _require_mujoco()
     body = model.body("object").id
     n_steps = int(sim_seconds / model.opt.timestep)
     steps_per_frame = max(1, int((1.0 / fps) / model.opt.timestep))
-    traj: List[Dict] = []
+    traj: list[dict] = []
     for step in range(n_steps):
         t = step * model.opt.timestep
         if force_fn is not None:
@@ -391,7 +390,7 @@ def _simulate(model, data, sim_seconds: float, fps: int,
 
 
 def run_drop(shape: str, material: M.Material, spec: P.DropSpec,
-             physics_cfg: PhysicsConfig) -> List[Dict]:
+             physics_cfg: PhysicsConfig) -> list[dict]:
     _require_mujoco()
     z = half_height(shape) + spec.height
     model = mujoco.MjModel.from_xml_string(build_mjcf(shape, material, object_z=z))
@@ -399,7 +398,7 @@ def run_drop(shape: str, material: M.Material, spec: P.DropSpec,
 
 
 def run_tilt(shape: str, material: M.Material, spec: P.TiltSpec,
-             physics_cfg: PhysicsConfig) -> List[Dict]:
+             physics_cfg: PhysicsConfig) -> list[dict]:
     _require_mujoco()
     # MJCF `euler` is DEGREES by default (no <compiler angle="radian"/> in the
     # template), so ground_euler must receive degrees. Passing radians here
@@ -414,7 +413,7 @@ def run_tilt(shape: str, material: M.Material, spec: P.TiltSpec,
 
 
 def run_push(shape: str, material: M.Material, spec: P.PushSpec,
-             physics_cfg: PhysicsConfig) -> List[Dict]:
+             physics_cfg: PhysicsConfig) -> list[dict]:
     _require_mujoco()
     model = mujoco.MjModel.from_xml_string(build_mjcf(shape, material))
     data = mujoco.MjData(model)
@@ -441,8 +440,8 @@ def _jitter_seed(material: M.Material) -> int:
     return int(abs(material.physics.density) * 1000.0) % (2 ** 31)
 
 
-def _soft_topple_final_tilts(shape: str, material: M.Material, base_spec: "P.PushSpec",
-                             physics_cfg: PhysicsConfig, base_tilt: float) -> List[float]:
+def _soft_topple_final_tilts(shape: str, material: M.Material, base_spec: P.PushSpec,
+                             physics_cfg: PhysicsConfig, base_tilt: float) -> list[float]:
     """Final tilts from the base push plus ``topple_jitter_reps`` action-jittered
     pushes — the sample used to estimate P(topple). Uses ``_PROBE_RUNNERS['push']``
     so it follows any (test) monkeypatch of the push runner."""
@@ -453,22 +452,24 @@ def _soft_topple_final_tilts(shape: str, material: M.Material, base_spec: "P.Pus
     tilts = [base_tilt]
     for _ in range(physics_cfg.topple_jitter_reps):
         spec = P.PushSpec(
-            impulse=base_spec.impulse * (1.0 + rng.gauss(0.0, physics_cfg.topple_jitter_impulse_rel)),
+            impulse=base_spec.impulse * (1.0 + rng.gauss(
+                0.0, physics_cfg.topple_jitter_impulse_rel)),
             height_frac=base_spec.height_frac,
-            azimuth_deg=base_spec.azimuth_deg + rng.gauss(0.0, physics_cfg.topple_jitter_azimuth_deg),
+            azimuth_deg=base_spec.azimuth_deg + rng.gauss(
+                0.0, physics_cfg.topple_jitter_azimuth_deg),
         )
         tilts.append(P.summarize(push(shape, material, spec, physics_cfg)).final_tilt_deg)
     return tilts
 
 
 def run_probes(shape: str, material: M.Material,
-               physics_cfg: PhysicsConfig, keep_trajectory: bool = False) -> List[Dict]:
+               physics_cfg: PhysicsConfig, keep_trajectory: bool = False) -> list[dict]:
     """Run the drop+tilt+push battery and summarize each into a probe record.
 
     With ``physics_cfg.topple_jitter_reps > 0`` the push probe's ``toppled`` field
     holds a smooth P(topple) in [0,1] (jitter-averaged) instead of the hard bool —
     the F8 mitigation; the deterministic fields still come from the base push."""
-    records: List[Dict] = []
+    records: list[dict] = []
     for spec in P.default_probes():
         traj = _PROBE_RUNNERS[spec.kind](shape, material, spec, physics_cfg)
         outcome = P.summarize(traj)
@@ -499,23 +500,23 @@ def run_probes(shape: str, material: M.Material,
 #   assemble_scene — cheap, no mujoco: build the record + write sample.json
 # build_scene runs all three in order (the serial / backward-compatible path).
 # --------------------------------------------------------------------------- #
-def render_scene(scene_id: str, shape: str, sample: "M.MaterialSample",
-                 out_root: str, render_cfg: RenderConfig) -> List[Dict]:
+def render_scene(scene_id: str, shape: str, sample: M.MaterialSample,
+                 out_root: str, render_cfg: RenderConfig) -> list[dict]:
     """GPU stage: render the multi-view images for one scene; returns the frames."""
     scene_dir = os.path.join(out_root, scene_id)
     return render_views(shape, sample.material, os.path.join(scene_dir, "renders"),
                         render_cfg)
 
 
-def simulate_scene(shape: str, sample: "M.MaterialSample",
-                   physics_cfg: PhysicsConfig, keep_trajectory: bool = False) -> List[Dict]:
+def simulate_scene(shape: str, sample: M.MaterialSample,
+                   physics_cfg: PhysicsConfig, keep_trajectory: bool = False) -> list[dict]:
     """CPU stage: run the drop/tilt/push battery for one scene; returns behavior."""
     return run_probes(shape, sample.material, physics_cfg, keep_trajectory)
 
 
-def assemble_scene(scene_id: str, shape: str, sample: "M.MaterialSample", split: str,
+def assemble_scene(scene_id: str, shape: str, sample: M.MaterialSample, split: str,
                    out_root: str, render_cfg: RenderConfig, physics_cfg: PhysicsConfig,
-                   frames: List[Dict], behavior: List[Dict]) -> Dict:
+                   frames: list[dict], behavior: list[dict]) -> dict:
     """Assemble the paired record from rendered frames + simulated behavior, and
     write ``sample.json``. Pure-Python (no mujoco): the join/serialize seam."""
     record = samples.build_sample_record(
@@ -532,9 +533,9 @@ def assemble_scene(scene_id: str, shape: str, sample: "M.MaterialSample", split:
     return record
 
 
-def build_scene(scene_id: str, shape: str, sample: "M.MaterialSample", split: str,
+def build_scene(scene_id: str, shape: str, sample: M.MaterialSample, split: str,
                 out_root: str, render_cfg: RenderConfig, physics_cfg: PhysicsConfig,
-                keep_trajectory: bool = False) -> Dict:
+                keep_trajectory: bool = False) -> dict:
     """Generate one paired sample (appearance + behavior) and write sample.json.
 
     Runs the three stages in order; the parallel ``main`` instead schedules the
@@ -546,7 +547,7 @@ def build_scene(scene_id: str, shape: str, sample: "M.MaterialSample", split: st
                           physics_cfg, frames, behavior)
 
 
-def _render_task(task: Tuple) -> List[Dict]:
+def _render_task(task: tuple) -> list[dict]:
     """Module-level (picklable) GPU-stage worker: render one scene's views.
 
     Each worker builds its own ``MjModel`` / ``Renderer`` (MuJoCo contexts are
@@ -557,15 +558,15 @@ def _render_task(task: Tuple) -> List[Dict]:
     return render_scene(rec["scene_id"], rec["shape"], rec["sample"], out_root, render_cfg)
 
 
-def _sim_task(task: Tuple) -> List[Dict]:
+def _sim_task(task: tuple) -> list[dict]:
     """Module-level (picklable) CPU-stage worker: run one scene's probe battery."""
     rec, physics_cfg, keep_traj = task
     return simulate_scene(rec["shape"], rec["sample"], physics_cfg, keep_traj)
 
 
-def assign_scenes(shapes: List[str], holdout: RegionHoldout, num_scenes: int,
+def assign_scenes(shapes: list[str], holdout: RegionHoldout, num_scenes: int,
                   seed: int, appearance_noise: float = 0.07,
-                  coupling_alpha: float = 1.0, coupling_gain: float = 1.0) -> List[Dict]:
+                  coupling_alpha: float = 1.0, coupling_gain: float = 1.0) -> list[dict]:
     """Sample (shape, continuous material) scenes and label train/test by region.
 
     ``appearance_noise`` is the Gaussian stddev on the essence->appearance map
@@ -582,7 +583,7 @@ def assign_scenes(shapes: List[str], holdout: RegionHoldout, num_scenes: int,
                               coupling_alpha=coupling_alpha,
                               coupling_gain=coupling_gain)
     rng = random.Random(seed)
-    out: List[Dict] = []
+    out: list[dict] = []
     for i in range(num_scenes):
         shape = rng.choice(shapes)
         ms = sampler.sample(material_id=f"scene_{i:06d}")
@@ -598,7 +599,7 @@ def assign_scenes(shapes: List[str], holdout: RegionHoldout, num_scenes: int,
     return out
 
 
-def parse_args(argv: List[str]) -> argparse.Namespace:
+def parse_args(argv: list[str]) -> argparse.Namespace:
     p = argparse.ArgumentParser(description="pseudo-marble MuJoCo behavior-based generation")
     p.add_argument("--output", default="data/pseudo_marble")
     p.add_argument("--num-scenes", type=int, default=16)
@@ -664,7 +665,7 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
     return p.parse_args(argv)
 
 
-def main(argv: List[str]) -> None:
+def main(argv: list[str]) -> None:
     _require_mujoco()
     args = parse_args(argv)
     shapes = [s.strip() for s in args.shapes.split(",") if s.strip()]
@@ -697,20 +698,20 @@ def main(argv: List[str]) -> None:
 
     # Phase 1 — GPU: render every scene's views (narrow; one shared GPU).
     render_tasks = [(rec, args.output, render_cfg) for rec in assignments]
-    frames_list: List[List[Dict]] = ordered_parallel_map(
+    frames_list: list[list[dict]] = ordered_parallel_map(
         _render_task, render_tasks, render_workers,
         on_done=lambda i, _f: print(
             f"[pseudo-marble:mujoco] rendered {assignments[i]['scene_id']}"))
 
     # Phase 2 — CPU: run the drop/tilt/push battery (wide; GPU idle now).
     sim_tasks = [(rec, physics_cfg, args.keep_trajectory) for rec in assignments]
-    behavior_list: List[List[Dict]] = ordered_parallel_map(
+    behavior_list: list[list[dict]] = ordered_parallel_map(
         _sim_task, sim_tasks, sim_workers,
         on_done=lambda i, _b: print(
             f"[pseudo-marble:mujoco] simulated {assignments[i]['scene_id']}"))
 
     # Phase 3 — cheap join: assemble each record + write sample.json (serial).
-    scenes: List[Dict] = []
+    scenes: list[dict] = []
     for i, rec in enumerate(assignments):
         record = assemble_scene(rec["scene_id"], rec["shape"], rec["sample"],
                                 rec["split"], args.output, render_cfg, physics_cfg,

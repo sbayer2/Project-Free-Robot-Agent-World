@@ -26,7 +26,7 @@ target per phase.
 from __future__ import annotations
 
 import os
-from typing import Callable, List, Optional, Sequence
+from collections.abc import Callable, Sequence
 
 
 def default_cpu_workers(reserve: int = 2) -> int:
@@ -54,8 +54,8 @@ def default_render_workers(cap: int = 4) -> int:
     return max(1, min(cap, n))
 
 
-def resolve_workers(requested: Optional[int], n_items: int,
-                    default: Optional[int] = None) -> int:
+def resolve_workers(requested: int | None, n_items: int,
+                    default: int | None = None) -> int:
     """How many worker processes to use.
 
     ``requested`` > 0 is honored (clamped); ``0``/``None`` ⇒ auto. ``default`` sets
@@ -72,7 +72,7 @@ def resolve_workers(requested: Optional[int], n_items: int,
 
 
 def ordered_parallel_map(fn: Callable, items: Sequence, workers: int,
-                         on_done: Optional[Callable[[int, object], None]] = None) -> List:
+                         on_done: Callable[[int, object], None] | None = None) -> list:
     """Map ``fn`` over ``items`` across ``workers`` processes, results in INPUT order.
 
     ``workers <= 1`` runs serially (no pool spawned — keeps small runs and the
@@ -82,7 +82,7 @@ def ordered_parallel_map(fn: Callable, items: Sequence, workers: int,
     """
     items = list(items)
     if workers <= 1:
-        results: List = []
+        results: list = []
         for i, x in enumerate(items):
             r = fn(x)
             if on_done is not None:

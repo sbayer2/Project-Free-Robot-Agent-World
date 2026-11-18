@@ -21,19 +21,19 @@ Constraints we enforce so the test is meaningful:
 from __future__ import annotations
 
 import random
+from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Sequence, Tuple
 
-Pair = Tuple[str, str]  # (shape_id, material_name)
-Interval = Tuple[float, float]
+Pair = tuple[str, str]  # (shape_id, material_name)
+Interval = tuple[float, float]
 
 
 @dataclass(frozen=True)
 class CombinationSplit:
-    train_pairs: Tuple[Pair, ...]
-    test_pairs: Tuple[Pair, ...]
+    train_pairs: tuple[Pair, ...]
+    test_pairs: tuple[Pair, ...]
 
-    def summary(self) -> Dict[str, int]:
+    def summary(self) -> dict[str, int]:
         return {
             "n_train": len(self.train_pairs),
             "n_test": len(self.test_pairs),
@@ -63,7 +63,7 @@ def make_combination_split(
     shapes = list(dict.fromkeys(shapes))  # de-dup, preserve order
     materials = list(dict.fromkeys(materials))
 
-    full_grid: List[Pair] = [(s, m) for s in shapes for m in materials]
+    full_grid: list[Pair] = [(s, m) for s in shapes for m in materials]
     rng = random.Random(seed)
 
     target_holdout = int(round(len(full_grid) * holdout_frac))
@@ -79,7 +79,7 @@ def make_combination_split(
     shape_train_count = {s: len(materials) for s in shapes}
     material_train_count = {m: len(shapes) for m in materials}
 
-    holdout: List[Pair] = []
+    holdout: list[Pair] = []
     for (s, m) in candidates:
         if len(holdout) >= target_holdout:
             break
@@ -119,13 +119,13 @@ class RegionHoldout:
     recorded in the manifest ("interpolation" | "extrapolation").
     """
 
-    density: Optional[Interval] = None
-    friction: Optional[Interval] = None
-    restitution: Optional[Interval] = None
-    shapes: Tuple[str, ...] = field(default_factory=tuple)
+    density: Interval | None = None
+    friction: Interval | None = None
+    restitution: Interval | None = None
+    shapes: tuple[str, ...] = field(default_factory=tuple)
     kind: str = "region"
 
-    def contains(self, essence_norm: Dict[str, float], shape: str) -> bool:
+    def contains(self, essence_norm: dict[str, float], shape: str) -> bool:
         if self.shapes and shape not in self.shapes:
             return False
         axes = (
@@ -144,7 +144,7 @@ class RegionHoldout:
         # An all-None holdout would match everything; require >=1 constraint.
         return constrained
 
-    def label(self, essence_norm: Dict[str, float], shape: str) -> str:
+    def label(self, essence_norm: dict[str, float], shape: str) -> str:
         return "test" if self.contains(essence_norm, shape) else "train"
 
 
@@ -173,7 +173,7 @@ def assign_scene_materials(
     split: CombinationSplit,
     num_scenes: int,
     seed: int = 0,
-) -> List[Dict[str, str]]:
+) -> list[dict[str, str]]:
     """Expand a combination split into concrete per-scene assignments.
 
     Returns a list of ``{"scene_id", "shape", "material", "split"}`` records,
@@ -181,7 +181,7 @@ def assign_scene_materials(
     so a single ``num_scenes`` run produces both partitions.
     """
     rng = random.Random(seed)
-    records: List[Dict[str, str]] = []
+    records: list[dict[str, str]] = []
     train = list(split.train_pairs)
     test = list(split.test_pairs)
     if not train:
@@ -218,18 +218,18 @@ def assign_scene_materials(
 # train; if categories are unknown/degenerate, fall back to a random object split.
 @dataclass(frozen=True)
 class CategorySplit:
-    train_ids: Tuple[str, ...]
-    test_ids: Tuple[str, ...]
-    holdout_categories: Tuple[str, ...]
+    train_ids: tuple[str, ...]
+    test_ids: tuple[str, ...]
+    holdout_categories: tuple[str, ...]
 
-    def summary(self) -> Dict[str, int]:
+    def summary(self) -> dict[str, int]:
         return {"n_train": len(self.train_ids), "n_test": len(self.test_ids),
                 "n_holdout_categories": len(self.holdout_categories)}
 
 
 def make_category_holdout(
-    objects: Sequence[Tuple[str, str]],
-    holdout_categories: Optional[Sequence[str]] = None,
+    objects: Sequence[tuple[str, str]],
+    holdout_categories: Sequence[str] | None = None,
     holdout_frac: float = 0.2,
     seed: int = 0,
 ) -> CategorySplit:
