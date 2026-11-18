@@ -12,7 +12,7 @@ together. A ~1M-param shared-latent model (multi-view renders → z → render h
 a **coherence metric** (nudge z; do look and behavior move together?).
 Personal research; not affiliated with World Labs.
 
-**The empirical record lives in `docs/FINDINGS.md` (F1–F17), not here.** Read it
+**The empirical record lives in `docs/FINDINGS.md` (the F-numbered entries), not here.** Read it
 before making claims about what the project has shown. The vault note
 `wiki/pseudo-marble.md` (ai-research vault, via MCP) maps findings to the wider
 research threads. Do not restate findings in this file — link to them.
