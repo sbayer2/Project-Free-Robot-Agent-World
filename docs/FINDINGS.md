@@ -3184,6 +3184,11 @@ only G1-failing loud run is P1c_loud_s9, so only two comparisons can move.
   identical by construction: neither of their arms has a G1-failing loud
   run.
 - The as-registered column reproduces F36's table.
+- **Why the shift has this direction:** P1c_loud_s9's nested friction,
+  0.345, is above P1′'s loud mean of 0.293. Dropping it lowers P1′'s mean,
+  so H1 rises and P1′ vs P0 falls. The one loud run below the PR floor did
+  not read worse than its arm. This is descriptive; PR and the readout
+  share z.
 - **Prediction (c073815):** each Δ moves by less than 0.01, and every CI
   keeps its sign.
 - **Result:** the largest move is 0.005, and every sign is kept, so it
