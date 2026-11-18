@@ -12,6 +12,7 @@ substrate) or just poking the pure-Python core anywhere.
 | Generate paired data (high-fidelity, optional) | Blender 4.x (ships its own Python) |
 | Mesh validation / collision decomposition | `pip install -e ".[datagen]"` (trimesh; optional CoACD/V-HACD) |
 | Train the MLX model | Apple silicon + `pip install -e ".[mlx]"` |
+| Grade a preregistered run (e.g. F36's `crossview_verdicts`) | `pip install -e ".[analysis]"` (scipy; also in `dev`) |
 
 The core package is intentionally dependency-light: it imports with **none** of
 the above installed, so you can read, test, and reason about it anywhere.
@@ -35,8 +36,9 @@ Expected: all suites print `N passed`.
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]"          # core + pytest/ruff
+pip install -e ".[dev]"          # core + pytest/ruff + scipy (rule tests)
 # optional extras:
+pip install -e ".[analysis]"     # scipy only: grading scripts (crossview_verdicts)
 pip install -e ".[datagen]"      # trimesh etc. (outside Blender)
 pip install -e ".[mlx]"          # Apple silicon only
 ```

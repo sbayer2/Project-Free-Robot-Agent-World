@@ -3147,10 +3147,11 @@ python scripts/crossview_verdicts.py --root runs/xv
 python scripts/crossview_summary.py --root runs/xv > runs/xv/crossview_summary.md
 ```
 
-`crossview_verdicts` needs scipy, which no extra in `pyproject.toml`
-installs yet, so these commands fail on a plain install.
-`crossview_summary`'s own tests run without it. The full
-`crossview_verdicts` log is in the PR body.
+`crossview_verdicts` needs scipy: install it with
+`pip install -e ".[analysis]"` (scipy only) or `".[dev]"`, which now
+includes it, so the verdict and summary rule tests run instead of skipping
+(added after F36 was written, 2026-11-18). `crossview_summary`'s own tests
+run without it. The full `crossview_verdicts` log is in PR #54's body.
 
 ---
 

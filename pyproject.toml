@@ -28,7 +28,12 @@ gso = ["trimesh>=4.0", "mujoco>=3.1", "numpy>=1.24", "imageio>=2.31", "Pillow>=1
 # Apple-silicon model stack (install on the Mac; not available in generic CI).
 # Includes image IO so training can read the generated render PNGs.
 mlx = ["mlx>=0.18", "numpy>=1.24", "imageio>=2.31", "Pillow>=10.0"]
-dev = ["pytest>=8.0", "ruff>=0.6"]
+# Statistical grading and analysis scripts: crossview_verdicts' Welch t and NULL
+# bound (F36), the F29 pilot's Delaunay, encode_device_diag's Spearman rho.
+analysis = ["scipy>=1.10"]
+# scipy is listed here too, so the rule tests that need it (crossview_verdicts,
+# crossview_summary, f29_generate_pilot) run instead of skipping.
+dev = ["pytest>=8.0", "ruff>=0.6", "scipy>=1.10"]
 # Optional CPU PyTorch backend (models/torch_net.py): an in-session trainable
 # stand-in to verify the loop converges without a Mac. NOT the canonical trainer.
 torch = ["torch>=2.2"]
