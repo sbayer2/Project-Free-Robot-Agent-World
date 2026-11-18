@@ -54,15 +54,91 @@ if _HAVE_MLX:
                 cin = cout
             self.proj = nn.Linear(cin, cfg.latent_dim)
 
-        def __call__(self, images):
-            # images: (B, N, H, W, C); fold views into the batch for the CNN.
+        def attach_pool(self) -> None:
+            """Build the cross-view pooling layer (none for "mean"). Called by
+            PseudoMarbleModel after its heads, so turning pooling on leaves the
+            initial CNN and head weights of a given seed unchanged."""
+            from pseudomarble.config import ATTN_POOLS, check_view_pool
+            cfg = self.cfg
+            check_view_pool(cfg)
+            if cfg.view_pool in ("stats", "stats_ctrl"):
+                self.pool = nn.Linear(2 * cfg.latent_dim, cfg.latent_dim)
+            elif cfg.view_pool in ATTN_POOLS:
+                self.mixer = ViewMixer(cfg)
+
+        def views(self, images):
+            """images (B, N, H, W, C) -> per-view latents v (B, N, latent_dim)."""
             B, N = images.shape[0], images.shape[1]
-            x = images.reshape(B * N, *images.shape[2:])
+            x = images.reshape(B * N, *images.shape[2:])  # fold views into the batch
             for conv in self.convs:
                 x = nn.relu(conv(x))
             x = x.mean(axis=(1, 2))                  # global average pool over H, W
-            z = nn.relu(self.proj(x))                # per-view latent
-            return z.reshape(B, N, -1).mean(axis=1)  # pool over the N views
+            v = nn.relu(self.proj(x))                # per-view latent
+            return v.reshape(B, N, -1)
+
+        def pool_views(self, v):
+            """Per-view latents (B, N, L) -> z (B, L), by cfg.view_pool. Mirrors
+            numpy_net.view_pool_forward."""
+            from pseudomarble.config import VIEW_STD_EPS
+            kind = self.cfg.view_pool
+            if kind == "mean":
+                return v.mean(axis=1)                # pool over the N views
+            if kind in ("stats", "stats_ctrl"):
+                m = v.mean(axis=1)
+                second = (mx.sqrt(mx.mean((v - m[:, None, :]) ** 2, axis=1) + VIEW_STD_EPS)
+                          if kind == "stats" else m)
+                return nn.relu(self.pool(mx.concatenate([m, second], axis=-1)))
+            return self.mixer(v)
+
+        def __call__(self, images):
+            return self.pool_views(self.views(images))
+
+    class ViewMixer(nn.Module):
+        """view_pool "attn": one pre-LayerNorm transformer block over the N view
+        tokens v_i + E d_i (d_i = camera i's unit direction), ReLU FFN, residual,
+        then the mean over tokens. "attn_ctrl" adds a self-only attention mask:
+        the same parameters and depth, with nothing passed between views."""
+
+        def __init__(self, cfg: ModelConfig) -> None:
+            super().__init__()
+            from pseudomarble.config import VIEW_LN_EPS, VIEW_MASK_NEG
+            L, F = cfg.latent_dim, cfg.view_attn_ffn
+            self._heads = cfg.view_attn_heads
+            self.dir_embed = nn.Linear(3, L)
+            self.ln1 = nn.LayerNorm(L, eps=VIEW_LN_EPS)
+            self.q_proj = nn.Linear(L, L)
+            self.k_proj = nn.Linear(L, L)
+            self.v_proj = nn.Linear(L, L)
+            self.out_proj = nn.Linear(L, L)
+            self.ln2 = nn.LayerNorm(L, eps=VIEW_LN_EPS)
+            self.ff1 = nn.Linear(L, F)
+            self.ff2 = nn.Linear(F, L)
+            # Underscored arrays are not parameters: never trained, never saved.
+            self._dirs = mx.array([list(d) for d in cfg.view_dirs], dtype=mx.float32)
+            n = len(cfg.view_dirs)
+            self._mask = (mx.where(mx.eye(n) > 0, 0.0, VIEW_MASK_NEG).astype(mx.float32)
+                          if cfg.view_pool == "attn_ctrl" else None)
+
+        def __call__(self, v):
+            B, N, L = v.shape
+            if N != self._dirs.shape[0]:
+                raise ValueError(f"{N} views but {self._dirs.shape[0]} view_dirs")
+            H = self._heads
+            dh = L // H
+
+            def split(t):  # (B, N, L) -> (B, H, N, dh)
+                return t.reshape(B, N, H, dh).transpose(0, 2, 1, 3)
+
+            x = v + self.dir_embed(self._dirs)[None]
+            h = self.ln1(x)
+            q, k, vv = split(self.q_proj(h)), split(self.k_proj(h)), split(self.v_proj(h))
+            s = (q @ k.transpose(0, 1, 3, 2)) * (1.0 / (dh ** 0.5))
+            if self._mask is not None:
+                s = s + self._mask
+            o = (mx.softmax(s, axis=-1) @ vv).transpose(0, 2, 1, 3).reshape(B, N, L)
+            x = x + self.out_proj(o)
+            x = x + self.ff2(nn.relu(self.ff1(self.ln2(x))))
+            return x.mean(axis=1)
 
     class MLP(nn.Module):
         def __init__(self, d_in: int, d_hidden: int, d_out: int) -> None:
@@ -102,6 +178,11 @@ if _HAVE_MLX:
             self.dec_convs = [nn.Conv2d(ch, ch, 3, padding=1)
                               for _ in range(num_upsample_steps(cfg))]
             self.dec_final = nn.Conv2d(ch, 3, 3, padding=1)
+            self.encoder.attach_pool()  # last: see Encoder.attach_pool
+
+        def encode_views(self, images):
+            """Per-view latents v (B, N, latent_dim) before pooling (D1 diagnostic)."""
+            return self.encoder.views(images)
 
         def decode(self, z):
             x = nn.relu(self.seed(z)).reshape(z.shape[0], self._seed_s, self._seed_s,

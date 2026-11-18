@@ -12,7 +12,7 @@ Architecture (shared with mlx_net):
       -> per-view conv stack (Conv2d + ReLU, strided)   # N views folded into batch
       -> global average pool over H, W
       -> Linear -> ReLU                                  # per-view latent
-      -> mean over the N views                           # the shared latent z (B, D)
+      -> pool over the N views (cfg.view_pool; default mean) # the shared latent z (B, D)
       -> behavior head: Linear -> ReLU -> Linear  (B, behavior_dim)
       -> essence  head: Linear -> ReLU -> Linear  (B, essence_dim)
 """
@@ -73,6 +73,83 @@ def _sigmoid(x):
     return 1.0 / (1.0 + np.exp(-x))
 
 
+# --------------------------------------------------------------------------- #
+# Cross-view pooling (ModelConfig.view_pool; docs/CROSSVIEW_POOLING.md).
+# Weights are stored (in, out), the numpy convention; mlx/torch Linear weights
+# are the transpose. The parameter names match the mlx/torch submodules.
+# --------------------------------------------------------------------------- #
+ATTN_LINEARS = ("dir_embed", "q_proj", "k_proj", "v_proj", "out_proj", "ff1", "ff2")
+
+
+def _init_view_pool(cfg: ModelConfig, rng) -> Dict:
+    np = _np()
+    from pseudomarble.config import check_view_pool
+    check_view_pool(cfg)
+    L = cfg.latent_dim
+    if cfg.view_pool == "mean":
+        return {}
+    if cfg.view_pool in ("stats", "stats_ctrl"):
+        return {"pool": (_he((2 * L, L), rng), np.zeros((L,), "float32"))}
+    F = cfg.view_attn_ffn
+    shapes = {"dir_embed": (3, L), "q_proj": (L, L), "k_proj": (L, L), "v_proj": (L, L),
+              "out_proj": (L, L), "ff1": (L, F), "ff2": (F, L)}
+    p = {k: (_he(s, rng), np.zeros((s[1],), "float32")) for k, s in shapes.items()}
+    for ln in ("ln1", "ln2"):
+        p[ln] = (np.ones((L,), "float32"), np.zeros((L,), "float32"))
+    return p
+
+
+def _layer_norm(x, w, b):
+    np = _np()
+    from pseudomarble.config import VIEW_LN_EPS
+    mu = x.mean(axis=-1, keepdims=True)
+    var = ((x - mu) ** 2).mean(axis=-1, keepdims=True)
+    return (x - mu) / np.sqrt(var + VIEW_LN_EPS) * w + b
+
+
+def _softmax(s):
+    np = _np()
+    e = np.exp(s - s.max(axis=-1, keepdims=True))
+    return e / e.sum(axis=-1, keepdims=True)
+
+
+def view_pool_forward(v, params: Dict, cfg: ModelConfig):
+    """Per-view latents v (B, N, L) -> z (B, L). The reference the mlx and torch
+    poolers are tested against (tests/test_view_pool.py)."""
+    np = _np()
+    from pseudomarble.config import VIEW_MASK_NEG, VIEW_STD_EPS, check_view_pool
+    v = np.asarray(v, dtype="float32")
+    B, N, L = v.shape
+    check_view_pool(cfg, N)
+    if cfg.view_pool == "mean":
+        return v.mean(axis=1)
+    if cfg.view_pool in ("stats", "stats_ctrl"):
+        m = v.mean(axis=1)
+        second = (np.sqrt(((v - m[:, None, :]) ** 2).mean(axis=1) + VIEW_STD_EPS)
+                  if cfg.view_pool == "stats" else m)
+        W, b = params["pool"]
+        return np.maximum(np.concatenate([m, second], axis=-1) @ W + b, 0.0)
+
+    def lin(name, x):
+        W, b = params[name]
+        return x @ W + b
+
+    H = cfg.view_attn_heads
+    dh = L // H
+    d = np.asarray(cfg.view_dirs, dtype="float32")              # (N, 3)
+    x = v + lin("dir_embed", d)[None]                           # (B, N, L)
+    h = _layer_norm(x, *params["ln1"])
+    q, k, vv = (lin(n, h).reshape(B, N, H, dh).transpose(0, 2, 1, 3)
+                for n in ("q_proj", "k_proj", "v_proj"))       # (B, H, N, dh)
+    s = q @ k.transpose(0, 1, 3, 2) * (1.0 / dh ** 0.5)       # (B, H, N, N), float32
+    if cfg.view_pool == "attn_ctrl":                            # self-only: no mixing
+        s = s + np.where(np.eye(N, dtype=bool), 0.0, VIEW_MASK_NEG).astype("float32")
+    o = (_softmax(s) @ vv).transpose(0, 2, 1, 3).reshape(B, N, L)
+    x = x + lin("out_proj", o)
+    x = x + lin("ff2", np.maximum(lin("ff1", _layer_norm(x, *params["ln2"])), 0.0))
+    return x.mean(axis=1)
+
+
 class NumpyModel:
     """Forward-only NumPy model mirroring the MLX network's architecture."""
 
@@ -113,8 +190,12 @@ class NumpyModel:
         self.dec = [(_he((3, 3, ch, ch), rng), np.zeros((ch,), "float32")) for _ in range(self.n_up)]
         self.Wf, self.bf = _he((3, 3, ch, 3), rng), np.zeros((3,), "float32")
 
-    def encode(self, images):
-        """images: (B, N, H, W, C) -> z: (B, latent_dim)."""
+        # Cross-view pooling. Drawn last, so turning it on leaves every weight
+        # above unchanged; "mean" draws nothing.
+        self.pool = _init_view_pool(cfg, rng)
+
+    def encode_views(self, images):
+        """images: (B, N, H, W, C) -> per-view latents v: (B, N, latent_dim)."""
         np = _np()
         x = np.asarray(images, dtype="float32")
         B, N = x.shape[0], x.shape[1]
@@ -122,8 +203,16 @@ class NumpyModel:
         for w, b in self.convs:
             x = np.maximum(_conv2d(x, w, b, self.cfg.conv_stride), 0.0)
         x = x.mean(axis=(1, 2))                       # global average pool
-        z = np.maximum(x @ self.Wp + self.bp, 0.0)    # per-view latent
-        return z.reshape(B, N, -1).mean(axis=1)       # pool over views
+        v = np.maximum(x @ self.Wp + self.bp, 0.0)    # per-view latent
+        return v.reshape(B, N, -1)
+
+    def pool_views(self, v):
+        """Per-view latents (B, N, latent_dim) -> z (B, latent_dim), by cfg.view_pool."""
+        return view_pool_forward(v, self.pool, self.cfg)
+
+    def encode(self, images):
+        """images: (B, N, H, W, C) -> z: (B, latent_dim)."""
+        return self.pool_views(self.encode_views(images))
 
     def decode(self, z):
         """z: (B, latent_dim) -> reconstructed canonical image (B, S, S, 3)."""

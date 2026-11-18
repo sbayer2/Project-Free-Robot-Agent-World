@@ -65,6 +65,11 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
                    help="comma list of probes in the F31 target (default drop,tilt,push)")
     p.add_argument("--trajectory-pos-only", action="store_true",
                    help="F31 target keeps position channels only (drops the up-axis)")
+    p.add_argument("--view-pool", default=None,
+                   choices=["mean", "stats", "stats_ctrl", "attn", "attn_ctrl"],
+                   help="how per-view latents become z (docs/CROSSVIEW_POOLING.md; "
+                        "default mean). The attn arms read camera directions from "
+                        "the dataset's stored frames")
     p.add_argument("--behavior-warmup-epochs", type=int, default=0,
                    help="ramp the behavior-head loss weight linearly from 0 to its "
                         "full value over the first K epochs (basin-selection lever: "
@@ -112,7 +117,22 @@ def make_config(args: argparse.Namespace) -> ModelConfig:
         cfg = replace(cfg, trajectory_probes=probes)
     if args.trajectory_pos_only:
         cfg = replace(cfg, trajectory_pos_only=True)
+    if args.view_pool is not None:
+        cfg = replace(cfg, view_pool=args.view_pool)
     return cfg
+
+
+def with_view_dirs(cfg: ModelConfig, data_root: str, max_views=None) -> ModelConfig:
+    """For the attn pooling arms, set cfg.view_dirs from the world's stored
+    frames, checked to agree across every scene of every split. Other arms pass
+    through unchanged."""
+    from dataclasses import replace
+
+    from pseudomarble.config import ATTN_POOLS
+    if cfg.view_pool not in ATTN_POOLS:
+        return cfg
+    dirs = PseudoMarbleDataset(data_root).camera_directions(max_views)
+    return replace(cfg, view_dirs=tuple(tuple(d) for d in dirs))
 
 
 def trajectory_kwargs(cfg: ModelConfig) -> Dict:
@@ -192,6 +212,10 @@ def main(argv: List[str]) -> None:
             f"of render_seed={cfg.render_seed}), or pass --image-size {res}."
         )
 
+    cfg = with_view_dirs(cfg, args.data, args.max_views)
+    if cfg.view_dirs:
+        print(f"[train] view_pool {cfg.view_pool}: {len(cfg.view_dirs)} camera "
+              "directions from the stored frames")
     model = build_model(cfg)
     optimizer = optim.AdamW(learning_rate=args.lr)
     os.makedirs(args.out, exist_ok=True)

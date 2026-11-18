@@ -1,13 +1,42 @@
 # Cross-view pooling: does replacing the view average let z hold friction?
 
-**Status: DRAFT preregistration, 2026-10-27; draft 3, 2026-11-14. Not
-frozen.** It freezes in the commit that adds the implementation (all three
-backends, with cross-backend tests, per CLAUDE.md) and
-`scripts/crossview_verdicts.py`, before any pooling-variant model is
-trained on a loud world. The one pre-freeze training is the stability check
-on the ctrl world (§3), from which no essence readout is computed. Until
-then every number, arm and bar here can change. F-number: unassigned (the
-owner assigns it at the freeze).
+**Status: FROZEN preregistration, 2026-11-17.** Draft 1 is dated
+2026-10-27 and draft 3 2026-11-14. This commit is the freeze, made on the
+owner's go. F-number: **F36**, assigned by the owner on 2026-11-18,
+after the freeze, in a commit that changes nothing else.
+
+The freeze conditions are met:
+- **Implementation.** `view_pool` is in all three backends with
+  cross-backend tests. The numpy reference and MLX are tested on the Mac.
+  Torch parity passes for all five arms on the cloud (PR #52 head
+  `f66943a`, cloud-notes `9855e04`). Code changed after that commit
+  touches only the readout and verdict scripts, not the backends.
+- **Scripts.** `scripts/crossview_measure.py` and
+  `scripts/crossview_verdicts.py` are committed with rule tests.
+- **No loud-world training.** No pooling-variant model has been trained on
+  a loud world. The only pooling-variant runs are the four ctrl-world
+  stability runs (§3), and no essence readout was computed from them.
+
+**§6 is hashed.** Its SHA-256, over the bytes from the `## 6.` heading
+line up to, not including, the `## 7.` heading line, is
+
+    d4f58988fb900aac788ed889e1aa3e0e96a5a4f981939cea67adf643c10c0e6c
+
+Recompute it with:
+
+    awk '/^## 6\. /{p=1} /^## 7\. /{p=0} p' docs/CROSSVIEW_POOLING.md | shasum -a 256
+
+The cloud session records the freeze commit and this hash, with a
+timestamp, in `origin/claude/cloud-notes`. From here on, any change to
+§3–§6 (arms, readouts, gates, bars, rules or predictions) is a dated,
+disclosed amendment, and none is made after a loud pooling run starts.
+
+**Disclosed at the freeze.** §6 stands as the owner accepted it
+(2026-11-17), so it is hashed unchanged. Its P1 rationale cites the
+margin over P0-equivalent nested z as +0.15 to +0.17, or 1.5–1.7 times the
+0.10 bar. That margin came from the GPU-encoded baseline (0.398). On the
+frozen CPU baseline (0.402, §2) it is +0.15 to +0.16, or 1.5–1.6 times the
+bar. The odds are unchanged.
 
 *Revision 2026-10-27 (draft 2), from the cloud session's review: matched
 no-mixing controls P1′/P2′ become the primary comparisons; D1 gains
@@ -24,8 +53,8 @@ epochs). §3–§9 take the cloud session's review of the switch (cloud-notes
 `8b0fdbb`, `19a367f`, `f342299`). A readout-strength diagnostic (§2, end;
 `scripts/z_readout_alpha.py`) adds two co-reported readouts (§4). Bars
 and predictions that rested on old-camera numbers were first flagged ⚑.
-All are now re-derived except one, the RISES bar's reachability (§5),
-which stays ⚑ and OPEN for the owner.*
+All are now re-derived. The last, the RISES bar's reachability (§5), was
+closed by the owner on 2026-11-17.*
 
 *Owner decisions, 2026-11-14:
 - The epoch budget is 50 (§3).
@@ -35,6 +64,18 @@ which stays ⚑ and OPEN for the owner.*
 - A ctrl-world stability check runs before the freeze (§3).
 - The rank-controlled top-k readout is dropped (§8).
 - The 15–65° camera band is kept (§8).*
+
+*Owner decisions, 2026-11-17:
+- §6 stands as written.
+- The RISES bar stays at Δ ≥ 0.10, and loud seeds go from 10 to 20 per
+  arm, so that a NULL means no effect of the bar's size, not too few
+  seeds to tell (§5). The reachability flag is closed.
+- Readouts encode on MLX's CPU stream, exact float32 (frozen, §4). The G3
+  baseline is re-measured on CPU (§2, §5).
+- A descriptive co-report reads friction under 10⁻⁴ relative input noise
+  (§4).
+- The rank account of the fixed-α penalty is withdrawn as a mechanism.
+  Rank stays a co-reported description (§4).*
 
 *Correction, 2026-11-14 (§1–§2 rewritten). The draft as pushed through
 `c08b173` said in §1 that the camera fix raised "what survives the
@@ -81,9 +122,9 @@ Two further facts make pooling the suspect:
 
 - z is already supervised on friction directly: the essence head (weight
   0.3, `mlx_net.loss_fn`) regresses all three essence axes from z. Under
-  that direct supervision, mean-pooled z holds friction at 0.398 on the
-  above-floor worlds (nested readout; 0.378 at fixed α; 50 epochs, 5
-  seeds). That is below the fixed cross-view features and below the 16
+  that direct supervision, mean-pooled z holds friction at 0.402 on the
+  above-floor worlds (nested readout; 0.379 at fixed α; 50 epochs, 5
+  seeds; CPU-encoded, §2; 0.398 / 0.378 GPU-encoded). That is below the fixed cross-view features and below the 16
   views side by side (0.616, a lower bound). Training to 150 epochs does
   not raise it. The target is not what is missing.
 - The project's "pixel ceiling" (0.167, F19 pixel features) is computed on
@@ -232,6 +273,28 @@ frozen-grid nested readout, now primary (§4), the above-floor 50-epoch
 seeds read .457 .449 .330 .351 .402, mean **0.398** (0.057). Ctrl reads
 −0.011 / −0.014 / −0.015 (`runs/xv_cam/readout_alpha_frozen_*.json`).
 
+**Re-measured on CPU encodings (2026-11-17, `crossview_measure` @
+`931adb4`, `runs/xv_cam/baseline_cpu/`).** Every MLX number in this
+section was GPU-encoded (§4, encode device). The same checkpoints on both
+devices, with predictions set in `931adb4` before the run:
+
+| above-floor, 50 ep | nested, mean (sd) | fixed α 10⁻³ | held-out | ctrl nested | ctrl fixed α |
+|---|---|---|---|---|---|
+| GPU | 0.398 (0.057) | 0.378 (0.085) | 0.519 | −0.011 to −0.015 | −0.09 to −0.22 |
+| CPU (frozen) | **0.402** (0.048) | 0.379 (0.084) | 0.512 | −0.012 to −0.018 | −0.09 to −0.11 |
+
+- **Apparatus check.** The GPU reproduces 0.398 / 0.378, which is right.
+- **Mean.** The CPU means are within 0.02 of the GPU's, as predicted.
+- **Per run, one prediction failed.** Fixed moves by at most 0.007. Nested
+  moves by −0.014 to +0.032, and seed 3's +0.032 is over the predicted
+  0.02.
+- **Ctrl.** Ctrl stays far below the 0.10 guard. Its fixed-α penalty
+  shrinks on CPU (seed 1: −0.223 → −0.090), so part of that penalty was
+  GPU rounding in near-null directions.
+- **Noise co-report.** Under 10⁻⁴ input noise, loud nested reads 0.402,
+  within 0.006 of exact on every run, as predicted. This joint z holds
+  its friction robustly.
+
 - **Camera effect at 50 epochs:** +0.111, Welch t = 2.14 (below the
   project's 2.5). Held-out moves the other way (−0.079, t = −1.65). Not
   established at n = 5.
@@ -268,7 +331,8 @@ fixed-α 5-fold readout, which matches F31a's H1, is co-reported.
 
 **How the fixed-α readout depends on its ridge strength** (diagnostic, not
 registered; `scripts/z_readout_alpha.py`, `fdb2147`, same z and folds as
-the fixed readout). The fixed readout, primary until this revision and
+the fixed readout; GPU-encoded, so the joint z's numbers below are within
+about 0.03 of the CPU's, by the re-measure above). The fixed readout, primary until this revision and
 F31a's, is a ridge at α = 10⁻³ on column-standardized z, close to least
 squares. This diagnostic is why the nested readout is now primary (§4).
 
@@ -307,7 +371,7 @@ squares. This diagnostic is why the nested readout is now primary (§4).
 
 MLX (canonical), F27b recipe: lr 2e-4, batch 16, 128 px, 16 views, **50
 epochs**. **Joint arm only: no trajectory head** (the F31a head collapsed
-on both backends). Worlds `data/pm_f31fix_loud_cam` (seeds 0–9) and
+on both backends). Worlds `data/pm_f31fix_loud_cam` (seeds 0–19) and
 `data/pm_f31fix_ctrl_cam` (seeds 0–2). `pm_big` is not run: the
 old-camera pilot found nothing there to recover, and the above-floor
 pilot was not run on `pm_big`.
@@ -316,8 +380,9 @@ pilot was not run on `pm_big`.
 epochs lowers the friction readout, fixed α and nested, in 5 of 5 seeds (whether through z's
 higher rank or less friction is unresolved) and raises held-out in 4 of 5,
 both modestly, at three times the cost (about 3 min per 50-epoch run,
-about 9 min per 150-epoch run on the Mac; 65 runs ≈ 3.5 h vs ≈ 10 h, P2
-and P2′ somewhat more). Not chosen: 150, whose case was a separate,
+about 9 min per 150-epoch run on the Mac; at the 10 seeds then planned,
+65 runs ≈ 3.5 h vs ≈ 10 h; at 20 seeds, 115 runs ≈ 6 h vs ≈ 17 h; P2 and
+P2′ somewhat more). Not chosen: 150, whose case was a separate,
 unpublished observation that on `pm_big` the held-out behavior gain for
 density kept rising to epoch 150; that readout is not primary here.
 
@@ -331,7 +396,7 @@ unchanged):
 | P0 | `mean` | mean_i v_i (today's encoder, rerun under the new code) | 0 |
 | P1 | `stats` | relu(W [mean_i v_i ; std_i v_i]), W: 512 → 256 | 131 k |
 | P1′ | `stats_ctrl` | relu(W [mean_i v_i ; mean_i v_i]): P1's layer and ReLU, no cross-view information | 131 k |
-| P2 | `attn` | mean_i of one pre-LayerNorm transformer block over the 16 tokens v_i + E·d_i (4 heads, FFN 512, residual), where d_i is camera i's unit direction and E: 3 → 256 is learned | ≈ 0.53 M |
+| P2 | `attn` | mean_i of one pre-LayerNorm transformer block over the 16 tokens v_i + E·d_i (4 heads, ReLU FFN 512, residual), where d_i is camera i's unit direction and E: 3 → 256 is learned | ≈ 0.53 M |
 | P2′ | `attn_ctrl` | P2's block with a diagonal (self-only) attention mask: same parameters and depth, no information passes between views | ≈ 0.53 M |
 
 **Camera direction d_i** = (position − look_at) / ‖position − look_at‖,
@@ -346,18 +411,43 @@ information as the view index, stated physically.
 P2 is the principled mixer: a highlight depends on where each camera sits
 relative to the light, so each view token carries its camera direction.
 
+**Implementation** (`ModelConfig.view_pool`; `tests/test_view_pool.py`):
+- std_i v_i = √(var_i v_i + 10⁻⁵), population variance. Dead ReLU units
+  are identical across views, where a plain square root has an infinite
+  gradient.
+- The attn block uses LayerNorm ε 10⁻⁵ and scores scaled by 1/√64.
+  `attn_ctrl` adds −10⁹ to every cross-view score, so the softmax puts all
+  weight on self. Its query and key layers then get no gradient; the
+  parameters and depth still match P2.
+- The directions come from `PseudoMarbleDataset.camera_directions`,
+  checked equal across every scene. They are stored in the run's config,
+  not in the weights.
+- The pooling layer is built after the heads, so at a given seed all five
+  arms start from the same CNN and head weights.
+- The numpy forward is the reference, and MLX matches it to 10⁻⁵ on its CPU
+  stream. On the Metal GPU a float32 matmul carries about 10⁻³ relative
+  error on this Mac (a plain product shows it). Every arm and every earlier
+  MLX run shares it in training. Readouts therefore encode on the CPU
+  (§4, encode device).
+- The torch parity tests run where torch is installed; the Mac's project
+  venv has none.
+- Every arm trains on a fixed random batch: the loss falls, and the
+  gradients reach the pooling layer.
+
 **Matched controls.** P1 and P2 add capacity (a layer, a ReLU, depth), not
 only mixing. P1′ and P2′ keep the added capacity and remove the mixing, so
 the primary hypotheses (§5) compare each mixer with its own control and
 test the mixing itself. Comparisons with P0 are reported as well.
 
-65 runs in all (5 arms × 13).
+115 runs in all: 5 arms × (20 loud + 3 ctrl). Ctrl stays at 3 seeds.
+G2 requires every ctrl run to pass, so more ctrl runs would add chances
+of a false failure without adding power to H1 or H2.
 
 **Stability check, before the freeze (owner, 2026-11-14).** The mixer arms
 have never been trained. Once `view_pool` is implemented, one run each of
 P1, P1′, P2 and P2′ trains on `data/pm_f31fix_ctrl_cam` at seed 100. Seed
 100 is not one of the experiment's seeds, and these runs are not among the
-65. On ctrl the photos carry no material, so these runs can show nothing
+115. On ctrl the photos carry no material, so these runs can show nothing
 about the hypotheses. From them, only these are read:
 - the training-loss curve;
 - the per-epoch latent PR;
@@ -369,10 +459,47 @@ An arm fails the check if it diverges, goes non-finite, or ends with
 PR < 8. A failed arm's recipe is revised before the freeze, and the
 revision is disclosed here.
 
+**Result (2026-11-17, code `77e6af3`): all four pass, so no recipe is
+revised.** The values below are read from each run's own `metrics.json`
+(`runs/xv_cam/stability/`); nothing else was computed.
+
+| arm | loss, epoch 0 → 49 | highest loss after epoch 5 | PR, min–max | final PR | non-finite |
+|---|---|---|---|---|---|
+| P1 `stats` | 0.261 → 0.153 | 0.155 | 40.9–44.8 | 44.8 | none |
+| P1′ `stats_ctrl` | 0.258 → 0.153 | 0.155 | 46.5–48.7 | 48.7 | none |
+| P2 `attn` | 0.221 → 0.153 | 0.155 | 41.4–66.3 | 66.3 | none |
+| P2′ `attn_ctrl` | 0.220 → 0.153 | 0.155 | 13.7–55.4 | 55.4 | none |
+
+- P2′'s PR dipped to 13.7 during training before recovering to 55.4. That
+  is above the bar of 8, but no other arm dipped that far. It is recorded
+  here so it is no surprise later, and nothing is changed for it (cloud
+  review, `2291c16`).
+- Each run took about 3 min on the Mac (P2 and P2′ about 3.1 min).
+- The 115 runs therefore come to about 6 h.
+
 ## 4. Readouts
 
-From `scripts/f31_measure_mlx.py` (on `claude/f31a-mlx-replication`; it
-lands on this branch with the freeze), per checkpoint:
+**Encode device (owner, 2026-11-17).** Every checkpoint is encoded on
+MLX's CPU stream, in exact float32. That is `crossview_measure`'s frozen
+default, and `crossview_verdicts` refuses a report encoded elsewhere.
+Training stays on the Metal GPU.
+
+The GPU's float32 matmul rounds its inputs, with relative error about
+7 × 10⁻⁴. At the projection this erased much of the F31a trajectory arm's
+friction in z:
+- trajectory arm, nested readout: 0.405 on CPU, 0.233 on GPU (5 seeds);
+- joint arm: moved by at most 0.012.
+
+The source is Mac `runs/postfix/RESULTS.md` Step 10 and PR #52. Torch
+reproduces the site (cloud-notes `3b53754`). Every earlier MLX readout in
+this document was GPU-encoded. The baseline that G3 compares against is
+re-measured on CPU (§2, §5).
+
+From `scripts/crossview_measure.py`, per checkpoint. It reuses
+`f31_measure`'s fixed-α and held-out readouts and `z_readout_alpha`'s
+nested readout and rank, so `f31_measure_mlx.py` (branch
+`claude/f31a-mlx-replication`, no PR; GPU-encoded) does not
+need to land here:
 
 - **friction z R², nested (primary)**: ridge from column-standardized z
   (all 512 scenes) to normalized friction.
@@ -386,22 +513,52 @@ lands on this branch with the freeze), per checkpoint:
   20 corner scenes. Co-reported, and a condition for RISES (§5).
 - **PR**: final latent participation ratio.
 - **Descriptive:** density and restitution z R²; held-out behavior gain.
+- **Descriptive, noise co-report:** friction nested and fixed on z, encoded
+  with relative noise 10⁻⁴ on the input of every Linear and Conv2d
+  (`crossview_measure.input_noise`, seed 0).
+  - It shows whether an arm's friction survives a reader of that precision.
+    It grades nothing.
+  - On one run of torch F31a's trajectory arm, noise of this size drops
+    friction from 0.478 to 0.138 (cloud-notes `3b53754`).
 
 **Why nested is primary (owner, 2026-11-14).** The fixed α is close to
-least squares (§2). Its out-of-fold R² falls as the rank of standardized
-z rises, whatever z holds. P1, P1′, P2 and P2′ change what produces z and
-may change its rank, so a fixed α can put a readout penalty into Δ.
+least squares (§2). How much it under-reads depends on where in z's
+spectrum friction sits. P1, P1′, P2 and P2′ change what produces z, so a
+fixed α can put a readout penalty into Δ.
 
-This has been seen. In the Mac's MLX replication of F31a the two arms'
-z differed in rank (mean 89 vs 136; Mac `runs/postfix/RESULTS.md` Step 9).
-- At α 10⁻³ and under the nested readout, H1 reads NULL (Δ −0.025 and −0.024).
-- At a fixed α of 0.1 the same checkpoints read +0.108, t 2.24.
+This has been seen on both backends. The table gives traj − joint on exact
+float32 encodings of F31a's joint and trajectory arms, 5 + 5 seeds:
 
-The nested readout adapts α to each z. It reduces a rank confound but
-does not remove it, hence the readout-dependent rule (§5).
+| | fixed α 10⁻³ | nested |
+|---|---|---|
+| torch (cloud-notes `343ecea`) | +0.133 (t 2.85) | +0.063 (t 1.86) |
+| MLX, CPU-encoded (Mac Step 10, PR #52) | +0.100 (t 1.94) | +0.148 (t 3.24) |
 
-On the above-floor baseline the nested readout reads 0.398 (sd 0.057), the
-fixed α 0.378 (0.085). Its picks on loud runs are 10⁻⁵ to 10⁻³.
+- The two readouts differ in Δ by 0.05–0.07, in opposite directions on the
+  two backends.
+- On torch the fixed α under-reads joint by 0.111 and traj by 0.041.
+
+*Correction, 2026-11-17.* This paragraph said the penalty tracks the rank
+of standardized z. It cited the Mac's MLX F31a replication: ranks 89 vs
+136, H1 NULL on both readouts, and +0.108 at α 0.1. Both claims are
+withdrawn:
+- **The MLX numbers were GPU-encoded.** The GPU erases much of the
+  trajectory arm's friction (see "Encode device" above).
+- **The rank account fails in direction on torch.** `std_rank` gives joint
+  the lower rank (113 vs 121, t 1.64), yet joint is the arm under-read
+  more (cloud-notes `f87a210`).
+- **A post-hoc band split locates the gain.** It sits in weak but real
+  directions of standardized z, with sd below about 1.5 × 10⁻³
+  (cloud-notes `cccb82d`, `1f0a43b`).
+
+Rank is co-reported as a description, not as the mechanism.
+
+The nested readout adapts α to each z. It reduces the penalty but does
+not remove it, hence the readout-dependent rule (§5).
+
+On the above-floor baseline, CPU-encoded, the nested readout reads 0.402
+(sd 0.048) and the fixed α 0.379 (0.084). GPU-encoded, the values were
+0.398 and 0.378. Its picks on loud runs are 10⁻⁵ to 10⁻³ on both devices.
 - **Lower edge.** A pick at 10⁻⁵ is bracketed, not an under-read. The
   excluded α = 0 (the minimum-norm fit) reads below 10⁻⁵ on every
   50-epoch baseline run (0.168–0.324 vs 0.333–0.450).
@@ -419,8 +576,10 @@ old-world number is expected from the cameras and is not an arm effect.
 
 **Diagnostic D1 (where friction is lost):** for every P0 checkpoint, the
 per-view latents v_1 … v_16 are read out by the primary readout's nested
-5-fold ridge on the same frozen grid (`z_readout_alpha.nested_grid`; the
-pilot's grid stops at 10⁻³ and under-reads low-variance friction, §2),
+5-fold ridge on the same frozen grid (`z_readout_alpha.nested_grid`,
+computed in dual form by `perview_readout.nested`, which a test shows
+equal; the pilot's grid stops at 10⁻³ and under-reads low-variance
+friction, §2),
 through five constructions: the plain concatenation
 (4096 dims, linear in v), and the pilot's nonlinear cross-view features C,
 D, G and H (§2) computed on v instead of on hand-made image statistics.
@@ -434,7 +593,8 @@ friction z R² on the primary (nested) readout.
 - D1 ≈ z: D1 ≤ z₀ + 0.05. The per-view CNN has already lost it.
 - In between: unresolved.
 
-D1 needs a per-view encode helper (added with the freeze).
+D1 reads v_1 … v_16 through `encode_views`, which all three backends now
+provide.
 
 ## 5. Gates, hypotheses and frozen rules
 
@@ -443,30 +603,70 @@ the primary (nested) readout unless stated.
 
 **Power disclosure,** recomputed on the above-floor P0-equivalent runs.
 Friction sd is 0.085 on the fixed-α readout (MLX, 5 seeds, at both 50 and
-150 epochs) and 0.057 on the nested one (50 epochs).
+150 epochs) and 0.057 on the nested one (50 epochs), GPU-encoded. On the
+frozen CPU encoding the 50-epoch sds are 0.084 and 0.048, so 0.085 stays
+the conservative figure.
 
 The power figures use the larger sd, 0.085, because the variance ratio
 (2.2 on 4 and 4 df) is not established on 5 seeds. At that sd the smallest
-difference reaching t = 2.5 is about 0.134 at n = 5, 0.106 at n = 8 and
-0.095 at n = 10 per arm; hence 10 loud seeds. At sd 0.057 it would be
-0.064 at n = 10. Effects between 0.05 and the detectable difference will
-read INCONCLUSIVE. The figures assume P0's spread carries over to the
-mixers and their matched controls; that is not measured.
+difference reaching t = 2.5 is about 0.134 at n = 5, 0.095 at n = 10 and
+0.067 at n = 20 per arm (0.045 at n = 20 at sd 0.057). At 20 loud seeds
+the t condition binds below the 0.10 bar, so RISES turns on Δ ≥ 0.10
+itself.
 
-**Gates (read first):**
-- G1 health: every run's final PR ≥ 8.
+**Why 20 loud seeds (owner, 2026-11-17).** NULL is graded on the point
+estimate (|Δ| < 0.05). The one-sided 95 % upper bound on Δ for any NULL
+is at most 0.05 + t₀.₉₅·SE, at sd 0.085:
+
+| loud seeds per arm | NULL's largest upper bound | excludes Δ = 0.10 |
+|---|---|---|
+| 10 | 0.116 | no |
+| 15 | 0.103 | no |
+| 17 | 0.099 | yes (the minimum) |
+| 20 | 0.095 | yes |
+
+So at n = 20 every NULL also excludes an effect of the bar's size. That
+holds while the realised sd stays ≤ 0.094. `crossview_verdicts.py` reports
+the realised bound with every NULL, so a wider spread in the mixers shows.
+The realised bound is |Δ| + t₀.₉₅·SE, with the Welch SE and df on the
+primary readout: the far end of the 90 % interval, either sign. Each
+arm's realised sd is reported beside it, so a reader can see why a bound
+moved.
+
+**If a realised bound reaches 0.10** (the arms spread wider than
+assumed), the verdict stays NULL and is reported with its bound, labelled
+**NULL, bound above bar**. It does not exclude an effect of the bar's size.
+No seeds are added after the runs: a seed count chosen after seeing the
+spread would make the design depend on the data. (Cloud review, cloud-notes
+`e06f63f`.) Other consequences, at sd 0.085:
+- A true effect of 0.15 reaches Δ ≥ 0.10 with probability about 0.97
+  (0.91 at n = 10). Δ_h > 0 is a further condition.
+- A true effect of exactly 0.10 still reaches the bar only about half the
+  time, since the bar is on the point estimate.
+- Effects between 0.05 and 0.10 read INCONCLUSIVE.
+
+The figures assume P0's spread carries over to the mixers and their
+matched controls; that is not measured.
+
+**Gates (read first). A G1 or G2 failure withholds every comparison that
+includes the failing arm.** For G1 this rule is new in this draft
+(2026-11-17), adopted from F31a ("any failure withholds the dependent
+verdicts") before the freeze; drafts 1–3 gave G1 no stated consequence.
+- G1 health: every run's final PR ≥ 8 (a non-finite PR fails).
 - G2 control, **the memorisation guard**: every ctrl run of an arm has
   friction z R² < 0.10 (nested; on the above-floor baseline ctrl reads
-  −0.011 to −0.015, against −0.09 to −0.22 at the fixed α, whose negative
-  values are its variance penalty, §2). The essence head regresses friction from z on the
+  −0.012 to −0.018 CPU-encoded, against −0.09 to −0.11 at the fixed α,
+  whose negative values are its variance penalty, §2). The essence head regresses friction from z on the
   training scenes, and the 5-fold readout covers those same scenes, so a
   higher-capacity mixer could raise the readout by fitting that target
   rather than by reading highlights. On ctrl the pixels carry no material,
   so the same fitting would show there. A G2 failure withholds that arm's
   verdict.
 - G3 apparatus (reported, does not withhold): P0's loud mean is within
-  ±0.10 of the above-floor 50-epoch baseline, 0.398 nested (0.378 at the
-  fixed α, co-reported). Verdicts compare against the P0 rerun either way.
+  ±0.10 of the above-floor 50-epoch baseline, **0.402** nested (0.379 at
+  the fixed α, co-reported). Both are re-measured on the frozen CPU
+  encoding (§2, 2026-11-17); GPU-encoded they were 0.398 / 0.378.
+  Verdicts compare against the P0 rerun either way.
 
 **H1 — stats mixing (P1 vs P1′)** and **H2 — attention mixing (P2 vs
 P2′)**, primary, each graded on Δ = mean friction z R²(mixer) − mean(its
@@ -487,26 +687,34 @@ READOUT-DEPENDENT, not INCONCLUSIVE. Only when both grade NULL or
 INCONCLUSIVE does the primary's grade stand, with both reported. The two Δ's and the two arms' mean standardized
 ranks are reported with every verdict.
 
-⚑ **Reachability of RISES, flagged, bar not changed; OPEN.** The bar was set
-when the best fixed cross-view features exceeded mean-pooled z by 0.37
-(0.636 vs 0.267). On the above-floor worlds the margin is 0.15–0.17
-over nested z (D 0.547, H 0.554, D′ 0.565 vs 0.398; 0.17–0.19 over the
-fixed α's 0.378). RISES now needs a mixer to recover 60–67 % of that
-margin over its control, and the detectable difference at n = 10
-(0.095 at the conservative sd) sits close to the 0.10 bar. Separately, on
-fixed features the held-out sign favours the average on these worlds
-(§2), so Δ_h > 0 is not assured even when the 5-fold readout rises.
-Whoever freezes decides whether to keep the bar, justify a new one from
-the new margin, or add seeds.
+**Reachability of RISES: closed (owner, 2026-11-17); bar kept at 0.10,
+seeds added.** The bar was set when the best fixed cross-view features
+exceeded mean-pooled z by 0.37 (0.636 vs 0.267). On the above-floor worlds
+the margin is 0.15–0.16 over nested z (D 0.547, H 0.554, D′ 0.565 vs
+0.402 CPU-encoded; 0.17–0.19 over the fixed α's 0.379). RISES needs a
+mixer to recover 61–69 % of that margin over its control. At n = 10 the detectable
+difference (0.095 at the conservative sd) sat close to the 0.10 bar; at
+n = 20 it is 0.067, below it. Separately, on fixed features the held-out
+sign favours the average on these worlds (§2), so Δ_h > 0 is not assured
+even when the 5-fold readout rises.
 
-Two primary comparisons. At df ≈ 18, t ≥ 2.5 is about p = 0.011 one-sided
-per test, so about 0.02 family-wise; disclosed, not corrected.
+Two primary comparisons. At df ≈ 38, t ≥ 2.5 is about p = 0.008 one-sided
+per test, so about 0.017 family-wise; disclosed, not corrected.
 
-**Reported against P0, same bars, secondary:** P1, P1′, P2, P2′ each vs
-P0 (is any arm better than today's encoder, whatever the reason).
+**Reported against P0, secondary:** P1, P1′, P2, P2′ each vs P0 (is any
+arm better than today's encoder, whatever the reason).
 
-**H3 — mechanism (P2 vs P1)**, same bars, secondary: does direction-aware
-mixing beat order-free statistics?
+**H3 — mechanism (P2 vs P1)**, secondary: does direction-aware mixing
+beat order-free statistics?
+
+The secondary comparisons use the same bars (Δ_h > 0 included), the same
+readout-dependent rule and the same NULL bound as H1 and H2. Every arm is
+scored on the same 20 held-out scenes, so Δ_h is correlated across
+comparisons. When several comparisons pass or fail the Δ_h condition
+together, that is reported once, as shared, not as independent
+confirmations.
+`scripts/crossview_verdicts.py` applies every rule in this section, and
+`tests/test_crossview_verdicts.py` tests each one on synthetic reports.
 
 ## 6. Predictions (registered at real odds)
 
@@ -553,8 +761,10 @@ numbers. They are hashed in the freeze commit.
   view, need restating either way. Adopting a pooling variant as the
   default is a separate decision.
 - **READOUT-DEPENDENT:** whether the mixer helps depends on how z is read.
-  Typically that is because the arms' z differ in rank. Not established
-  either way. The ranks and both Δ's are the finding.
+  Typically that is because the arms' z hold friction in different parts
+  of their spectrum; rank alone does not account for it (§4). Not
+  established either way. The ranks, both Δ's and the noise co-report
+  are the finding.
 - **NULL, D1 high:** the information survives per view but the mixer does
   not learn to use it under this loss. The next question is the training
   signal, not the architecture.
@@ -630,3 +840,31 @@ Readout-strength diagnostic (§2; needs MLX):
       --out runs/xv_cam/readout_alpha_loud.json
     # extended grid (fac9c7d): add --alphas 0 1e-5 1e-4 1e-3 1e-2 1e-1 1 10
     # frozen primary grid (§4): --alphas 1e-5 1e-4 1e-3 1e-2 1e-1 1 10 100
+
+Baseline on the frozen CPU encoding (§2). Add `--device gpu` for the
+GPU column:
+
+    python scripts/crossview_measure.py --data data/pm_f31fix_loud_cam \
+      --runs runs/xv_cam/loud_joint_e50_s{0..4} --out runs/xv_cam/baseline_cpu/loud_cpu.json
+    python scripts/crossview_measure.py --data data/pm_f31fix_ctrl_cam \
+      --runs runs/xv_cam/ctrl_joint_e50_s{0..2} --out runs/xv_cam/baseline_cpu/ctrl_cpu.json
+
+Stability check (§3; ctrl world, seed 100, no essence readout):
+
+    for arm in stats stats_ctrl attn attn_ctrl; do
+      python -m pseudomarble.models.train --data data/pm_f31fix_ctrl_cam \
+        --epochs 50 --lr 2e-4 --batch-size 16 --seed 100 --view-pool $arm \
+        --out runs/xv_cam/stability/${arm}_s100
+    done
+
+The experiment (after the freeze). Arms P0 P1 P1c P2 P2c are view_pool mean,
+stats, stats_ctrl, attn and attn_ctrl. Loud seeds 0–19, ctrl seeds 0–2.
+`crossview_measure` encodes on the CPU (frozen default) and adds the 10⁻⁴
+noise co-report:
+
+    python -m pseudomarble.models.train --data data/pm_f31fix_${W}_cam \
+      --epochs 50 --lr 2e-4 --batch-size 16 --seed $S --view-pool $POOL \
+      --out runs/xv/${ARM}_${W}_s$S
+    python scripts/crossview_measure.py --data data/pm_f31fix_${W}_cam \
+      --runs runs/xv/${ARM}_${W}_s* --out runs/xv/${ARM}_${W}.json   # add --d1 for P0 loud
+    python scripts/crossview_verdicts.py --root runs/xv
