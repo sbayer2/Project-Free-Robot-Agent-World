@@ -26,12 +26,13 @@ Other docs, in reading order: `README.md` (motivation), `docs/BEHAVIOR_TASK.md`
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]"            # core + pytest/ruff (core has ZERO required deps)
+pip install -e ".[dev]"            # core + pytest/ruff + scipy (core has ZERO required deps)
 pip install -e ".[mujoco]"         # primary data generator
 pip install -e ".[mlx]"            # Mac only: canonical trainer
-pip install -e ".[gso]"            # real-object (GSO/ABO) pipeline (+ scipy for ABO)
+pip install -e ".[gso]"            # real-object (GSO/ABO) pipeline
+pip install -e ".[analysis]"       # scipy only: grading scripts (crossview_verdicts)
 
-python -m pytest                   # full suite (~182 tests, 25 files)
+python -m pytest                   # full suite
 python -m pytest tests/test_model.py            # one suite
 python tests/test_materials.py                  # suites also run standalone, no deps
 ruff check src tests
