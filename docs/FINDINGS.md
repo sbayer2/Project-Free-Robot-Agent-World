@@ -3153,6 +3153,133 @@ includes it, so the verdict and summary rule tests run instead of skipping
 (added after F36 was written, 2026-11-18). `crossview_summary`'s own tests
 run without it. The full `crossview_verdicts` log is in PR #54's body.
 
+#### F36, exploratory addendum (post hoc; not registered)
+
+**EXPLORATORY (post hoc; not registered).** Nothing here can rescue or
+reverse a WITHHELD verdict. A claim about mixing needs a new
+preregistration (F36's option c). No verdict word (RISES, NULL, FALLS, INCONCLUSIVE,
+READOUT-DEPENDENT) is used below. The predictions are marked held or wrong.
+
+*(Sources:*
+- *design agreed with the cloud in a82eb91;*
+- *script `scripts/crossview_exploratory.py`, committed with its predictions at c073815 (SHA-256 `bcdeefb4…ad4db`);*
+- *the cloud recorded that commit before any computation (b449d47, verified 2026-11-18T17:15:11Z);*
+- *run on the F36 reports and run histories at 17:16:43Z;*
+- *the parts are E1–E3, so they are not confused with F36's registered D1;*
+- *reads only existing files: it trains nothing and computes no new readout.)*
+
+**E1: comparisons with the G1-failing runs dropped (loud world).** The
+only G1-failing loud run is P1c_loud_s9, so only two comparisons can move.
+
+| comparison | readout | as registered: Δ, t, 95 % CI (n) | P1c_loud_s9 dropped: Δ, t, 95 % CI (n) |
+|---|---|---|---|
+| H1: P1 vs P1′ | nested | +0.148, t +6.50, [+0.102, +0.195] (20/20) | +0.151, t +6.49, [+0.104, +0.198] (20/19) |
+| H1: P1 vs P1′ | fixed α | +0.286, t +15.15, [+0.247, +0.325] (20/20) | +0.291, t +15.32, [+0.252, +0.330] (20/19) |
+| H1: P1 vs P1′ | held-out Δ | +0.287 | +0.295 |
+| P1′ vs P0 | nested | −0.128, t −6.73, [−0.167, −0.089] (20/20) | −0.131, t −6.69, [−0.171, −0.091] (19/20) |
+| P1′ vs P0 | fixed α | −0.264, t −11.86, [−0.309, −0.219] (20/20) | −0.269, t −12.03, [−0.315, −0.224] (19/20) |
+| P1′ vs P0 | held-out Δ | −0.231 | −0.239 |
+
+- The other five comparisons (H2, P1 vs P0, P2 vs P0, P2′ vs P0, H3) are
+  identical by construction: neither of their arms has a G1-failing loud
+  run.
+- The as-registered column reproduces F36's table.
+- **Prediction (c073815):** each Δ moves by less than 0.01, and every CI
+  keeps its sign.
+- **Result:** the largest move is 0.005, and every sign is kept, so it
+  **held**. It was not blind: P1c_loud_s9's values had been seen, so this
+  is arithmetic on known values.
+
+**E2: PR trajectories of the ctrl runs, with the §3 seed-100 stability
+runs as references:**
+
+| run | PR e0 | e5 | e10 | e20 | e30 | e40 | e49 | first epoch < 8 | lowest (epoch) | recovered | final loss |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| P0_ctrl_s0 | 47.3 | 44.1 | 43.6 | 42.4 | 40.9 | 39.6 | 40.0 | never | 39.1 (47) | n/a | 0.1531 |
+| P0_ctrl_s1 | 36.1 | 32.5 | 32.1 | 30.9 | 29.0 | 28.5 | 28.8 | never | 27.9 (47) | n/a | 0.1532 |
+| P0_ctrl_s2 | 46.9 | 44.1 | 44.4 | 42.9 | 41.2 | 39.8 | 41.9 | never | 39.4 (47) | n/a | 0.1531 |
+| P1_ctrl_s0 | 41.0 | 42.9 | 42.9 | 42.9 | 41.2 | 39.9 | 41.2 | never | 39.4 (35) | n/a | 0.1532 |
+| P1_ctrl_s1 | 55.7 | 55.2 | 55.0 | 51.6 | 42.5 | 28.8 | 40.5 | never | 25.3 (47) | n/a | 0.1530 |
+| P1_ctrl_s2 | 50.6 | 40.3 | 40.8 | 21.0 | 6.1 | 0.9 | 0.9 | 29 | 0.6 (47) | no | 0.1530 |
+| P1c_ctrl_s0 | 43.7 | 41.7 | 41.9 | 42.1 | 40.8 | 40.7 | 40.7 | never | 39.5 (35) | n/a | 0.1534 |
+| P1c_ctrl_s1 | 55.8 | 55.1 | 54.9 | 53.0 | 46.6 | 33.7 | 39.8 | never | 26.8 (47) | n/a | 0.1530 |
+| P1c_ctrl_s2 | 38.8 | 1.6 | 0.4 | 0.0 | 0.0 | 0.0 | 0.0 | 2 | 0.0 (49) | no | 0.1528 |
+| P2_ctrl_s0 | 3.9 | 0.4 | 0.3 | 0.2 | 0.1 | 0.1 | 0.1 | 0 | 0.0 (47) | no | 0.1530 |
+| P2_ctrl_s1 | 54.5 | 22.6 | 22.4 | 16.3 | 17.3 | 14.4 | 8.0 | 48 | 5.7 (48) | no | 0.1530 |
+| P2_ctrl_s2 | 0.4 | 0.1 | 0.1 | 0.1 | 0.1 | 27.5 | 14.5 | 0 | 0.0 (26) | yes | 0.1535 |
+| P2c_ctrl_s0 | 8.6 | 8.6 | 7.4 | 6.2 | 3.7 | 6.7 | 5.1 | 2 | 3.0 (48) | no | 0.1538 |
+| P2c_ctrl_s1 | 53.9 | 26.1 | 21.8 | 11.7 | 9.0 | 5.1 | 6.0 | 29 | 4.0 (36) | no | 0.1529 |
+| P2c_ctrl_s2 | 2.7 | 3.5 | 3.4 | 2.1 | 0.7 | 1.9 | 12.3 | 0 | 0.7 (30) | yes | 0.1531 |
+| stats_s100 (§3) | 48.4 | 46.5 | 46.7 | 45.8 | 42.8 | 41.2 | 44.8 | never | 40.9 (47) | n/a | 0.1530 |
+| stats_ctrl_s100 (§3) | 50.2 | 48.9 | 49.1 | 48.9 | 47.8 | 46.8 | 48.7 | never | 46.5 (35) | n/a | 0.1531 |
+| attn_s100 (§3) | 61.2 | 54.6 | 54.8 | 51.8 | 45.6 | 59.1 | 66.3 | never | 41.4 (36) | n/a | 0.1532 |
+| attn_ctrl_s100 (§3) | 56.8 | 55.1 | 53.8 | 51.1 | 49.5 | 23.8 | 55.4 | never | 13.7 (36) | n/a | 0.1531 |
+
+What the table shows (descriptive):
+- **8 of the 12 mixer and control ctrl runs fall below 8 at some epoch.**
+  6 end there. 2 recover: P2_ctrl_s2 ends at 14.5 and P2c_ctrl_s2 at
+  12.3, both from below 8 at epoch 0.
+- **The attention arms fall early:** 4 of their 6 ctrl runs are below 8
+  by epoch 2. The other two (P2_ctrl_s1, P2c_ctrl_s1) start near 54 and
+  decline to the floor by epochs 48 and 29.
+- **The stats arms fall either way:** P1c_ctrl_s2 collapses by epoch 5.
+  P1_ctrl_s2 declines from 50.6 and crosses at epoch 29. Their other four
+  ctrl runs stay above 25.
+- **P0's ctrl runs drift down slowly** (36–47 to 29–42), never near 8.
+- **The loss doesn't separate them.** Final train loss lies within
+  0.1528–0.1538 for every ctrl run, collapsed or not. On the no-material
+  world, the loss doesn't distinguish a z with PR 0.0 from one with
+  PR 40.
+- **The four seed-100 stability runs never fall below 8.** Their lowest
+  is attn_ctrl_s100's 13.7 at epoch 36.
+- **Prediction (c073815):** "most of the 6 failing ctrl runs fall below
+  8 within the first 10 epochs and do not recover. The 9 passing ctrl
+  runs never fall below 8."
+- **Result: wrong on two of its three clauses.**
+  - Only 3 of the 6 failing runs fall within 10 epochs; the others cross
+    at 29, 29 and 48.
+  - 2 of the 9 passing runs do fall below 8 (from epoch 0) and recover.
+  - "Do not recover" holds, but only by definition for runs that end
+    below 8.
+  - Partly informed: P2_ctrl_s0's endpoints had been seen.
+
+**E3: final PR against nested friction z R², loud runs, per arm.** This is
+descriptive only. PR and the readout come from the same z, so a nonzero ρ
+does not mean PR causes a bad readout.
+
+| arm | n | Spearman ρ | bootstrap 95 % CI (10 000 resamples, seed 0) |
+|---|---|---|---|
+| P0 | 20 | +0.27 | [−0.17, +0.63] |
+| P1 | 20 | +0.06 | [−0.46, +0.57] |
+| P1′ | 20 | −0.29 | [−0.68, +0.16] |
+| P2 | 20 | +0.46 | [−0.09, +0.80] |
+| P2′ | 20 | −0.14 | [−0.59, +0.35] |
+
+**Prediction (c073815):** |ρ| < 0.5 in each arm, and every CI includes 0.
+**Result:** both parts **held**. P2's +0.46, with CI [−0.09, +0.80], is
+the closest to either bound.
+
+**Prediction tally:** E1 held (not blind), E2 was wrong on two clauses,
+and E3 held.
+
+**What the addendum adds for F36's option (c):** the facts a next
+stability design would face.
+- On the no-material world, the mixers' and controls' PR often falls
+  below the frozen floor, from the first epoch in the attention arms.
+- The training loss is indifferent to it.
+- Two of the eight runs that fell recovered.
+
+Whether a PR floor on ctrl runs is the right health criterion for these
+arms is a design question for that preregistration. F36's grading stands
+as registered.
+
+Reproduce (Mac):
+
+```bash
+python scripts/crossview_exploratory.py --root runs/xv \
+    --stability runs/xv_cam/stability > runs/xv/crossview_exploratory.md
+```
+
 ---
 
 ## 4. Next steps — the gap is NOT intrinsic; the fork is resolved
