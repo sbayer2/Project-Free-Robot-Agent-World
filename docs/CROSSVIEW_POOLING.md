@@ -2,8 +2,8 @@
 
 **Status: FROZEN preregistration, 2026-11-17.** Draft 1 is dated
 2026-10-27 and draft 3 2026-11-14. This commit is the freeze, made on the
-owner's go. F-number: assigned by the owner after the freeze, in a commit
-that changes nothing else.
+owner's go. F-number: **F36**, assigned by the owner on 2026-11-18,
+after the freeze, in a commit that changes nothing else.
 
 The freeze conditions are met:
 - **Implementation.** `view_pool` is in all three backends with
