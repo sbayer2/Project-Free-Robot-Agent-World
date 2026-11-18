@@ -1,0 +1,32 @@
+name: lint
+
+# Runs the lint command CLAUDE.md documents (`ruff check src tests`) on every
+# push/PR to main. Before this job existed nothing ran it in CI, and about 500
+# findings built up unseen. ruff is pinned to one exact version so that a new
+# ruff release adding rules cannot turn main red overnight; bump it on purpose,
+# in a PR that fixes whatever the new version reports. Scope matches the
+# documented command: scripts/ (including the frozen prereg scripts) is not
+# linted here.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  ruff:
+    name: Lint (ruff check src tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install "ruff==0.17.5"
+      - name: ruff check src tests
+        run: ruff check --output-format=github src tests
