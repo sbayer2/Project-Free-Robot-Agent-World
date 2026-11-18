@@ -115,9 +115,12 @@ friction" headline was mostly the bug (summary friction R² 0.34 → 0.83;
 trajectory 0.84 → 0.92; tilt block gain 2.70 → 16.16). **F31a rerun on
 the fixed worlds:** torch H1 RISES by the frozen rule (friction in z 0.236 →
 0.383, t 3.31), but the trajectory head collapsed (one path for every scene)
-on torch and MLX, and MLX on byte-identical worlds reads NULL (FALLS with
-Adam bias correction). RISES is optimizer-dependent drift, not trajectory
-learning (`docs/F31A_MLX_REPLICATION.md`, PR #46). C1 NULL; H2 saturated or
+on torch and MLX. **2026-11-17:** the MLX NULL was GPU encode precision
+(Metal's proj matmul erases traj's friction); CPU-encoded MLX reads traj >
+joint like torch, so RISES is not optimizer drift, but it is still not
+trajectory learning, and the added friction is erased by 1e-4 relative noise
+at `proj` (FINDINGS "F31a, third reading"; PR #52). Every MLX z readout
+before 29f4c9a was GPU-encoded. C1 NULL; H2 saturated or
 budget-limited at 50 epochs, not separable (all arms gain ≈ 1.04; no run
 escaped). Next: rescale the target before F31b; the w ≈ 0.36 arm is
 dropped. Pre-fix worlds were nearly friction-blind (friction explains 1% of
