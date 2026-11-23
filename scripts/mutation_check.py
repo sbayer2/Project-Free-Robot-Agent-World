@@ -132,7 +132,8 @@ def run_tests(test_dir: Path, test_files) -> bool:
 def main(argv):
     ap = argparse.ArgumentParser()
     ap.add_argument("--max-mutants", type=int, default=12, help="per target")
-    # 0.50 floor; the suite scores ~0.57, now STABLE (per-target seeded sampling +
+    # 0.50 floor; the suite scores 0.52 (31/60 on 2026-11-23; ~0.57 when the floor
+    # was set in ca8e85a), now STABLE (per-target seeded sampling +
     # -B fresh compile + logic-only operators). The residual survivors are
     # structural, not laziness: (1) coherence_loss_mlx can't run in CI (needs MLX),
     # so its mutants can NEVER be killed here; (2) equivalent mutants — symmetric
